@@ -2,7 +2,7 @@
 ## Title: ForeverArtisan: Skinning
 ## Notes: Skinning log by zone and mob, skill-up tracker, which mob levels to skin next, goals, and leather tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.0
+## Version: 0.9.1-beta.1
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core
