@@ -5,6 +5,7 @@
 ## Version: 0.9.0
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
+## X-Curse-Project-ID: 1716370
 ## SavedVariables: ForeverArtisanSettings, MatsledgerSettings
 
 UI.lua
