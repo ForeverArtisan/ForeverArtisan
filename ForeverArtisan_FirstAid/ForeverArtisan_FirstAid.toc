@@ -1,0 +1,15 @@
+## Interface: 16001, 11601, 11509
+## Title: ForeverArtisan: First Aid
+## Notes: What to make next for skill-ups, a plan and shopping list to reach your target skill, a craft log, where to train next, and material tooltips.
+## Author: ForeverArtisan
+## Version: 0.9.0
+## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
+## X-Website: https://foreverartisan.app
+## Dependencies: ForeverArtisan_Core
+## OptionalDeps: ForeverArtisan_Herbalism, ForeverArtisan_Skinning, ForeverArtisan_Mining, ForeverArtisan_Fishing
+## SavedVariables: ForeverArtisanFirstAidDB
+## X-FA-Slash: FAAID
+## X-FA-Alias: aid
+
+FirstAid.lua
+UI.lua

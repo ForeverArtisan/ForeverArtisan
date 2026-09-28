@@ -1,0 +1,19 @@
+# ForeverArtisan changelog
+
+## 0.9.1 (unreleased)
+- Cooking / First Aid: the plan explains itself. A red line shows when you are capped and planning past your rank; the yellow "recipes stop at N" line moved up under the target box; the target turns red when the plan cannot reach it. Same warning in `/fa cook plan` and `/fa aid plan`.
+- Trade Contacts: weapon and armor vendors are now read instead of skipped, and saved only if they actually sell crafting goods (with just those items).
+- Core: new vendor-only reagent list. Tooltips and shopping lists say what kind of vendor sells a reagent before you have met one ("Cooking Supplies vendors - none in your Trade Contacts yet").
+
+## 0.9.0 (2026-09-27)
+- One suite, one version: every part of ForeverArtisan now shares this number. /fa version shows it; the module panel flags any part that doesn't match.
+- Suite style: every window, tab row, heading, skill bar and goal list comes from Core's shared style kit. Gold everywhere.
+- Names: everything is ForeverArtisan now. Commands /fa fish, /fa cook, /fa herb, /fa mine, /fa skin, /fa aid, /fa contacts (plus /fafish, /facook, /faherb, /famining, /faskin, /faaid, /facontacts, /fasearch). Old /mfish, /mlog, /mats removed. Saved data moves over automatically.
+- Herbalism, Mining, Skinning: goals get progress bars and editable amounts; Progress tabs get the skill bar.
+- Fishing: the fishing key re-applies itself after you equip the pole (and every couple of seconds if anything drops it), so you no longer have to clear and re-set it. /fa fish status shows whether the key is active.
+- Beta notice only counts as seen after you click "Got it", so it can't be missed.
+- Beta tag is automatic: every 0.x build (and any -beta build) shows BETA; release builds don't. The minimap tooltip shows the version too.
+- Trade Contacts (new, replaces the old vendor list): your own crafting address book. Talk to a crafting vendor or profession trainer and they're saved with what they sell or teach, prices, limited stock and location. Search it (/fa <item>), see "Sold by" on item tooltips, click for a waypoint. It starts empty, only knows NPCs you've met, and is shared by all characters on your account. Turn it off in the /fa panel like any module. Contacts stay honest: passing by one refreshes it, after a game update the ones you haven't seen since are marked "before update", after two updates without a sighting they drop out of tooltips and search, and you can forget one with a double right-click.
+- Core no longer ships a built-in vendor list. Fishing's "Suggest from Cooking" now reads the Cooking module.
+- Cooking: shows where to train the next rank (and what to do when capped).
+- First Aid: new module. Make now, plan + shopping list, craft log, recipe book, where to train next, material tooltips.

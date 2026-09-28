@@ -1,0 +1,10 @@
+<!-- Copyright (c) 2026 ForeverArtisan. All rights reserved. -->
+<Bindings>
+	<Binding name="CLICK ForeverArtisanFishingCastButton:LeftButton" header="FOREVERARTISAN_FISHING" category="ADDONS">
+	</Binding>
+	<Binding name="CLICK ForeverArtisanFishingSwapButton:LeftButton" category="ADDONS">
+	</Binding>
+	<Binding name="FOREVERARTISAN_FISHING_SNAPCAMERA" category="ADDONS">
+		ForeverArtisanFishingSnapCamera()
+	</Binding>
+</Bindings>

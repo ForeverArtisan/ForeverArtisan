@@ -1,0 +1,15 @@
+## Interface: 16001, 11601, 11509
+## Title: ForeverArtisan: Mining
+## Notes: Mining log by zone, skill-up tracker, what to mine next, goals, and ore tooltips.
+## Author: ForeverArtisan
+## Version: 0.9.0
+## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
+## X-Website: https://foreverartisan.app
+## Dependencies: ForeverArtisan_Core
+## SavedVariables: ForeverArtisanMiningDB
+## X-FA-Slash: FAMINING
+## X-FA-Alias: mine
+
+Nodes.lua
+Mining.lua
+UI.lua

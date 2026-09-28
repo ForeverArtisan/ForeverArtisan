@@ -1,0 +1,8 @@
+# nothing from the game client belongs here (WTF, SavedVariables, screenshots)
+*.zip
+Thumbs.db
+.DS_Store
+desktop.ini
+__pycache__/
+*.bak
+*.tmp

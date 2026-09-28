@@ -1,0 +1,15 @@
+## Interface: 16001, 11601, 11509
+## Title: ForeverArtisan: Herbalism
+## Notes: Gather log by zone, skill-up tracker, what to pick next, goals, and herb tooltips.
+## Author: ForeverArtisan
+## Version: 0.9.0
+## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
+## X-Website: https://foreverartisan.app
+## Dependencies: ForeverArtisan_Core
+## SavedVariables: ForeverArtisanHerbalismDB, ForeverArtisanHerbDB
+## X-FA-Slash: FAHERB
+## X-FA-Alias: herb
+
+Herbs.lua
+Herbalism.lua
+UI.lua

@@ -1,0 +1,17 @@
+## Interface: 16001, 11601, 11509
+## Title: ForeverArtisan: Fishing
+## Notes: One key to cast and keep a lure on your pole, plus a catch log by zone, skill and lure.
+## Author: ForeverArtisan
+## Version: 0.9.0
+## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
+## X-Website: https://foreverartisan.app
+## Dependencies: ForeverArtisan_Core
+## OptionalDeps: ForeverArtisan_Cooking
+## SavedVariables: ForeverArtisanFishingDB, MatsFishDB
+## X-FA-Slash: FAFISH
+## X-FA-Alias: fish
+
+Fishing.lua
+Progress.lua
+Derby.lua
+UI.lua

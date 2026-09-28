@@ -1,0 +1,28 @@
+# BigWigs packager config. One repo, eight addon folders.
+# The packager zips the repo as one folder, then move-folders splits it back
+# into the separate AddOns folders the game expects.
+package-as: ForeverArtisan
+
+move-folders:
+  ForeverArtisan/ForeverArtisan_Core: ForeverArtisan_Core
+  ForeverArtisan/ForeverArtisan_Fishing: ForeverArtisan_Fishing
+  ForeverArtisan/ForeverArtisan_Herbalism: ForeverArtisan_Herbalism
+  ForeverArtisan/ForeverArtisan_Mining: ForeverArtisan_Mining
+  ForeverArtisan/ForeverArtisan_Skinning: ForeverArtisan_Skinning
+  ForeverArtisan/ForeverArtisan_Cooking: ForeverArtisan_Cooking
+  ForeverArtisan/ForeverArtisan_FirstAid: ForeverArtisan_FirstAid
+  ForeverArtisan/ForeverArtisan_Contacts: ForeverArtisan_Contacts
+
+# Dev files that stay out of the player download.
+ignore:
+  - README.md
+  - CHANGELOG.md
+  - .github
+  - .pkgmeta
+  - .gitignore
+  - docs
+  - tools
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown

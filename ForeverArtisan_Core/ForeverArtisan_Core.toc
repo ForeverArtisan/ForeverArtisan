@@ -1,0 +1,13 @@
+## Interface: 16001, 11601, 11509
+## Title: ForeverArtisan: Core
+## Notes: Required base for the ForeverArtisan crafting suite: the /fa hub, a panel to turn modules on or off, the minimap button and the shared look.
+## Author: ForeverArtisan
+## Version: 0.9.0
+## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
+## X-Website: https://foreverartisan.app
+## SavedVariables: ForeverArtisanSettings, MatsledgerSettings
+
+UI.lua
+VendorItems.lua
+Modules.lua
+Minimap.lua
