@@ -3,7 +3,7 @@
 Run this in game before every build goes to the site or CurseForge/Wago. Screenshot anything off. A red Lua error is an automatic stop.
 
 ## 0. Build
-- [ ] `python tools\release.py . <version>` ran clean (syntax OK); before launch the version is `0.x.y-beta.N`
+- [ ] `python tools\release.py . <version>` ran clean (syntax OK); before launch the version is `0.9.x` (or `0.9.x-beta.N` for a rough test build, which the stores hide behind their Beta filter)
 - [ ] CHANGELOG.md top section has the version and today's date and reads right to a player
 - [ ] Fully restart WoW if a module is new (the game already runs the repo files through the junctions)
 
@@ -60,5 +60,5 @@ Look for overlapping text, rows running off the edge, and anything cut off.
 ## 8. Publish
 - [ ] Commit, tag `v<version>` (exactly the TOC version), Push origin
 - [ ] GitHub Actions run is green; the GitHub Release has the zip
-- [ ] CurseForge and Wago show the new file with the right type (Beta before launch)
+- [ ] CurseForge and Wago show the new file (Release for 0.9.x and 1.x, Beta only for -beta.N tags)
 - [ ] The site download link and changelog match the build

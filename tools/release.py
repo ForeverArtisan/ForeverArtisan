@@ -5,9 +5,9 @@ usage (from the repo):  python tools\\release.py . 0.9.1-beta.1\n\nusage: releas
 
   SOURCE_DIR    folder that holds the ForeverArtisan_* addon folders
   VERSION       1.2.3 or 1.2.3-beta.1
-                  0.x.x          -> Beta   (everything before launch)
-                  x.y.z-beta.N   -> Beta   (test builds after launch)
-                  1.0.0 and up   -> Release
+                  0.x.x          -> shows BETA in game; uploads to the stores as Release
+                  x.y.z-beta.N   -> test build; uploads to the stores as Beta
+                  1.0.0 and up   -> launch and later; Release everywhere
   --package DIR build the download zip into DIR/Beta or DIR/Release
 
 What it does:
@@ -67,7 +67,7 @@ def add_changelog(root, ver, notes):
     old = open(log, encoding="utf-8").read() if os.path.exists(log) else "# ForeverArtisan changelog\n"
     title = "## %s (%s)" % (ver, datetime.date.today().isoformat())
     lines = "".join("- %s\n" % n for n in notes)
-    if ("\n## %s " % ver) in old:
+    if re.search(r"^## %s \((?!unreleased)" % re.escape(ver), old, flags=re.M):
         print("changelog: %s already listed, left as is" % ver)
         return
     m = re.search(r"^## [^\n]*\(unreleased\)[^\n]*\n", old, flags=re.M)
@@ -137,8 +137,7 @@ def main():
     add_changelog(root, ver, notes)
     if out:
         package(root, ver, out)
-    if ver.startswith("0.") and "-beta" not in ver:
-        print("WARNING: tag v%s would upload to CurseForge/Wago as a RELEASE. Use %s-beta.1 before launch." % (ver, ver))
+    print("store label: %s (tags with -beta upload as Beta; everything else as Release)" % ("Beta" if "-beta" in ver else "Release"))
     print("next: commit in GitHub Desktop, then tag the commit v%s and push origin" % ver)
 
 

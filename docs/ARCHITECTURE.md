@@ -4,8 +4,8 @@ ONE app, ONE download, ONE version, built as a SUITE: **ForeverArtisan_Core** is
 **Source of truth: the Git repo `D:\ForeverArtisan`** (GitHub: Forever-Artisan org). It is the ONLY copy: the eight folders in `Interface\AddOns` are junctions pointing into the repo, so the game runs the repo files. Both Claude projects (addon + website) edit the repo and nothing else; never write into AddOns or keep a second copy. Copies under `claude/addons/` in the project are reference snapshots only. Moved to the repo Sep 28, 2026.
 
 ## Versioning: one suite version
-- Current release: **0.9.0**; next is **0.9.1-beta.1**. 1.0.0 is reserved for launch day (Nov 4, 2026).
-- Every build before launch is `0.x.y-beta.N`: the packager uploads a tag as Beta only if "beta" is in it (a plain `v0.9.1` tag would go out as a Release).
+- Current release: **0.9.1-beta.1** (first public build, Sep 28, 2026); next is **0.9.2**. 1.0.0 is reserved for launch day (Nov 4, 2026).
+- Store label comes from the tag: a tag with "beta" uploads as Beta (hidden from CurseForge's default filter), anything else as Release. Decision (Sep 28): normal pre-launch builds are plain `0.9.x` so casual players find them; they still show BETA in game because every 0.x is beta. Use `-beta.N` only for rough test builds.
 - Every TOC carries the same `## Version`. Never bump one module alone. Run `python tools\release.py . <version>` in the repo: it sets all TOCs, syntax-checks every file and renames the `## x.y.z (unreleased)` changelog section to the version with today's date.
 - Lua reads it with `FA.Version()` (Core's TOC is the reference). Window brand line shows "v0.9.0 BETA"; `/fa version` prints it; the module panel shows "Update needed" and login warns if a module's version differs from Core (half-updated install).
 - No version numbers in Lua headers or code. `db.version` records the suite version that last wrote the data.
@@ -22,7 +22,7 @@ ONE app, ONE download, ONE version, built as a SUITE: **ForeverArtisan_Core** is
 ## Packaging and release (GitHub)
 - Repo root: the eight `ForeverArtisan_*` folders, `.pkgmeta`, `.github\workflows\release.yml`, `CHANGELOG.md`, `README.md`, `docs\` (this file, RELEASE-CHECKLIST.md), `tools\` (release.py). `.pkgmeta` keeps docs/tools/README/CHANGELOG out of the player zip.
 - As you work: add player-facing lines under `## x.y.z (unreleased)` at the top of CHANGELOG.md.
-- Ship: run `docs\RELEASE-CHECKLIST.md` in game → `python tools\release.py . 0.9.1-beta.1` → commit in GitHub Desktop → tag the commit `v0.9.1-beta.1` (tag = TOC version with a `v`) → Push origin.
+- Ship: run `docs\RELEASE-CHECKLIST.md` in game → `python tools\release.py . 0.9.2` → commit in GitHub Desktop → tag the commit `v0.9.2` (tag = TOC version with a `v`) → Push origin.
 - The tag runs the BigWigs packager (GitHub Actions): one zip `ForeverArtisan-<version>.zip` with all eight folders at the top level, attached to a GitHub Release and uploaded to CurseForge and Wago with the changelog. Keys live only in GitHub Secrets (`CF_API_KEY`, `WAGO_API_TOKEN`); project IDs in Core's TOC (`## X-Curse-Project-ID`, `## X-Wago-ID`).
 - The repo is public so the GitHub release zip can be the site's direct download (release assets of private repos need a login).
 - After launch: fixes go out as 1.0.1, 1.0.2…; bigger test builds as 1.1.0-beta.1, -beta.2, then 1.1.0.

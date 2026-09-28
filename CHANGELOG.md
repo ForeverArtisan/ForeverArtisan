@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.2 (2026-09-28)
+- Download fix: the zip no longer includes a stray folder without a TOC file, which made Wago reject the 0.9.1-beta.1 upload. No changes in game.
+
 ## 0.9.1-beta.1 (2026-09-28)
 - Cooking / First Aid: the plan explains itself. A red line shows when you are capped and planning past your rank; the yellow "recipes stop at N" line moved up under the target box; the target turns red when the plan cannot reach it. Same warning in `/fa cook plan` and `/fa aid plan`.
 - Trade Contacts: weapon and armor vendors are now read instead of skipped, and saved only if they actually sell crafting goods (with just those items).

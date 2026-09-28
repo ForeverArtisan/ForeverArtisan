@@ -22,6 +22,8 @@ ignore:
   - .gitignore
   - docs
   - tools
+  - LICENSE
+  - .gitattributes
 
 manual-changelog:
   filename: CHANGELOG.md
