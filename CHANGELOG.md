@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.3 (2026-09-28)
+- Listed for WoW Forever only. Addon managers no longer offer ForeverArtisan to Classic Era players, where it doesn't work. No changes in game.
+
 ## 0.9.2 (2026-09-28)
 - Download fix: the zip no longer includes a stray folder without a TOC file, which made Wago reject the 0.9.1-beta.1 upload. No changes in game.
 

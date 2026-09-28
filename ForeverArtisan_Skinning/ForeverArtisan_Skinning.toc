@@ -1,8 +1,8 @@
-## Interface: 16001, 11601, 11509
+## Interface: 16001
 ## Title: ForeverArtisan: Skinning
 ## Notes: Skinning log by zone and mob, skill-up tracker, which mob levels to skin next, goals, and leather tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.2
+## Version: 0.9.3
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

@@ -1,8 +1,8 @@
-## Interface: 16001, 11601, 11509
+## Interface: 16001
 ## Title: ForeverArtisan: Mining
 ## Notes: Mining log by zone, skill-up tracker, what to mine next, goals, and ore tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.2
+## Version: 0.9.3
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core
