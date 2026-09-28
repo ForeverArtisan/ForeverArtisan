@@ -6,6 +6,7 @@
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## X-Curse-Project-ID: 1716370
+## X-Wago-ID: b6mzv4KP
 ## SavedVariables: ForeverArtisanSettings, MatsledgerSettings
 
 UI.lua
