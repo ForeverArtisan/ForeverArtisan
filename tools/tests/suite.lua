@@ -139,7 +139,7 @@ for wname,cmd in pairs(wins) do
   if not w then print("NO WINDOW",wname) os.exit(1) end
   print("WINDOW",wname,"title:",(w.title._text or ""):gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r",""), "shown", w._shown)
   for i=before+1,#frames do local b=frames[i]
-    if b._text and b.scripts.OnClick and ({Progress=1,Fishing=1,["Catch log"]=1,Derby=1,Herbalism=1,Mining=1,Skinning=1,Cooking=1,["Gather log"]=1,["Herb guide"]=1,["Mining log"]=1,["Node guide"]=1,["Skinning log"]=1,["Level guide"]=1,["Cook log"]=1,["Recipe book"]=1,["First Aid"]=1,["Craft log"]=1,Search=1,Contacts=1,["Limited stock"]=1,Alchemy=1,Leatherworking=1})[b._text] then
+    if b._text and b.scripts.OnClick and ({Progress=1,Fishing=1,["Catch log"]=1,["Cast marker"]=1,Herbalism=1,Mining=1,Skinning=1,Cooking=1,["Gather log"]=1,["Herb guide"]=1,["Mining log"]=1,["Node guide"]=1,["Skinning log"]=1,["Level guide"]=1,["Cook log"]=1,["Recipe book"]=1,["First Aid"]=1,["Craft log"]=1,Search=1,Contacts=1,["Limited stock"]=1,Alchemy=1,Leatherworking=1})[b._text] then
       local ok,err=pcall(b.scripts.OnClick,b) if not ok then print("TAB ERROR",wname,b._text,err) os.exit(1) end
     end
   end

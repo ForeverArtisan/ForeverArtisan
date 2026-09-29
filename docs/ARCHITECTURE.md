@@ -68,7 +68,7 @@ Old names (MatsledgerSettings, MatsFishDB, ForeverArtisanLoggerDB, ForeverArtisa
 - Next on the engine: Tailoring, Enchanting, Blacksmithing, Engineering (one CRAFTS entry each, plus anything profession-specific).
 
 ## Suite style rules (every module, including new professions)
-- Build windows only through `FA.UI.Kit`: `K.Window` with tabs **Main (profession name) / Progress / Log / Guide** (Fishing's 4th tab is Derby).
+- Build windows only through `FA.UI.Kit`: `K.Window` with tabs **Main (profession name) / Progress / Log / Guide** (Fishing's 4th tab is Cast marker: marker tools on top, fishing derby below).
 - Progress tab: `K.SkillBar` at top, "N since your last skill-up · pace" line, "Pick next" list, Goals with progress bars + editable amounts (`MakeRows(..., {goals=true})` + `K.GoalData`), Amount box, goals count since login.
 - Section headings via `Header` (gold). Chat via `FA.Printer`. No per-module accent colors: gold everywhere.
 - Module code layout: API wrappers → skill → where → session → `ns.SkillInfo` → pick next → goals (`AddGoal`, `SetGoalWant`, `RemoveGoal`, `GoalRows`, reset on login) → log → reminder → tooltips → events → slash.

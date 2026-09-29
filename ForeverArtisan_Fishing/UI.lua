@@ -535,23 +535,13 @@ local function RefreshLogPage(p)
     #data > LOG_ROWS and ("   |   showing %d-%d of %d"):format(view.offset + 1, math.min(#data, view.offset + LOG_ROWS), #data) or ""))
 end
 
----------- page 4: Derby
+---------- page 4: Cast marker (marker tools on top, fishing derby below)
 local DERBY_ROWS = 5
 BuildDerbyPage = function(p)
-  p.title = Text(p, "GameFontNormal", "TOPLEFT", 16, -4)
-  p.big = Text(p, "GameFontNormalLarge", "TOPLEFT", 20, -24)
-  p.when = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -50); p.when:SetWidth(430)
-  Header(p, -74, "Rules")
-  p.rules = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -92); p.rules:SetWidth(430); p.rules:SetJustifyV("TOP")
-  p.rules:SetHeight(84)
-  Header(p, -184, "This derby")
-  p.dhead = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -202); p.dhead:SetWidth(430)
-  p.rows = MakeRows(p, DERBY_ROWS, -218, false, "doffset")
-
-  Header(p, -350, "Cast marker")
-  p.mstat = Text(p, nil, "TOPLEFT", 20, -368); p.mstat:SetWidth(430)
+  Header(p, -2, "Cast marker")
+  p.mstat = Text(p, nil, "TOPLEFT", 20, -20); p.mstat:SetWidth(430)
   local set = Button(p, "Set marker", 96, function() ns.CalibrateMarker(false) end)
-  set:SetPoint("TOPLEFT", 16, -388)
+  set:SetPoint("TOPLEFT", 16, -40)
   Tip(set, function()
     GameTooltip:AddLine("Set marker (start over)")
     GameTooltip:AddLine("Cast first, then click this and click on your bobber. Also saves your camera view.", 1, 1, 1, true)
@@ -572,10 +562,20 @@ BuildDerbyPage = function(p)
   p.show:SetSize(24, 24); p.show:SetPoint("LEFT", snap, "RIGHT", 10, 0)
   local sl = Text(p.show, "GameFontHighlight", "LEFT", 24, 0, p.show, "LEFT"); sl:SetText("Show")
   p.show:SetScript("OnClick", function(self) S().showMarker = self:GetChecked() and true or false; ns.UpdateMarker() end)
-  local hint = Text(p, "GameFontDisableSmall", "TOPLEFT", 20, -418); hint:SetWidth(430)
+  local hint = Text(p, "GameFontDisableSmall", "TOPLEFT", 20, -70); hint:SetWidth(430)
   hint:SetText("Casts land roughly the same spot ahead of you, with some random scatter. Stand still, cast 4-5 times and " ..
     "Add cast each time; then turn so the ring covers the pool. Hold right mouse to turn so the camera stays behind you. " ..
     "Red = zoom changed: click Snap camera.")
+
+  Header(p, -130, "Fishing derby")
+  p.title = Text(p, "GameFontNormal", "TOPLEFT", 20, -148)
+  p.big = Text(p, "GameFontNormalLarge", "TOPLEFT", 20, -166)
+  p.when = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -190); p.when:SetWidth(430)
+  p.rules = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -210); p.rules:SetWidth(430); p.rules:SetJustifyV("TOP")
+  p.rules:SetHeight(60)
+  Header(p, -276, "This derby")
+  p.dhead = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -294); p.dhead:SetWidth(430)
+  p.rows = MakeRows(p, DERBY_ROWS, -310, false, "doffset")
 end
 
 RefreshDerbyPage = function(p)
@@ -625,7 +625,7 @@ end
 
 ---------- frame
 local function Build()
-  local order = { { "fish", "Fishing" }, { "progress", "Progress" }, { "log", "Catch log" }, { "derby", "Derby" } }
+  local order = { { "fish", "Fishing" }, { "progress", "Progress" }, { "log", "Catch log" }, { "derby", "Cast marker" } }
   f = K.Window({ name = "ForeverArtisanFishingFrame", title = "Fishing", tabs = order, pages = pages, tabButtons = tabs,
     onTab = ShowTab, defaultPos = { "CENTER", 0, 40 } })
   BuildFishingPage(pages.fish)
