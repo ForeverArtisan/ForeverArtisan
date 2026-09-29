@@ -5,7 +5,7 @@ usage (from the repo):  python tools\\release.py . 0.9.1-beta.1\n\nusage: releas
 
   SOURCE_DIR    folder that holds the ForeverArtisan_* addon folders
   VERSION       1.2.3 or 1.2.3-beta.1
-                  0.x.x          -> shows BETA in game; uploads to the stores as Release
+                  0.x.x / 1.x.x  -> tested build: no tag in game; uploads to the stores as Release
                   x.y.z-beta.N   -> test build; uploads to the stores as Beta
                   1.0.0 and up   -> launch and later; Release everywhere
   --package DIR build the download zip into DIR/Beta or DIR/Release
@@ -28,7 +28,7 @@ PRIVATE = []  # e.g. ["ForeverArtisan_SomeDevTool"]
 
 
 def channel(ver):
-    return "Beta" if ver.startswith("0.") or "-beta" in ver else "Release"
+    return "Beta" if "-beta" in ver else "Release"
 
 
 def set_versions(root, ver):

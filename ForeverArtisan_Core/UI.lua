@@ -30,16 +30,25 @@ function FA.Version(addon)
   return (ok and v) or "?"
 end
 
--- Beta build? Everything before 1.0.0 is beta, and so is any "-beta" build after launch
--- (e.g. 1.2.0-beta.1). Release builds drop the BETA tag everywhere automatically.
+-- Beta build? Only versions named that way: "1.2.0-beta.1" or "-alpha". Plain numbered
+-- releases (0.9.4, 1.0.0) are tested builds and show no tag. Decided Sep 30, 2026.
 function FA.IsBeta()
-  local v = FA.Version()
-  return v:match("^0%.") ~= nil or v:lower():find("beta", 1, true) ~= nil
+  local v = FA.Version():lower()
+  return v:find("beta", 1, true) ~= nil or v:find("alpha", 1, true) ~= nil
 end
 
--- "v0.9.0  BETA" or "v1.0.0"
+-- Dev build? The working copy between releases is "x.y.z-dev". It never ships:
+-- tools/release.py replaces it with the real version before tagging.
+function FA.IsDev()
+  return FA.Version():lower():find("-dev", 1, true) ~= nil
+end
+
+-- "v0.9.4", "v1.1.0-beta.1  BETA" or "v0.9.4-dev  DEV"
 function FA.VersionTag()
-  return "v" .. FA.Version() .. (FA.IsBeta() and ("  " .. FA.ORANGE .. "BETA|r") or "")
+  local tag = ""
+  if FA.IsBeta() then tag = "  " .. FA.ORANGE .. "BETA|r"
+  elseif FA.IsDev() then tag = "  |cff888888DEV|r" end
+  return "v" .. FA.Version() .. tag
 end
 
 function FA.Prefix(title)

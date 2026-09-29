@@ -3,15 +3,15 @@
 Run this in game before every build goes to the site or CurseForge/Wago. Screenshot anything off. A red Lua error is an automatic stop.
 
 ## 0. Build
-- [ ] `python tools\release.py . <version>` ran clean (syntax OK); before launch the version is `0.9.x` (or `0.9.x-beta.N` for a rough test build, which the stores hide behind their Beta filter)
+- [ ] `python tools\release.py . <version>` ran clean (syntax OK); it replaced the `-dev` version in every TOC; before launch the version is `0.9.x` (or `0.9.x-beta.N` for a rough test build, which the stores hide behind their Beta filter)
 - [ ] CHANGELOG.md top section has the version and today's date and reads right to a player
 - [ ] Fully restart WoW if a module is new (the game already runs the repo files through the junctions)
 
 ## 1. Start-up
 - [ ] Log in with no red Lua errors (also after `/reload`)
 - [ ] `/fa version` shows the new number, and there's no "different release" warning
-- [ ] The minimap button tooltip shows the version (plus BETA on beta builds)
-- [ ] Beta builds: the beta notice shows once, and "Got it" closes it
+- [ ] The minimap button tooltip shows the version (no BETA or DEV on a normal release)
+- [ ] -beta builds only: the beta notice shows once, and "Got it" closes it; `/fa feedback` opens it on any build
 
 ## 2. /fa panel
 - [ ] Every module is listed and says "Running"

@@ -292,24 +292,30 @@ local function registerOptions()
   end
 end
 
----------------------------------------------------------------- beta notice
--- Shown once per version (and any time with /fa beta). WoW Forever is in beta, and so are we.
+---------------------------------------------------------------- beta / feedback notice
+-- Shown once per version on "-beta" builds only. /fa feedback (or /fa beta) opens it any time;
+-- on a normal release it just says where to send bugs and ideas.
 local FEEDBACK_URL = "https://foreverartisan.app"
 local betaFrame
 
 local function showBeta()
   if not betaFrame then
-    local b = FA.UI.Frame({ name = "ForeverArtisanBeta", title = "Beta", width = 420, height = 250, strata = "DIALOG",
+    local b = FA.UI.Frame({ name = "ForeverArtisanBeta", title = FA.IsBeta() and "Beta" or "Feedback", width = 420, height = 250, strata = "DIALOG",
       defaultPos = { "CENTER", 0, 120 } })
     local head = b:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     head:SetPoint("TOP", 0, -34)
-    head:SetText(GOLD .. "Thanks for testing ForeverArtisan!|r")
+    head:SetText(GOLD .. (FA.IsBeta() and "Thanks for testing ForeverArtisan!" or "Thanks for using ForeverArtisan!") .. "|r")
 
     local body = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     body:SetPoint("TOPLEFT", 20, -62); body:SetWidth(380); body:SetJustifyH("LEFT"); body:SetSpacing(2)
-    body:SetText("WoW Forever is still in beta, and so is this addon. We're working hard to have everything "
-      .. "ready before launch, so some features may change, and a few things may not work quite right yet.\n\n"
-      .. "Spotted a bug or have an idea? We'd love your feedback:")
+    if FA.IsBeta() then
+      body:SetText("This is a test build. Some features may change, and a few things may not work "
+        .. "quite right yet.\n\n"
+        .. "Spotted a bug or have an idea? We'd love your feedback:")
+    else
+      body:SetText("ForeverArtisan is free, and bug reports and ideas shape what comes next.\n\n"
+        .. "Spotted a bug or have an idea? We'd love your feedback:")
+    end
 
     local link = CreateFrame("EditBox", nil, b, "InputBoxTemplate")
     link:SetSize(250, 22); link:SetPoint("TOPLEFT", 26, -168)
@@ -329,7 +335,7 @@ local function showBeta()
       b:Hide()
     end)
     local note = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    note:SetPoint("BOTTOM", ok, "TOP", 0, 6); note:SetText("You can bring this back any time with /fa beta")
+    note:SetPoint("BOTTOM", ok, "TOP", 0, 6); note:SetText("You can bring this back any time with /fa feedback")
     betaFrame = b
   end
   betaFrame:Show()
@@ -356,7 +362,7 @@ ev:RegisterEvent("PLAYER_LOGIN")
 ev:SetScript("OnEvent", function()
   pcall(registerOptions)
   pcall(checkVersions)
-  -- show the beta notice once per version
+  -- show the beta notice once per version ("-beta" builds only)
   FA.Migrate("ForeverArtisanSettings", "MatsledgerSettings")
   ForeverArtisanSettings = ForeverArtisanSettings or {}
   if FA.IsBeta() and ForeverArtisanSettings.betaSeen ~= betaVersion() then
@@ -370,7 +376,7 @@ local function help()
   print(PREFIX .. "version " .. FA.Version() .. "  -  commands")
   print("  /fa  - module panel (turn modules on/off)")
   print("  /fa version  - suite version, and a check that every part matches")
-  print("  /fa beta  - beta notice and where to send feedback")
+  print("  /fa feedback  - where to send bugs and ideas")
   print("  /fa minimap [angle | reset]  - show/hide or move the minimap button")
   if FA.Vendors then print("  /fa <item, vendor or town>  - search your Trade Contacts") end
   print("  /fa enable <module>  |  /fa disable <module>")
@@ -396,7 +402,7 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     if ForeverArtisan and ForeverArtisan.minimap then ForeverArtisan.minimap(rest) end
   elseif lower == "beta" or lower == "feedback" then
     showBeta()
-    print(PREFIX .. "Beta feedback: " .. FEEDBACK_URL)
+    print(PREFIX .. "Feedback: " .. FEEDBACK_URL)
   elseif lower == "version" or lower == "ver" then
     print(PREFIX .. "ForeverArtisan " .. FA.Version())
     checkVersions()

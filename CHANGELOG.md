@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.4 (unreleased)
+- No more BETA tag on tested releases. Only builds named "-beta" show it now, and the login popup went with it. `/fa feedback` still shows where to send bugs and ideas.
+
 ## 0.9.3 (2026-09-28)
 - Listed for WoW Forever only. Addon managers no longer offer ForeverArtisan to Classic Era players, where it doesn't work. No changes in game.
 

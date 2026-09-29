@@ -16,4 +16,4 @@ Site, guides and feedback: https://foreverartisan.app
 4. GitHub Desktop: commit, then History > right-click the commit > Create tag `v0.9.2` > Push origin.
 5. The Release workflow builds the zip and uploads it to GitHub Releases, CurseForge and Wago.
 
-Before launch builds are `0.9.x`: they upload to the stores as Release so players can find them, and show BETA in game. Add `-beta.N` only for rough test builds (the stores hide those behind a Beta filter). Launch is `1.0.0`; after that fixes are `1.0.1`…, test builds `1.1.0-beta.1`….
+Before launch builds are `0.9.x`: they upload to the stores as Release so players can find them, and show no tag in game. Add `-beta.N` only for rough test builds (the stores hide those behind a Beta filter). Launch is `1.0.0`; after that fixes are `1.0.1`…, test builds `1.1.0-beta.1`….
