@@ -1,6 +1,9 @@
 # ForeverArtisan changelog
 
 ## 0.9.4 (unreleased)
+- Alchemy (new module): what to make now for skill-ups, a plan to your target skill with a shopping list, a craft log, a recipe book, where to train next, and Alchemy lines on herb and vial tooltips. Herbs you're short on point to where your Herbalism log found them. Transmutes stay out of the plan because of their cooldowns. `/fa alch`
+- Leatherworking (new module): the same window and plan. Cured hides count as crafts, not purchases: the plan makes only the ones you don't already have and lists the raw hides and Salt instead. Leather and hides point to where your Skinning log found them. `/fa lw`
+- Alchemy and Leatherworking name a trainer from your Trade Contacts for your next rank once you've met one.
 - No more BETA tag on tested releases. Only builds named "-beta" show it now, and the login popup went with it. `/fa feedback` still shows where to send bugs and ideas.
 
 ## 0.9.3 (2026-09-28)

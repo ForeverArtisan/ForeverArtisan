@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: ForeverArtisan: Alchemy
+## Notes: What to make next for skill-ups, a plan and shopping list to your target skill (herbs point to your Herbalism log), a craft log, where to train next, and material tooltips.
+## Author: ForeverArtisan
+## Version: 0.9.4-dev
+## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
+## X-Website: https://foreverartisan.app
+## Dependencies: ForeverArtisan_Core
+## OptionalDeps: ForeverArtisan_Contacts, ForeverArtisan_Herbalism, ForeverArtisan_Skinning, ForeverArtisan_Mining, ForeverArtisan_Fishing
+## SavedVariables: ForeverArtisanAlchemyDB
+## X-FA-Slash: FAALCH
+## X-FA-Alias: alch
+
+Alchemy.lua
+UI.lua

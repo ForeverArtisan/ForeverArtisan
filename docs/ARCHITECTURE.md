@@ -1,7 +1,7 @@
 # ForeverArtisan — how the app is built (read this first)
 
 ONE app, ONE download, ONE version, built as a SUITE: **ForeverArtisan_Core** is the hub and the shared style kit; every tradeskill is a module underneath it and must look and behave the same.
-**Source of truth: the Git repo `D:\ForeverArtisan`** (GitHub: Forever-Artisan org). It is the ONLY copy: the eight folders in `Interface\AddOns` are junctions pointing into the repo, so the game runs the repo files. Both Claude projects (addon + website) edit the repo and nothing else; never write into AddOns or keep a second copy. Copies under `claude/addons/` in the project are reference snapshots only. Moved to the repo Sep 28, 2026.
+**Source of truth: the Git repo `D:\ForeverArtisan`** (GitHub: Forever-Artisan org). It is the ONLY copy: the ten folders in `Interface\AddOns` are junctions pointing into the repo (new module = new junction: `mklink /J "<AddOns>\ForeverArtisan_X" "D:\ForeverArtisan\ForeverArtisan_X"`), so the game runs the repo files. Both Claude projects (addon + website) edit the repo and nothing else; never write into AddOns or keep a second copy. Copies under `claude/addons/` in the project are reference snapshots only. Moved to the repo Sep 28, 2026.
 
 ## Versioning: one suite version
 - Current release: **0.9.3** (Sep 28, 2026; first public builds 0.9.1-beta.1 → 0.9.2 → 0.9.3 the same day). Next is **0.9.4** (bundles the BETA-tag change with Alchemy + Leatherworking). 1.0.0 is reserved for launch day (Nov 4, 2026).
@@ -24,10 +24,10 @@ ONE app, ONE download, ONE version, built as a SUITE: **ForeverArtisan_Core** is
 - Kerry's research: `/fa contacts dev` also saves full profession-window dumps for the website pipeline (dump.lua reads ForeverArtisanContactsDB).
 
 ## Packaging and release (GitHub)
-- Repo root: the eight `ForeverArtisan_*` folders, `.pkgmeta`, `.github\workflows\release.yml`, `CHANGELOG.md`, `README.md`, `docs\` (this file, RELEASE-CHECKLIST.md), `tools\` (release.py). `.pkgmeta` keeps docs/tools/README/CHANGELOG out of the player zip.
+- Repo root: the ten `ForeverArtisan_*` folders, `.pkgmeta`, `.github\workflows\release.yml`, `CHANGELOG.md`, `README.md`, `docs\` (this file, RELEASE-CHECKLIST.md), `tools\` (release.py, build_crafts.py + templates\, tests\suite.lua: `lua5.1 tools/tests/suite.lua .` must end with SUITE OK before a release). New module folders also need a `move-folders` line in `.pkgmeta`. `.pkgmeta` keeps docs/tools/README/CHANGELOG out of the player zip.
 - As you work: add player-facing lines under `## x.y.z (unreleased)` at the top of CHANGELOG.md.
 - Ship: run `docs\RELEASE-CHECKLIST.md` in game → `python tools\release.py . 0.9.2` → commit in GitHub Desktop → tag the commit `v0.9.2` (tag = TOC version with a `v`) → Push origin.
-- The tag runs the BigWigs packager (GitHub Actions): one zip `ForeverArtisan-<version>.zip` with all eight folders at the top level, attached to a GitHub Release and uploaded to CurseForge and Wago with the changelog. Keys live only in GitHub Secrets (`CF_API_KEY`, `WAGO_API_TOKEN`); project IDs in Core's TOC (`## X-Curse-Project-ID`, `## X-Wago-ID`).
+- The tag runs the BigWigs packager (GitHub Actions): one zip `ForeverArtisan-<version>.zip` with every module folder at the top level, attached to a GitHub Release and uploaded to CurseForge and Wago with the changelog. Keys live only in GitHub Secrets (`CF_API_KEY`, `WAGO_API_TOKEN`); project IDs in Core's TOC (`## X-Curse-Project-ID`, `## X-Wago-ID`).
 - The repo is public so the GitHub release zip can be the site's direct download (release assets of private repos need a login).
 - After launch: fixes go out as 1.0.1, 1.0.2…; bigger test builds as 1.1.0-beta.1, -beta.2, then 1.1.0.
 - Don't install ForeverArtisan from the CurseForge app on the dev PC: an "update" would write into the junctions, i.e. into the repo.
@@ -52,8 +52,20 @@ ONE app, ONE download, ONE version, built as a SUITE: **ForeverArtisan_Core** is
 | Mining | mine | /famining (FAMINING) | ForeverArtisanMiningDB |
 | Skinning | skin | /faskin (FASKIN) | ForeverArtisanSkinningDB |
 | First Aid | aid | /faaid (FAAID) | ForeverArtisanFirstAidDB |
+| Alchemy | alch | /faalch (FAALCH) | ForeverArtisanAlchemyDB |
+| Leatherworking | lw | /falw (FALW) | ForeverArtisanLeatherworkingDB |
 | Trade Contacts | contacts | /facontacts (FACONTACTS), /fasearch | ForeverArtisanContactsDB (account-wide) |
 Old names (MatsledgerSettings, MatsFishDB, ForeverArtisanLoggerDB, ForeverArtisanHerbDB) are still listed in the TOCs for this release only so FA.Migrate can carry data over; drop them in the next release. Old slash commands (/mfish, /mlog, /mats, /falog) are gone. Trade Contacts (files Contacts.lua = recording, Finder.lua = tooltips/search/`FA.Vendors`, UI.lua = Search / Contacts / Limited stock tabs) replaced the old Logger module. Frame names are ForeverArtisan<Module>Frame; Fishing buttons ForeverArtisanFishingCastButton / SwapButton; key bindings header FOREVERARTISAN_FISHING.
+
+## Crafting modules: one engine (Alchemy, Leatherworking, and the next ones)
+- `tools\build_crafts.py` writes `ForeverArtisan_<Name>\<Name>.lua`, `UI.lua` and the TOC from `tools\templates\Craft.lua.tpl` + `UI.lua.tpl`. Each profession is one entry in its `CRAFTS` list (skill line, slash, alias, SavedVariables, recipe item prefix, trainer advice, recipes the plan skips). Never hand-edit the generated files; fix the template and rerun. The TOC version is copied from Core.
+- Same engine as First Aid (reads the profession window, Make now, Plan + shopping list, craft log, recipe book, tooltips), plus:
+  - Sub-crafts: a reagent that one of your learned recipes makes (Cured Light Hide) is crafted, not bought. Only the shortfall after your bags, up to three levels deep; its materials join the list. Shown in gold ("craft N").
+  - Sources: Trade Contacts vendor → Core vendor-kind hint → your Herbalism / Skinning / Mining / Fishing log ("Herb: Red Rocks (Mulgore), from your Herbalism log") → "not in your Herbalism/Skinning log yet" by item type.
+  - Where to train: a trainer from Trade Contacts who teaches the next rank wins; otherwise the Classic answer, labeled as such.
+  - The window check is strict: a module only reads a profession window the game says is its own, so Alchemy never reads a Leatherworking window.
+- First Aid and Cooking predate the engine and are still their own files. Move them onto it when they next need real work.
+- Next on the engine: Tailoring, Enchanting, Blacksmithing, Engineering (one CRAFTS entry each, plus anything profession-specific).
 
 ## Suite style rules (every module, including new professions)
 - Build windows only through `FA.UI.Kit`: `K.Window` with tabs **Main (profession name) / Progress / Log / Guide** (Fishing's 4th tab is Derby).
