@@ -692,7 +692,7 @@ local IGNORE = { "guard", "grunt", "sentinel", "flight master", "wind rider", "g
   "mace", "sword", "axe merchant", "dagger", "robe merchant", "bowyer", "gunsmith", "shield", "mail armor", "plate armor",
   "cloth & leather armor", "bartender", "warrior trainer", "mage trainer", "priest trainer",
   "rogue trainer", "hunter trainer", "warlock trainer", "shaman trainer", "paladin trainer",
-  "druid trainer", "pet trainer" }
+  "druid trainer", "pet trainer", "weapon master", "riding", "mechanostrider" }
 
 isIgnored = function(title)
   if not title then return false end
