@@ -439,5 +439,16 @@ do
   GetProfessions=oldProf
   assert(hns.Skill(), "relearned shows again")
 end
+-- one-button fishing: reel-in key = fishing key turns on "same key reels in"
+do
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local st=ForeverArtisanFishingDB.settings
+  fns.SetKey("key","F"); st.reelSameKey=false
+  fns.SetKey("reelKey","F")
+  assert(st.key=="F" and st.reelKey=="" and st.reelSameKey==true, "same key turns on one-button fishing")
+  fns.SetKey("reelKey","")
+  assert(st.reelSameKey==false and st.key=="F", "Clear on reel-in turns it off, fishing key kept")
+  st.reelSameKey=true
+end
 print("CRAFTS OK")
 print("SUITE OK")

@@ -470,7 +470,7 @@ function ns.SetKey(field, key)
     if field == "reelKey" and key == s.key then
       -- reel on the fishing key = the "same key reels in" option
       s.reelKey, s.reelSameKey = "", true
-      say("Your fishing key already reels in, so no separate reel key is needed.")
+      say(("Reel-in key: %s, same as your fishing key. Cast, put your mouse on the bobber, and press it again on the splash."):format(KeyLabel(key)))
       UpdateMode(); ns.UpdateEnv(); if ns.OnChange then ns.OnChange() end
       return
     end
@@ -482,6 +482,8 @@ function ns.SetKey(field, key)
     end
   end
   s[field] = key
+  -- Clear on the reel-in row also turns off "same key reels in", so Clear clears what the row shows
+  if field == "reelKey" and key == "" then s.reelSameKey = false end
   if key == "SPACE" and field ~= "swapKey" then
     say("Heads up: Space won't jump while your fishing pole is equipped. It goes back to jumping when the pole comes off.")
   end

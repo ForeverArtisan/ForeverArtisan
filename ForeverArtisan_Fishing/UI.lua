@@ -74,7 +74,13 @@ local function KeyButton(parent, x, y, field, _, w)
   return kb
 end
 local function SyncKey(kb)
-  local k = S()[kb.field]
+  local s = S()
+  local k = s[kb.field]
+  -- one-button fishing: the reel-in row shows the fishing key instead of "none"
+  if kb.field == "reelKey" and (not k or k == "") and s.reelSameKey and s.key and s.key ~= "" then
+    kb:SetText(ns.KeyLabel(s.key) .. GRAY .. " (same key)|r")
+    return
+  end
   kb:SetText((k and k ~= "") and ns.KeyLabel(k) or (GRAY .. "none|r"))
 end
 
