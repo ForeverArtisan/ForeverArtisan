@@ -263,5 +263,32 @@ local aidInfo=aid.SkillInfo(); print("AID WITHOUT COOKING", aidInfo.rank)
 assert(aidInfo.rank, "First Aid not found when Cooking is missing")
 UnitName=realName
 GetProfessions=function() return 1,2,3,4,5,6,7,8 end
+-- Trade Contacts search: status words, one row per trainer, seen-only NPCs
+do
+  local db=ForeverArtisanContactsDB
+  db.entries["trainer:777"]={kind="trainer",npcId=777,name="Chaw Stronghide",title="Journeyman Leatherworker",zone="Mulgore",subzone="Bloodhoof Village",mapID=1412,x=45,y=61.5,
+    skills={{name="Camp Tent",rank="unavailable",skillReq="Leatherworking 30"},{name="Cured Light Hide",rank="available",skillReq="Leatherworking 35"},
+            {name="Journeyman Leatherworking",rank="available",skillReq="Leatherworking 50"}}}
+  db.scouted=db.scouted or {}
+  db.scouted[888]={name="Carolai Anise",title="Journeyman Alchemist",zone="Tirisfal Glades",subzone="Brill",mapID=1420,x=59.6,y=52.1,relevant=true,lastSeen=1}
+  db.scouted[889]={name="Tavern Keeper",title="Innkeeper",zone="Tirisfal Glades",subzone="Salty Tavern",relevant=nil}
+  local cns3=loadedFrames["ForeverArtisan_Contacts"].ns
+  cns3.OnContactsChanged()
+  local r=cns3.Search("leatherworking")
+  local rows, trains, status = 0, nil, false
+  for _,h in ipairs(r) do
+    if h.npc.n=="Chaw Stronghide" then rows=rows+1; if h.trains then trains=h.trains end end
+    if h.item and h.item.n:find("available") then status=true end
+  end
+  print("SEARCH GROUPED", rows, trains, status)
+  assert(trains==2, "trainer recipes should collapse into one row")
+  assert(rows==2, "one grouped row plus the Journeyman Leatherworking rank row")
+  assert(not status, "status words must not show as ranks")
+  local a=cns3.Search("alchemy"); local seen=false
+  for _,h in ipairs(a) do if h.seen and h.npc.n=="Carolai Anise" then seen=true end end
+  print("SEARCH SEEN", seen)
+  assert(seen, "seen-only alchemist should be found by 'alchemy'")
+  for _,h in ipairs(cns3.Search("salty")) do assert(not h.seen, "seen-only NPCs match on name/title only") end
+end
 print("CRAFTS OK")
 print("SUITE OK")

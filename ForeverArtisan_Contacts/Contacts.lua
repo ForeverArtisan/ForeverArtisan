@@ -353,7 +353,10 @@ local function logTrainer(announce)
     if category == "header" then
       header = name
     elseif name then
-      local s = { name = name, rank = (sub and sub ~= "") and sub or nil, group = header }
+      -- Forever returns the status ("available" / "unavailable" / "used") here; Classic returned the rank
+      local status = sub and ({ available = true, unavailable = true, used = true })[sub:lower()]
+      local s = { name = name, rank = (sub and sub ~= "" and not status) and sub or nil,
+                  status = status and sub:lower() or nil, group = header }
       if GetTrainerServiceCost then s.priceCopper = GetTrainerServiceCost(i) end
       if GetTrainerServiceLevelReq then
         local lv = GetTrainerServiceLevelReq(i)

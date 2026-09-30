@@ -35,12 +35,14 @@ local function UpdatesSince(e)
 end
 ns.HIDE_AFTER = 2
 
+local STATUS_WORD = { available = true, unavailable = true, used = true }
+
 local function Rebuild()
   wipe(npcs); wipe(byId); wipe(byName)
   local entries = DB() and DB().entries or {}
   for key, e in pairs(entries) do
     if (e.kind == "vendor" or e.kind == "trainer") and e.name then
-      local npc = { n = e.name, t = e.title, k = e.kind, z = e.zone, s = e.subzone, m = e.mapID, x = e.x, y = e.y,
+      local npc = { id = e.npcId, n = e.name, t = e.title, k = e.kind, z = e.zone, s = e.subzone, m = e.mapID, x = e.x, y = e.y,
                     seen = e.seenAt or e.lastSeen, visited = e.lastSeen, age = UpdatesSince(e), key = key, items = {} }
       if e.kind == "vendor" then
         for _, it in ipairs(e.items or {}) do
@@ -52,7 +54,9 @@ local function Rebuild()
       else
         for _, sk in ipairs(e.skills or {}) do
           if sk.name then
-            npc.items[#npc.items + 1] = { n = sk.name .. (sk.rank and (" (" .. sk.rank .. ")") or ""), p = sk.priceCopper,
+            -- older saves hold the status in rank ("Camp Tent (unavailable)"); keep real ranks only
+            local rank = sk.rank and not STATUS_WORD[sk.rank:lower()] and sk.rank or nil
+            npc.items[#npc.items + 1] = { n = sk.name .. (rank and (" (" .. rank .. ")") or ""), p = sk.priceCopper,
               sk = sk.skillReq, lv = sk.levelReq, train = true }
           end
         end
@@ -120,6 +124,7 @@ local function sortHits(hits)
     end
   end
   table.sort(hits, function(a, b)
+    if (a.seen or false) ~= (b.seen or false) then return not a.seen end
     if (a.npc.age or 0) ~= (b.npc.age or 0) then return (a.npc.age or 0) < (b.npc.age or 0) end
     if a.dist ~= b.dist then return a.dist < b.dist end
     if where(a.npc) ~= where(b.npc) then return where(a.npc) < where(b.npc) end
@@ -200,23 +205,56 @@ local function hitsForLink(link, name)
   return out
 end
 
--- search item names, vendor names/titles/towns, and required professions ("tailoring")
+-- "alchemy" should find an <Alchemist>, "leatherworking" a <Leatherworker>, "herbalism" an <Herbalist>
+local function stem(q)
+  local s = q:gsub("ing$", ""):gsub("ism$", "is"):gsub("y$", "")
+  if #s >= 5 and s ~= q then return s end
+end
+
+-- search item names, vendor names/titles/towns, and required professions ("tailoring").
+-- A trainer's recipes that only match by profession collapse into one row ("trains 33").
+-- NPCs you've passed but never talked to (scout mode) show too, marked as seen only.
 local function search(q)
   Ensure()
   q = (q or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
   local hits = {}
   if q == "" then return hits end
+  local st = stem(q)
+  local function has(text)
+    if not text then return false end
+    text = text:lower()
+    return text:find(q, 1, true) ~= nil or (st ~= nil and text:find(st, 1, true) ~= nil)
+  end
+  local known = {}
   for _, npc in ipairs(npcs) do
+    if npc.id then known[npc.id] = true end
+    known[npc.n] = true
     if npc.age >= ns.HIDE_AFTER then -- hidden: not seen through two updates
     else
-    local npcMatch = npc.n:lower():find(q, 1, true) or (npc.t and npc.t:lower():find(q, 1, true))
-      or (npc.s and npc.s:lower():find(q, 1, true)) or (npc.z and npc.z:lower():find(q, 1, true))
-    if npcMatch then table.insert(hits, { npc = npc }) end
+    local npcHit
+    if has(npc.n) or has(npc.t) or has(npc.s) or has(npc.z) then
+      npcHit = { npc = npc }
+      table.insert(hits, npcHit)
+    end
+    local trains = 0
     for _, it in ipairs(npc.items) do
-      if it.n:lower():find(q, 1, true) or (it.sk and it.sk:lower():find(q, 1, true)) then
+      if has(it.n) then
         table.insert(hits, { npc = npc, item = it })
+      elseif it.sk and has(it.sk) then
+        if it.train then trains = trains + 1 else table.insert(hits, { npc = npc, item = it }) end
       end
     end
+    if trains > 0 then
+      if npcHit then npcHit.trains = trains else table.insert(hits, { npc = npc, trains = trains }) end
+    end
+    end
+  end
+  local scouted = DB() and DB().scouted or {}
+  for id, s in pairs(scouted) do
+    if s.name and s.title and s.relevant and not known[id] and not known[s.name]
+      and (has(s.name) or has(s.title)) then
+      table.insert(hits, { seen = true, npc = { n = s.name, t = s.title, z = s.zone, s = s.subzone, m = s.mapID,
+        x = s.x, y = s.y, age = 0, seen = s.lastSeen, seenOnly = true, items = {} } })
     end
   end
   return sortHits(hits)

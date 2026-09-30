@@ -354,6 +354,20 @@ function UI.Kit(ns, view)
     return rows
   end
 
+  -- Share a row between the name (left) and the detail text (right) so they never overlap:
+  -- the right side gets what it needs up to 60% of the row, the name gets the rest, and
+  -- whichever is too long is cut off with "..." (hover the row for the full text).
+  function K.FitRow(r)
+    local rowW = (r.GetWidth and r:GetWidth()) or 0
+    if not rowW or rowW <= 0 then return end
+    local avail = rowW - 28 - 10 - ((r.act and r.act.IsShown and r.act:IsShown()) and ((r.act:GetWidth() or 0) + 8) or 0)
+    r.right:SetWidth(0)
+    local rw = (r.right.GetStringWidth and r.right:GetStringWidth()) or 0
+    local maxRight = math.floor(avail * 0.6)
+    if rw > maxRight then rw = maxRight; r.right:SetWidth(rw); r.right:SetWordWrap(false) end
+    r.left:SetWidth(math.max(80, avail - rw))
+  end
+
   -- data rows: { id, icon, left, right, tip, tipTitle, act, onAct,  goal rows also: pct, done, want, goalIndex }
   function K.Fill(rows, data, offset)
     for i, r in ipairs(rows) do
@@ -378,6 +392,8 @@ function UI.Kit(ns, view)
         end
         if r.bar then
           if d.pct then r.bar:Show(); r.bar:Set(d.pct, d.done and "done" or nil) else r.bar:Hide() end
+        else
+          K.FitRow(r)
         end
         r:Show()
       else

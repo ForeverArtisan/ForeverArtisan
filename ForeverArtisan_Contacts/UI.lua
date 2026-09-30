@@ -42,10 +42,18 @@ local function SearchData()
         left = it.n .. (it.sk and (GRAY .. "  " .. it.sk .. "|r") or ""),
         right = GRAY .. npc.n .. ", " .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "") .. "|r  " .. ns.Money(it),
         tip = npc.n .. (npc.t and (" <" .. npc.t .. ">") or "") .. "\n" .. ns.DetailText(npc, it) }
+    elseif npc.seenOnly then
+      data[#data + 1] = { icon = 134400, npc = npc, tipTitle = npc.n,
+        left = GOLD .. npc.n .. "|r" .. (npc.t and (GRAY .. " <" .. npc.t .. ">|r") or ""),
+        right = GRAY .. ns.Where(npc) .. "  ·  seen, not visited yet|r",
+        tip = ns.Where(npc) .. (npc.x and ("  (%.1f, %.1f)"):format(npc.x, npc.y) or "")
+          .. "\nYou've passed this NPC but haven't talked to them yet.\n|cff80c0ffClick for a waypoint|r" }
     else
       data[#data + 1] = { icon = npc.k == "trainer" and 136235 or 133784, npc = npc, tipTitle = npc.n,
         left = GOLD .. npc.n .. "|r" .. (npc.t and (GRAY .. " <" .. npc.t .. ">|r") or ""),
-        right = GRAY .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "") .. "|r", tip = ns.DetailText(npc) }
+        right = GRAY .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "")
+          .. (h.trains and ("  ·  trains " .. h.trains) or "") .. "|r",
+        tip = ns.DetailText(npc) }
     end
   end
   return data
@@ -84,7 +92,7 @@ local function RefreshSearchPage(p)
   elseif q == "" then
     p.status:SetText(("%d vendors and %d trainers you've met. Type to search."):format(v, t))
   elseif #data == 0 then
-    p.status:SetText(GRAY .. "Nothing matches among the NPCs you've met.|r")
+    p.status:SetText(GRAY .. "Nothing matches among the NPCs you've met or passed.|r")
   else
     p.status:SetText(("%d result%s"):format(#data, #data == 1 and "" or "s"))
   end

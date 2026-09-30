@@ -73,7 +73,7 @@ local function RefreshMainPage(p)
     local c = ns.CharRec()
     local n, learned = 0, 0
     for _, r in pairs(c.recipes) do n = n + 1; if r.learned then learned = learned + 1 end end
-    p.find:SetText(GREEN .. ("%d recipes read, %d learned|r"):format(n, learned) .. GRAY .. "  ·  updated when you open your Cooking window|r")
+    p.find:SetText(GREEN .. ("%d recipes read, %d learned|r"):format(n, learned))
     for _, e in ipairs((ns.CookNow())) do
       list[#list + 1] = { id = e.r.itemId, icon = Icon(e.r.itemId),
         left = ns.COLOR_CODE[e.color] .. e.r.name .. "|r",
