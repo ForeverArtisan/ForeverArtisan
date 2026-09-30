@@ -65,12 +65,20 @@ end
 local function RunSearch()
   local p = pages.search
   local q = p.box:GetText() or ""
+  view.hidden, view.hiddenName = 0, nil
   if view.onlyNew then
     if q:match("^%s*$") then
       view.results = ns.Unvisited()
     else
       view.results = {}
-      for _, h in ipairs(ns.Search(q)) do if h.seen then view.results[#view.results + 1] = h end end
+      for _, h in ipairs(ns.Search(q)) do
+        if h.seen then view.results[#view.results + 1] = h
+        else
+          -- keep count of what the checkbox hid, so an empty list can say why
+          view.hidden = view.hidden + 1
+          view.hiddenName = view.hiddenName or (h.npc and h.npc.n)
+        end
+      end
     end
   else
     view.results = ns.Search(q)
@@ -110,7 +118,16 @@ local function RefreshSearchPage(p)
   for _, c in ipairs(p.checks) do c:Sync() end
   local v, t = Counts()
   local q = p.box:GetText() or ""
-  if view.onlyNew then
+  local hid = view.hidden or 0
+  if view.onlyNew and hid > 0 and #data == 0 then
+    -- the search found someone, the checkbox hid them: say so instead of "nobody"
+    p.status:SetText(YELLOW .. (hid == 1 and ((view.hiddenName or "1 NPC") .. " matches, but you've already visited.")
+      or (hid .. " NPCs match, but you've already visited them.")) .. " Untick 'Only not visited' to see.|r")
+  elseif view.onlyNew and hid > 0 then
+    p.status:SetText(("%d not visited yet  " .. GRAY .. "(%d visited hidden. Untick 'Only not visited' to see all.)|r"):format(#data, hid))
+  elseif view.onlyNew and q ~= "" and #data == 0 then
+    p.status:SetText(GRAY .. "Nothing matches among the NPCs you've met or passed.|r")
+  elseif view.onlyNew then
     p.status:SetText(#data == 0 and (GRAY .. "Nobody left to visit. Turn on 'Show NPC names in town' and ride through a town.|r")
       or ("%d crafting NPC%s you've passed but not talked to, nearest first"):format(#data, #data == 1 and "" or "s"))
   elseif v + t == 0 then

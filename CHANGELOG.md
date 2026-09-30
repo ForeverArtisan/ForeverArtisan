@@ -7,6 +7,7 @@
 - The `/fa` panel has a "Show NPC names in town" checkbox at the bottom, next to Vendor search, so scout mode is easy to find.
 - Wording: "seen, not visited yet" is now "seen, talk to save".
 - Hover either "Show NPC names in town" checkbox for what it does and how many NPCs you have seen. Ticking it says so in chat, and clicking a checkbox's label works too.
+- Search with "Only not visited" ticked now says when it hid a match ("Karolek matches, but you've already visited") instead of "Nobody left to visit".
 
 ## 0.9.4 (2026-09-29)
 - Alchemy (new module): what to make now for skill-ups, a plan to your target skill with a shopping list, a craft log, a recipe book, where to train next, and Alchemy lines on herb and vial tooltips. Herbs you're short on point to where your Herbalism log found them. Transmutes stay out of the plan because of their cooldowns. `/fa alch`
