@@ -488,7 +488,7 @@ FishingSkillLive = function()
   if GetProfessions and GetProfessionInfo then
     local ok, p1, p2, arch, fish, cook = pcall(GetProfessions)
     if ok then
-      for _, idx in ipairs({ fish, p1, p2, cook, arch }) do
+      for _, idx in pairs({ fish, p1, p2, cook, arch }) do -- pairs: a profession you lack is nil, and ipairs would stop there
         if idx then
           local name, _, rank, maxr, _, _, line, mod = GetProfessionInfo(idx)
           if rank and (line == FISHING_SKILL_LINE or IsFishingName(name)) then

@@ -69,7 +69,7 @@ local function SkillLive()
   if GetProfessions and GetProfessionInfo then
     local ok, p1, p2 = pcall(GetProfessions)
     if ok then
-      for _, idx in ipairs({ p1, p2 }) do
+      for _, idx in pairs({ p1, p2 }) do -- pairs: a profession you lack is nil, and ipairs would stop there
         if idx then
           local name, _, rank, maxr, _, _, line, mod = GetProfessionInfo(idx)
           if rank and (line == SKINNING_SKILL_LINE or IsSkinName(name)) then

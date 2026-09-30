@@ -256,5 +256,12 @@ fire("UNIT_SPELLCAST_SUCCEEDED","player",nil,2330); fire("CHAT_MSG_SKILL","Your 
 print("ALCH session", alch.SessionInfo().crafts, alch.SessionInfo().ups, alch.CharRec().skill)
 assert(alch.SessionInfo().crafts==1 and alch.SessionInfo().ups==1)
 assert(lw.SessionInfo().ups==0, "alchemy skill-up counted in leatherworking")
+-- regression: First Aid learned, Cooking not (GetProfessions returns nil for the cooking slot)
+GetProfessions=function() return 1,2,nil,4,nil,6 end
+local realName=UnitName; UnitName=function() return "Fresh" end  -- new character: nothing saved yet
+local aidInfo=aid.SkillInfo(); print("AID WITHOUT COOKING", aidInfo.rank)
+assert(aidInfo.rank, "First Aid not found when Cooking is missing")
+UnitName=realName
+GetProfessions=function() return 1,2,3,4,5,6,7,8 end
 print("CRAFTS OK")
 print("SUITE OK")
