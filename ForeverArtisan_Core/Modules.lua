@@ -162,6 +162,8 @@ local function refreshPanel()
   panel.empty:SetShown(#modules == 0)
   panel.reload:SetShown(pending)
   panel.searchBtn:SetShown(FA.Vendors ~= nil)
+  panel.scout:SetShown(FA.Vendors ~= nil and FA.Vendors.setScout ~= nil)
+  if FA.Vendors and FA.Vendors.scoutOn then panel.scout:SetChecked(FA.Vendors.scoutOn() and true or false) end
 
   -- "Coming soon" grid under the installed modules
   local shown = math.min(#modules, #panel.rows)
@@ -184,7 +186,7 @@ local function refreshPanel()
     end
   end
   local gridRows = math.ceil(#soon / SOON_COLS)
-  panel:SetHeight(math.max(260, -top + 20 + gridRows * SOON_H + 84))
+  panel:SetHeight(math.max(260, -top + 20 + gridRows * SOON_H + 110))
 end
 
 local function buildPanel()
@@ -246,6 +248,22 @@ local function buildPanel()
   panel.searchBtn:SetPoint("BOTTOMLEFT", 16, 12)
   panel.searchBtn:SetText("Vendor search")
   panel.searchBtn:SetScript("OnClick", function() panel:Hide(); if FA.Vendors then FA.Vendors.open() end end)
+
+  -- scout mode, right where people look first (also on Trade Contacts' Search tab)
+  panel.scout = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+  panel.scout:SetSize(24, 24)
+  panel.scout:SetPoint("BOTTOMLEFT", 14, 40)
+  local sl = panel.scout:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  sl:SetPoint("LEFT", panel.scout, "RIGHT", 2, 0)
+  sl:SetText("Show NPC names in town " .. GREY .. "(finds crafting NPCs as you pass)|r")
+  panel.scout:SetScript("OnClick", function(self)
+    if FA.Vendors and FA.Vendors.setScout then FA.Vendors.setScout(self:GetChecked() and true or false) end
+  end)
+  -- the label is part of the button, so hovering or clicking the words works too
+  panel.scout:SetHitRectInsets(0, -((sl:GetStringWidth() or 0) + 4), 0, 0)
+  FA.UI.Tip(panel.scout, function()
+    if FA.Vendors and FA.Vendors.scoutTip then FA.Vendors.scoutTip(GameTooltip) end
+  end)
 
   panel.reload = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
   panel.reload:SetSize(130, 24)

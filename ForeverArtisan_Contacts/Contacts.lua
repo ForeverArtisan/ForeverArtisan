@@ -924,6 +924,32 @@ function ns.SetScout(on)
 end
 function ns.IsRelevant(title) return isRelevant(title) end
 
+-- What the "Show NPC names in town" checkbox does, for its hover tooltip (both checkboxes use this).
+function ns.ScoutTip(tt)
+  local total, rel = 0, 0
+  for _, s in pairs((ForeverArtisanContactsDB and ForeverArtisanContactsDB.scouted) or {}) do
+    total = total + 1; if isRelevant(s.title) then rel = rel + 1 end
+  end
+  tt:AddLine("Show NPC names in town")
+  tt:AddLine("Shows friendly NPC names with their job under them, like <Leatherworking Trainer>.", 1, 1, 1, true)
+  tt:AddLine(" ")
+  tt:AddLine("Walk or ride through a town and every crafting vendor and trainer you pass is noted, " ..
+    "even before you talk to them. Search shows them as \"seen, talk to save\" with a waypoint.", 1, 1, 1, true)
+  tt:AddLine("Talk to one to save its full list and prices.", 1, 1, 1, true)
+  tt:AddLine(" ")
+  tt:AddLine("Turn it off and your own nameplate settings come back.", 0.6, 0.6, 0.6, true)
+  tt:AddLine("Open world only: the game hides nameplates in dungeons.", 0.6, 0.6, 0.6, true)
+  tt:AddLine(" ")
+  tt:AddLine(total .. " NPCs seen so far, " .. rel .. " of them crafting-related.", 1, 0.82, 0)
+end
+
+-- Checkbox version of /fa contacts scout: same switch, plus one line in chat so people see it worked.
+function ns.SetScoutFromUI(on)
+  ns.SetScout(on)
+  if on then say("names in town on. Ride through a town and crafting NPCs are noted as you pass.")
+  else say("names in town off. Your nameplate settings are back.") end
+end
+
 ---------------------------------------------------------------- events
 
 -- Register safely: an event this client doesn't have is skipped instead of

@@ -275,6 +275,7 @@ function UI.Kit(ns, view)
     local c = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     c:SetSize(24, 24); c:SetPoint("TOPLEFT", x, y)
     local fs = UI.Text(c, "GameFontHighlight", "LEFT", 24, 0, c, "LEFT"); fs:SetText(label)
+    c:SetHitRectInsets(0, -((fs:GetStringWidth() or 0) + 4), 0, 0) -- clicking the words ticks the box too
     c:SetScript("OnClick", function(self)
       set(self:GetChecked() and true or false)
       if after then after() end

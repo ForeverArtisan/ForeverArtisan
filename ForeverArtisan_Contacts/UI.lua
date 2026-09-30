@@ -90,11 +90,16 @@ local function BuildSearchPage(p)
   p.rows = MakeRows(p, SEARCH_ROWS, -50, false)
   ClickToWaypoint(p.rows)
   p.checks = {
-    K.Check(p, "Show NPC names in town", 16, -414, function() return ns.ScoutOn() end, function(v) ns.SetScout(v) end),
+    K.Check(p, "Show NPC names in town", 16, -414, function() return ns.ScoutOn() end, function(v) ns.SetScoutFromUI(v) end),
     K.Check(p, "Only not visited", 250, -414, function() return view.onlyNew end, function(v) view.onlyNew = v; RunSearch() end),
   }
+  FA.UI.Tip(p.checks[1], function() ns.ScoutTip(GameTooltip) end)
+  FA.UI.Tip(p.checks[2], function()
+    GameTooltip:AddLine("Only not visited")
+    GameTooltip:AddLine("Lists crafting NPCs you've passed but never talked to, nearest first. Talk to each one to save what it sells or trains.", 1, 1, 1, true)
+  end)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
-  help:SetText("Search items, vendors, towns or a profession. Click a row for a waypoint. Names in town finds NPCs as you pass.")
+  help:SetText("Search items, vendors, towns or a profession. Click a row for a waypoint. Hover a checkbox to see what it does.")
   Wheel(p, "searchOff", function() return #view.results - SEARCH_ROWS end)
 end
 

@@ -395,6 +395,9 @@ FA.Vendors = {
   hitsForLink = hitsForLink,
   open = function(q) if ns.OpenSearch then ns.OpenSearch(q) end end,
   waypoint = function(npc) if npc then ns.SetWaypoint(npc) end end,
+  scoutOn = function() return ns.ScoutOn and ns.ScoutOn() end,
+  setScout = function(on) if ns.SetScoutFromUI then ns.SetScoutFromUI(on) end end,
+  scoutTip = function(tt) if ns.ScoutTip then ns.ScoutTip(tt) end end,
 }
 
 SLASH_FASEARCH1 = "/fasearch"

@@ -4,7 +4,9 @@
 - Trade Contacts: a crafting NPC you talked to is saved even when no trainer or shop window opens (a trainer who won't train you yet only shows chat). They show as "visited, no list yet" instead of "seen, not visited".
 - Trade Contacts search: one row per trainer, with the ranks they teach on it ("trains 16 · Apprentice").
 - Trade Contacts: two checkboxes on the Search tab replace the scout and todo commands. "Show NPC names in town" finds crafting NPCs as you pass; "Only not visited" lists the ones you haven't talked to, nearest first. The slash commands still work.
+- The `/fa` panel has a "Show NPC names in town" checkbox at the bottom, next to Vendor search, so scout mode is easy to find.
 - Wording: "seen, not visited yet" is now "seen, talk to save".
+- Hover either "Show NPC names in town" checkbox for what it does and how many NPCs you have seen. Ticking it says so in chat, and clicking a checkbox's label works too.
 
 ## 0.9.4 (2026-09-29)
 - Alchemy (new module): what to make now for skill-ups, a plan to your target skill with a shopping list, a craft log, a recipe book, where to train next, and Alchemy lines on herb and vial tooltips. Herbs you're short on point to where your Herbalism log found them. Transmutes stay out of the plan because of their cooldowns. `/fa alch`
