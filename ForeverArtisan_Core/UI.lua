@@ -109,6 +109,23 @@ function UI.Header(parent, y, label, x)
   return fs
 end
 
+-- "Open Alchemy window": casts the profession spell when clicked, which opens its window so the
+-- module can read the recipes. Secure buttons can't be shown or hidden in combat, so ShowIf waits.
+function UI.ProfessionButton(parent, spellName, w)
+  local b = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate, UIPanelButtonTemplate")
+  b:SetSize(w or 220, 26)
+  b:RegisterForClicks("AnyUp", "AnyDown")
+  b:SetAttribute("type", "spell")
+  b:SetAttribute("spell", spellName)
+  b:SetText("Open " .. spellName .. " window")
+  function b:ShowIf(on)
+    if InCombatLockdown() then return end
+    if on then self:Show() else self:Hide() end
+  end
+  b:Hide()
+  return b
+end
+
 function UI.Button(parent, label, w, onClick)
   local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
   b:SetSize(w or 100, 22); b:SetText(label or "")

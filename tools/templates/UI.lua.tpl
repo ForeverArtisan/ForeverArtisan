@@ -44,6 +44,7 @@ local function BuildMainPage(p)
   Text(p, "GameFontDisableSmall", "TOPLEFT", 90, -160):SetText("recipes that still give skill-ups")
   p.rows = MakeRows(p, NOW_ROWS, -178, false)
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 20, -182); p.empty:SetWidth(420)
+  p.open = FA.UI.ProfessionButton(p, "@@NAME@@", 240); p.open:SetPoint("TOPLEFT", 20, -208)
 
   p.checks = {
     Check(p, "Show @@NAME@@ info on material tooltips", 16, -412,
@@ -83,8 +84,8 @@ local function RefreshMainPage(p)
     end
     p.empty:SetText(#list == 0 and "None of your recipes give skill-ups right now. Learn new ones or train." or "")
   elseif knows then
-    p.find:SetText(YELLOW .. "Open your @@NAME@@ window once so I can read your recipes.|r")
-    p.empty:SetText("")
+    p.find:SetText(YELLOW .. "Your recipes haven't been read yet.|r")
+    p.empty:SetText(YELLOW .. "Open the @@NAME@@ window once and every recipe is read. Click here:|r")
   else
     p.find:SetText(""); p.empty:SetText("")
   end
@@ -98,6 +99,7 @@ local function RefreshMainPage(p)
   else
     p.sess:SetText(GRAY .. "Nothing made yet this session.|r"); p.last:SetText("")
   end
+  p.open:ShowIf(knows and not ns.HasRecipes())
   for _, c in ipairs(p.checks) do c:Sync() end
 end
 
@@ -122,6 +124,7 @@ local function BuildProgressPage(p)
   Text(p, "GameFontDisableSmall", "TOPLEFT", 120, -240):SetText("have / need  ·  hover for source  ·  gold = you craft it")
   p.shopRows = MakeRows(p, SHOP_ROWS, -258, false)
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 20, -104); p.empty:SetWidth(420)
+  p.open = FA.UI.ProfessionButton(p, "@@NAME@@", 240); p.open:SetPoint("TOPLEFT", 20, -128)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("Craft counts are estimates: orange always skills up, yellow and green less often.")
 end
@@ -135,6 +138,7 @@ local function RefreshProgressPage(p)
     p.skillBar:Set(nil); p.rate:SetText(GRAY .. "You haven't learned @@NAME@@ on this character.|r")
   end
   if i.rank then p.rate:SetText(("%d crafts since your last skill-up  ·  "):format(i.sinceUp or 0) .. (p.rate:GetText() or "")) end
+  p.open:ShowIf(ns.Knows() and not ns.HasRecipes())
   if not (ns.Knows() and ns.HasRecipes()) then
     Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); p.note:SetText(""); p.target:SetTextColor(1, 1, 1)
     p.empty:SetText(ns.Knows() and "Open your @@NAME@@ window once so I can read your recipes." or "")
@@ -261,6 +265,7 @@ local function BuildGuidePage(p)
   p.tLearned, p.tAll = tLearned, tAll
   p.rows = MakeRows(p, BOOK_ROWS, -30, false)
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -100, p, "TOP"); p.empty:SetJustifyH("CENTER")
+  p.open = FA.UI.ProfessionButton(p, "@@NAME@@", 240); p.open:SetPoint("TOP", 0, -126)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("Hover a recipe for its materials and, if you don't know it, who sells it.")
   Wheel(p, "guideOff", function() return #BookData() - BOOK_ROWS end)
@@ -271,6 +276,7 @@ local function RefreshGuidePage(p)
   view.guideOff = math.min(view.guideOff, math.max(0, #data - BOOK_ROWS))
   Fill(p.rows, data, view.guideOff)
   p.empty:SetText(#data == 0 and "Open your @@NAME@@ window once so I can read your recipes." or "")
+  p.open:ShowIf(ns.Knows() and not ns.HasRecipes())
   p.tLearned:SetEnabled(view.bookAll)
   p.tAll:SetEnabled(not view.bookAll)
 end

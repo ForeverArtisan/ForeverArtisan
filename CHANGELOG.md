@@ -10,6 +10,7 @@
 - Trade Contacts search: a trainer shows as one row ("trains 33") instead of one row per recipe; "alchemy" now finds Alchemists and "leatherworking" finds Leatherworkers; NPCs you've passed but not talked to show up too, marked "seen, not visited yet". Results are nearest first, across zones on your continent. Use `/fa search alchemy` when the word is also a module name.
 - Trade Contacts: trainer entries no longer end in "(available)" or "(unavailable)".
 - Every list: long names and long details share the row instead of printing over each other.
+- Cooking, First Aid, Alchemy, Leatherworking: until your recipes are read, every tab shows an "Open <profession> window" button. One click opens the window and the recipes are read.
 - No more BETA tag on tested releases. Only builds named "-beta" show it now, and the login popup went with it. `/fa feedback` still shows where to send bugs and ideas.
 
 ## 0.9.3 (2026-09-28)
