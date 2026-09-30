@@ -391,7 +391,7 @@ function UI.Kit(ns, view)
     for i, r in ipairs(rows) do
       local d = data[i + (offset or 0)]
       if d then
-        r.icon:SetTexture(d.icon or 134400)
+        if d.noIcon then r.icon:SetTexture(nil) else r.icon:SetTexture(d.icon or 134400) end
         r.left:SetText(d.left or ""); r.right:SetText(d.right or "")
         r.itemId, r.tip, r.tipTitle, r.data, r.goalIndex = d.id, d.tip, d.tipTitle, d, d.goalIndex
         if r.act then

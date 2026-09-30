@@ -8,6 +8,7 @@
 - Wording: "seen, not visited yet" is now "seen, talk to save".
 - Hover either "Show NPC names in town" checkbox for what it does and how many NPCs you have seen. Ticking it says so in chat, and clicking a checkbox's label works too.
 - Search with "Only not visited" ticked now says when it hid a match ("Karolek matches, but you've already visited") instead of "Nobody left to visit".
+- Trade Contacts, Contacts tab: grouped under town headers (click one to fold it), with a Zone picker (All zones, Where I am, or one zone) and a Trade picker (All crafting, one profession, Trade & general goods, or Everyone). Innkeepers, class and riding trainers saved by older versions are hidden unless you pick Everyone. The "before update" tag is gone from each row; a grey name means the same thing.
 
 ## 0.9.4 (2026-09-29)
 - Alchemy (new module): what to make now for skill-ups, a plan to your target skill with a shopping list, a craft log, a recipe book, where to train next, and Alchemy lines on herb and vial tooltips. Herbs you're short on point to where your Herbalism log found them. Transmutes stay out of the plan because of their cooldowns. `/fa alch`

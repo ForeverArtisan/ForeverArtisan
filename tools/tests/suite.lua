@@ -329,5 +329,42 @@ do
   print("UNVISITED", #un)
   cn.SetScout(false); assert(not cn.ScoutOn()); cn.SetScout(true); assert(cn.ScoutOn())
 end
+-- Contacts tab: grouped by town, Zone and Trade pickers
+do
+  local cn=loadedFrames["ForeverArtisan_Contacts"].ns
+  local db=ForeverArtisanContactsDB
+  db.entries["vendor:903"]={kind="vendor",npcId=903,name="Innkeeper Test",title="Innkeeper",zone="Stranglethorn Vale",subzone="Grom'gol Base Camp",mapID=1434,x=31,y=28,items={}}
+  cn.OnContactsChanged()
+  local function tab(name) for _,b in ipairs(frames) do if b._text==name and b.scripts.OnClick then b.scripts.OnClick(b) end end end
+  local function visible()
+    local out={}
+    for _,r in ipairs(cn.Pages.contacts.rows) do if r.data and r._shown then out[#out+1]=(r.data.header and "H:" or "")..(r.left._text or ""):gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r","") end end
+    return out
+  end
+  local set=db.settings
+  set.listZone, set.listTrade = "all", "crafting"
+  ForeverArtisanContactsFrame:Show()
+  tab("Contacts")
+  local v=visible(); local inn=false, false
+  for _,t in ipairs(v) do if t:find("Innkeeper Test") then inn=true end end
+  assert(not inn, "innkeepers hidden under All crafting")
+  set.listTrade="Leatherworking"; cn.OnChange(); v=visible()
+  local heads, lw, other = 0, 0, 0
+  for _,t in ipairs(v) do if t:find("^H:") then heads=heads+1 elseif t:find("Leatherwork") then lw=lw+1 else other=other+1 end end
+  print("CONTACTS LW", heads, lw, other, table.concat(v," ; "))
+  assert(heads>0 and lw>0 and other==0, "Leatherworking filter shows only leatherworkers, under town headers")
+  set.listTrade="all"; set.listZone="Stranglethorn Vale"; cn.OnChange(); v=visible()
+  inn=false; for _,t in ipairs(v) do if t:find("Innkeeper Test") then inn=true end end
+  assert(inn, "Everyone + zone shows the innkeeper")
+  for _,r in ipairs(cn.Pages.contacts.rows) do if r.data and r.data.header and r._shown then r.scripts.OnClick(r,"LeftButton") break end end
+  v=visible(); print("FOLDED", #v, v[1]); assert(#v==1 and v[1]:find("^H:%+"), "clicking a town folds it")
+  -- both pickers open, list their choices, and only one menu is open at a time
+  local pg=cn.Pages.contacts
+  pg.zonePick.scripts.OnClick(pg.zonePick); pg.tradePick.scripts.OnClick(pg.tradePick)
+  assert(pg.tradePick.menu._shown and not pg.zonePick.menu._shown, "one picker menu at a time")
+  local tn=0 for _,it in ipairs(pg.tradePick.menu.items) do if it._shown then tn=tn+1 end end
+  print("TRADE CHOICES", tn, pg.tradePick._text); assert(tn>=3)
+  set.listZone, set.listTrade = nil, nil
+end
 print("CRAFTS OK")
 print("SUITE OK")

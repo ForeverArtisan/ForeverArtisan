@@ -923,6 +923,7 @@ function ns.SetScout(on)
   end
 end
 function ns.IsRelevant(title) return isRelevant(title) end
+function ns.IsIgnored(title) return isIgnored(title) end
 
 -- What the "Show NPC names in town" checkbox does, for its hover tooltip (both checkboxes use this).
 function ns.ScoutTip(tt)
