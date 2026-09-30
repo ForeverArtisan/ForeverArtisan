@@ -280,9 +280,12 @@ do
     if h.npc.n=="Chaw Stronghide" then rows=rows+1; if h.trains then trains=h.trains end end
     if h.item and h.item.n:find("available") then status=true end
   end
-  print("SEARCH GROUPED", rows, trains, status)
+  local ranks
+  for _,h in ipairs(r) do if h.npc.n=="Chaw Stronghide" then ranks=h.ranks end end
+  print("SEARCH GROUPED", rows, trains, status, ranks and #ranks)
   assert(trains==2, "trainer recipes should collapse into one row")
-  assert(rows==2, "one grouped row plus the Journeyman Leatherworking rank row")
+  assert(rows==1, "one row per trainer, rank rows folded in")
+  assert(ranks and #ranks==1, "Journeyman Leatherworking folded into the trainer row")
   assert(not status, "status words must not show as ranks")
   local a=cns3.Search("alchemy"); local seen=false
   for _,h in ipairs(a) do if h.seen and h.npc.n=="Carolai Anise" then seen=true end end
@@ -311,6 +314,20 @@ do
   print("LEARN FROM", who and who.n)
   assert(who and who.n=="Chaw Stronghide", "should name the trainer who teaches Apprentice, not Brawn")
   assert(alch.LearnFrom()==nil, "no alchemy trainer met yet")
+  -- talked to, but only the chat window opened: a contact, not "seen"
+  db.entries["service:902"]={kind="service",npcId=902,name="Brawn Two",title="Expert Leatherworker",zone="Stranglethorn Vale",subzone="Grom'gol Base Camp",mapID=1434,x=31.6,y=28.8,service="expert leatherworker"}
+  db.scouted[902]={name="Brawn Two",title="Expert Leatherworker",zone="Stranglethorn Vale",subzone="Grom'gol Base Camp",mapID=1434,x=31.6,y=28.8,relevant=true}
+  loadedFrames["ForeverArtisan_Contacts"].ns.OnContactsChanged()
+  local cn=loadedFrames["ForeverArtisan_Contacts"].ns
+  local found
+  for _,h in ipairs(cn.Search("leatherworker")) do if h.npc.n=="Brawn Two" then found=h end end
+  print("CHAT-ONLY CONTACT", found and found.npc.k, found and found.seen)
+  assert(found and found.npc.k=="service" and not found.seen, "chat-only visit should be a contact")
+  local un=cn.Unvisited(); local hasBrawn=false
+  for _,h in ipairs(un) do if h.npc.n=="Brawn Two" then hasBrawn=true end end
+  assert(not hasBrawn, "a visited NPC is not in Only not visited")
+  print("UNVISITED", #un)
+  cn.SetScout(false); assert(not cn.ScoutOn()); cn.SetScout(true); assert(cn.ScoutOn())
 end
 print("CRAFTS OK")
 print("SUITE OK")

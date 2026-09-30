@@ -1,5 +1,11 @@
 # ForeverArtisan changelog
 
+## 0.9.5 (unreleased)
+- Trade Contacts: a crafting NPC you talked to is saved even when no trainer or shop window opens (a trainer who won't train you yet only shows chat). They show as "visited, no list yet" instead of "seen, not visited".
+- Trade Contacts search: one row per trainer, with the ranks they teach on it ("trains 16 · Apprentice").
+- Trade Contacts: two checkboxes on the Search tab replace the scout and todo commands. "Show NPC names in town" finds crafting NPCs as you pass; "Only not visited" lists the ones you haven't talked to, nearest first. The slash commands still work.
+- Wording: "seen, not visited yet" is now "seen, talk to save".
+
 ## 0.9.4 (2026-09-29)
 - Alchemy (new module): what to make now for skill-ups, a plan to your target skill with a shopping list, a craft log, a recipe book, where to train next, and Alchemy lines on herb and vial tooltips. Herbs you're short on point to where your Herbalism log found them. Transmutes stay out of the plan because of their cooldowns. `/fa alch`
 - Leatherworking (new module): the same window and plan. Cured hides count as crafts, not purchases: the plan makes only the ones you don't already have and lists the raw hides and Salt instead. Leather and hides point to where your Skinning log found them. `/fa lw`

@@ -2,7 +2,7 @@
 ## Title: ForeverArtisan: Herbalism
 ## Notes: Gather log by zone, skill-up tracker, what to pick next, goals, and herb tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.4
+## Version: 0.9.5-dev
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

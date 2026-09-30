@@ -27,12 +27,12 @@ end
 
 local function Counts()
   local v, t = 0, 0
-  for _, npc in ipairs(ns.Contacts()) do if npc.k == "vendor" then v = v + 1 else t = t + 1 end end
+  for _, npc in ipairs(ns.Contacts()) do if npc.k == "vendor" then v = v + 1 elseif npc.k == "trainer" then t = t + 1 end end
   return v, t
 end
 
 ---------------------------------------------------------------- page 1: Search
-local SEARCH_ROWS = 17
+local SEARCH_ROWS = 15
 local function SearchData()
   local data = {}
   for _, h in ipairs(view.results) do
@@ -45,14 +45,17 @@ local function SearchData()
     elseif npc.seenOnly then
       data[#data + 1] = { icon = 134400, npc = npc, tipTitle = npc.n,
         left = GOLD .. npc.n .. "|r" .. (npc.t and (GRAY .. " <" .. npc.t .. ">|r") or ""),
-        right = GRAY .. ns.Where(npc) .. "  ·  seen, not visited yet|r",
+        right = GRAY .. ns.Where(npc) .. "  ·  seen, talk to save|r",
         tip = ns.Where(npc) .. (npc.x and ("  (%.1f, %.1f)"):format(npc.x, npc.y) or "")
           .. "\nYou've passed this NPC but haven't talked to them yet.\n|cff80c0ffClick for a waypoint|r" }
     else
       data[#data + 1] = { icon = npc.k == "trainer" and 136235 or 133784, npc = npc, tipTitle = npc.n,
         left = GOLD .. npc.n .. "|r" .. (npc.t and (GRAY .. " <" .. npc.t .. ">|r") or ""),
         right = GRAY .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "")
-          .. (h.trains and ("  ·  trains " .. h.trains) or "") .. "|r",
+          .. (h.trains and ("  ·  trains " .. h.trains) or "")
+          .. (h.ranks and ("  ·  " .. table.concat((function()
+                local w = {} for _, r in ipairs(h.ranks) do w[#w + 1] = ns.RankWord(r) or r end return w end)(), ", ")) or "")
+          .. (npc.k == "service" and "  ·  visited, no list yet" or "") .. "|r",
         tip = ns.DetailText(npc) }
     end
   end
@@ -61,7 +64,17 @@ end
 
 local function RunSearch()
   local p = pages.search
-  view.results = ns.Search(p.box:GetText())
+  local q = p.box:GetText() or ""
+  if view.onlyNew then
+    if q:match("^%s*$") then
+      view.results = ns.Unvisited()
+    else
+      view.results = {}
+      for _, h in ipairs(ns.Search(q)) do if h.seen then view.results[#view.results + 1] = h end end
+    end
+  else
+    view.results = ns.Search(q)
+  end
   view.searchOff = 0
   ns.OnChange()
 end
@@ -76,8 +89,12 @@ local function BuildSearchPage(p)
   p.status = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -32); p.status:SetWidth(430)
   p.rows = MakeRows(p, SEARCH_ROWS, -50, false)
   ClickToWaypoint(p.rows)
+  p.checks = {
+    K.Check(p, "Show NPC names in town", 16, -414, function() return ns.ScoutOn() end, function(v) ns.SetScout(v) end),
+    K.Check(p, "Only not visited", 250, -414, function() return view.onlyNew end, function(v) view.onlyNew = v; RunSearch() end),
+  }
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
-  help:SetText("Search items, vendors, towns or a profession (\"tailoring\"). Click a row for a waypoint.")
+  help:SetText("Search items, vendors, towns or a profession. Click a row for a waypoint. Names in town finds NPCs as you pass.")
   Wheel(p, "searchOff", function() return #view.results - SEARCH_ROWS end)
 end
 
@@ -85,9 +102,13 @@ local function RefreshSearchPage(p)
   local data = SearchData()
   view.searchOff = math.min(view.searchOff, math.max(0, #data - SEARCH_ROWS))
   Fill(p.rows, data, view.searchOff)
+  for _, c in ipairs(p.checks) do c:Sync() end
   local v, t = Counts()
   local q = p.box:GetText() or ""
-  if v + t == 0 then
+  if view.onlyNew then
+    p.status:SetText(#data == 0 and (GRAY .. "Nobody left to visit. Turn on 'Show NPC names in town' and ride through a town.|r")
+      or ("%d crafting NPC%s you've passed but not talked to, nearest first"):format(#data, #data == 1 and "" or "s"))
+  elseif v + t == 0 then
     p.status:SetText(YELLOW .. "No contacts yet. Talk to a crafting vendor or profession trainer and they show up here.|r")
   elseif q == "" then
     p.status:SetText(("%d vendors and %d trainers you've met. Type to search."):format(v, t))
@@ -110,7 +131,8 @@ local function ListData()
   end)
   local data = {}
   for _, npc in ipairs(list) do
-    local what = npc.k == "trainer" and ("%d skills"):format(#npc.items) or ("%d items"):format(#npc.items)
+    local what = (npc.k == "service" and "visited, no list yet")
+      or (npc.k == "trainer" and ("%d skills"):format(#npc.items)) or ("%d items"):format(#npc.items)
     local status = (npc.age >= ns.HIDE_AFTER and "  ·  |cffff4040hidden|r") or (npc.age == 1 and "  ·  |cffff9020before update|r") or ""
     local name = (npc.age > 0 and GRAY or "") .. npc.n .. (npc.age > 0 and "|r" or "")
     data[#data + 1] = { icon = npc.k == "trainer" and 136235 or 133784, npc = npc, tipTitle = npc.n,

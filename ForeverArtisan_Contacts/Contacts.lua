@@ -695,7 +695,9 @@ local IGNORE = { "guard", "grunt", "sentinel", "flight master", "wind rider", "g
   "mace", "sword", "axe merchant", "dagger", "robe merchant", "bowyer", "gunsmith", "shield", "mail armor", "plate armor",
   "cloth & leather armor", "bartender", "warrior trainer", "mage trainer", "priest trainer",
   "rogue trainer", "hunter trainer", "warlock trainer", "shaman trainer", "paladin trainer",
-  "druid trainer", "pet trainer", "weapon master", "riding", "mechanostrider" }
+  "druid trainer", "pet trainer", "weapon master", "riding", "mechanostrider",
+  "demon trainer", "horse merchant", "cockroach", "'s pet", "bag vendor", "shipmaster", "blade trader",
+  "fireworks", "prizes", "apprentice weaponsmith", "apprentice armorer", "armorer" }
 
 isIgnored = function(title)
   if not title then return false end
@@ -906,6 +908,22 @@ local function setScoutPlates(on)
   end
 end
 
+-- Scout mode (NPC names and titles in town) for the slash command and the window checkbox.
+function ns.ScoutOn() return ForeverArtisanContactsDB and not ForeverArtisanContactsDB.scoutOff end
+function ns.SetScout(on)
+  if not ForeverArtisanContactsDB then return end
+  if on then
+    ForeverArtisanContactsDB.scoutOff = nil
+    setScoutPlates(true)
+    startScoutTicker()
+  else
+    setScoutPlates(false)
+    ForeverArtisanContactsDB.scoutOff = true
+    pcall(hideAllPlateTitles)
+  end
+end
+function ns.IsRelevant(title) return isRelevant(title) end
+
 ---------------------------------------------------------------- events
 
 -- Register safely: an event this client doesn't have is skipped instead of
@@ -1002,8 +1020,7 @@ SlashCmdList.FACONTACTS = function(msg)
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts  - open the window (search, contacts)")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa <item or vendor>  - search, e.g. /fa silk thread")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts tooltips  - 'Sold by' lines on item tooltips on/off")
-    DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts scout  - show friendly NPC nameplates while you ride through town (/fa contacts scout off)")
-    DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts todo  - crafting NPCs you've passed but not talked to yet, nearest first")
+    DEFAULT_CHAT_FRAME:AddMessage("  Search tab: 'Show NPC names in town' finds crafting NPCs as you pass; 'Only not visited' lists the ones to talk to, nearest first")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts forget <name>  - remove one contact (or right-click it twice on the Contacts tab)")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts note <text>  - add a note to the last contact  ·  /fa contacts quiet  - chat messages on/off")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts clear confirm  - forget everyone")
@@ -1043,14 +1060,10 @@ SlashCmdList.FACONTACTS = function(msg)
     end
   elseif cmd == "scout" then
     if rest == "off" then
-      setScoutPlates(false)
-      ForeverArtisanContactsDB.scoutOff = true
-      pcall(hideAllPlateTitles)
+      ns.SetScout(false)
       say("scout mode off - nameplate settings restored.")
     else
-      ForeverArtisanContactsDB.scoutOff = nil
-      setScoutPlates(true)
-      startScoutTicker()
+      ns.SetScout(true)
       local total, rel = 0, 0
       for _, s in pairs(ForeverArtisanContactsDB.scouted or {}) do total = total + 1; if isRelevant(s.title) then rel = rel + 1 end end
       say("scout mode on - friendly NPC nameplates shown. Ride through town; NPCs log as you pass. (" ..

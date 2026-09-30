@@ -399,8 +399,10 @@ function ns.LearnFrom()
   if not (V and V.search) then return end
   local prof = "first aid"
   for _, h in ipairs(V.search(prof) or {}) do
-    local n = h.item and h.item.train and h.item.n and h.item.n:lower()
-    if n and n:find("apprentice", 1, true) and n:find(prof, 1, true) then return h.npc end
+    for _, r in ipairs(h.ranks or {}) do
+      local n = r:lower()
+      if n:find("apprentice", 1, true) and n:find(prof, 1, true) then return h.npc end
+    end
   end
 end
 

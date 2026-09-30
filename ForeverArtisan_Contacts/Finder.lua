@@ -40,8 +40,19 @@ local STATUS_WORD = { available = true, unavailable = true, used = true }
 local function Rebuild()
   wipe(npcs); wipe(byId); wipe(byName)
   local entries = DB() and DB().entries or {}
+  -- A crafting NPC you talked to whose trainer or shop window never opened (a trainer who
+  -- won't train you yet only shows chat) is still a contact: "visited, no list yet".
+  local full = {}
+  for _, e in pairs(entries) do
+    if e.kind == "vendor" or e.kind == "trainer" then
+      if e.npcId then full[e.npcId] = true end
+      if e.name then full[e.name] = true end
+    end
+  end
   for key, e in pairs(entries) do
-    if (e.kind == "vendor" or e.kind == "trainer") and e.name then
+    local chatOnly = e.kind == "service" and e.name and e.title and ns.IsRelevant and ns.IsRelevant(e.title)
+      and not full[e.npcId or false] and not full[e.name]
+    if ((e.kind == "vendor" or e.kind == "trainer") and e.name) or chatOnly then
       local npc = { id = e.npcId, n = e.name, t = e.title, k = e.kind, z = e.zone, s = e.subzone, m = e.mapID, x = e.x, y = e.y,
                     seen = e.seenAt or e.lastSeen, visited = e.lastSeen, age = UpdatesSince(e), key = key, items = {} }
       if e.kind == "vendor" then
@@ -233,6 +244,38 @@ local function stem(q)
   if #s >= 5 and s ~= q then return s end
 end
 
+-- "Apprentice Leatherworking" or "Leatherworking (Apprentice)": a rank, not a recipe
+local RANK_WORD = { apprentice = true, journeyman = true, expert = true, artisan = true, master = true }
+local function rankWord(name)
+  local w = name:match("^(%a+) ") or name:match("%((%a+)%)$")
+  if w and RANK_WORD[w:lower()] then return w end
+end
+
+-- NPCs you've passed (scout mode) but never talked to; has(text) filters, nil = all
+local function seenHits(known, has)
+  local out = {}
+  for id, s in pairs(DB() and DB().scouted or {}) do
+    -- relevance by today's rules (the flag saved when scouting can be out of date)
+    local relevant = s.relevant
+    if ns.IsRelevant then relevant = ns.IsRelevant(s.title) end
+    if s.name and s.title and relevant and not known[id] and not known[s.name]
+      and (not has or has(s.name) or has(s.title)) then
+      out[#out + 1] = { seen = true, npc = { n = s.name, t = s.title, z = s.zone, s = s.subzone, m = s.mapID,
+        x = s.x, y = s.y, age = 0, seen = s.lastSeen, seenOnly = true, items = {} } }
+    end
+  end
+  return out
+end
+
+local function knownSet()
+  local known = {}
+  for _, npc in ipairs(npcs) do
+    if npc.id then known[npc.id] = true end
+    known[npc.n] = true
+  end
+  return known
+end
+
 -- search item names, vendor names/titles/towns, and required professions ("tailoring").
 -- A trainer's recipes that only match by profession collapse into one row ("trains 33").
 -- NPCs you've passed but never talked to (scout mode) show too, marked as seen only.
@@ -247,10 +290,8 @@ local function search(q)
     text = text:lower()
     return text:find(q, 1, true) ~= nil or (st ~= nil and text:find(st, 1, true) ~= nil)
   end
-  local known = {}
+  local known = knownSet()
   for _, npc in ipairs(npcs) do
-    if npc.id then known[npc.id] = true end
-    known[npc.n] = true
     if npc.age >= ns.HIDE_AFTER then -- hidden: not seen through two updates
     else
     local npcHit
@@ -258,29 +299,33 @@ local function search(q)
       npcHit = { npc = npc }
       table.insert(hits, npcHit)
     end
-    local trains = 0
+    local trains, ranks = 0, {}
     for _, it in ipairs(npc.items) do
       if has(it.n) then
-        table.insert(hits, { npc = npc, item = it })
+        if it.train and rankWord(it.n) then ranks[#ranks + 1] = it.n
+        else table.insert(hits, { npc = npc, item = it }) end
       elseif it.sk and has(it.sk) then
         if it.train then trains = trains + 1 else table.insert(hits, { npc = npc, item = it }) end
       end
     end
-    if trains > 0 then
-      if npcHit then npcHit.trains = trains else table.insert(hits, { npc = npc, trains = trains }) end
+    if trains > 0 or #ranks > 0 then
+      if not npcHit then npcHit = { npc = npc }; table.insert(hits, npcHit) end
+      npcHit.trains = trains > 0 and trains or nil
+      npcHit.ranks = #ranks > 0 and ranks or nil
     end
     end
   end
-  local scouted = DB() and DB().scouted or {}
-  for id, s in pairs(scouted) do
-    if s.name and s.title and s.relevant and not known[id] and not known[s.name]
-      and (has(s.name) or has(s.title)) then
-      table.insert(hits, { seen = true, npc = { n = s.name, t = s.title, z = s.zone, s = s.subzone, m = s.mapID,
-        x = s.x, y = s.y, age = 0, seen = s.lastSeen, seenOnly = true, items = {} } })
-    end
-  end
+  for _, h in ipairs(seenHits(known, has)) do hits[#hits + 1] = h end
   return sortHits(hits)
 end
+
+-- every crafting NPC you've passed but not talked to, nearest first ("Only not visited")
+local function unvisited()
+  Ensure()
+  return sortHits(seenHits(knownSet(), nil))
+end
+ns.Unvisited = unvisited
+ns.RankWord = rankWord
 
 ---------------------------------------------------------------- tooltips
 
