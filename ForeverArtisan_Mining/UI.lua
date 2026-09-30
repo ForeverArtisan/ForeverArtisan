@@ -135,7 +135,8 @@ local function RefreshProgressPage(p)
       p.rate:SetText(GRAY .. "Mine a few nodes and your pace shows here.|r")
     end
   else
-    p.skillBar:Set(nil); p.rate:SetText(GRAY .. "Can't read your Mining skill yet.|r")
+    p.skillBar:Set(nil); p.rate:SetText(GRAY .. ((ForeverArtisan.ProfessionListLoaded and ForeverArtisan.ProfessionListLoaded())
+      and "Any Mining trainer teaches it. Your log and guide still work." or "Can't read your Mining skill yet.") .. "|r")
   end
   if i.rank then p.rate:SetText(("%d nodes since your last skill-up  ·  "):format(i.sinceUp or 0) .. (p.rate:GetText() or "")) end
 

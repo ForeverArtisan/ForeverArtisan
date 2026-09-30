@@ -248,7 +248,9 @@ local function RefreshFishingPage(p)
   p.s1:SetText(("Pole: %s     Lure on pole: %s"):format(pole and (GREEN .. "equipped|r") or (GRAY .. "not equipped|r"), lureTxt))
   local i = ns.SkillInfo()
   p.s2:SetText(("Fishing skill: %s%s%s"):format(
-    i.rank and (i.rank .. (i.max and (" / " .. i.max) or "")) or (GRAY .. "unknown (fills in at your next skill-up)|r"),
+    i.rank and (i.rank .. (i.max and (" / " .. i.max) or ""))
+      or (i.notLearned and (YELLOW .. "not learned yet|r" .. GRAY .. " (any Fishing trainer teaches it)|r"))
+      or (GRAY .. "unknown (fills in at your next skill-up)|r"),
     (i.mod and i.mod > 0) and (GREEN .. " (+" .. i.mod .. " lure)|r") or "",
     i.capped and (RED .. "  capped, train!|r") or ""))
   local zone, sub = ns.Where()
@@ -273,7 +275,7 @@ local function RefreshFishingPage(p)
   end
 
   local mh, oh, poleId = ns.GearSet()
-  local g = s.gear or {}
+  local g = (ns.CharRec and ns.CharRec() or {}).gear or {}
   local eff = { pole = poleId, mh = mh, oh = oh }
   for _, sl in ipairs(p.slots) do
     local sid = eff[sl.slot]
@@ -344,11 +346,11 @@ local function RefreshProgressPage(p)
     p.fill:SetWidth(math.max(1, 420 * pct))
     p.fill:SetColorTexture(i.capped and 1 or 0.83, i.capped and 0.25 or 0.66, i.capped and 0.25 or 0.31, 0.85)
   else
-    p.big:SetText(GRAY .. "Skill unknown|r"); p.fill:SetWidth(1)
+    p.big:SetText(i.notLearned and (GRAY .. "Fishing not learned yet|r") or (GRAY .. "Skill unknown|r")); p.fill:SetWidth(1)
   end
   local ses = ns.session
   p.l1:SetText(("This session: %s+%d|r skill-ups from %d catches"):format(GREEN, i.gained or 0, ses.catches))
-  p.l2:SetText(("%d catches since the last point%s"):format(i.sinceUp or 0,
+  p.l2:SetText(("%d catch%s since the last point%s"):format(i.sinceUp or 0, (i.sinceUp or 0) == 1 and "" or "es",
     i.cpp and ("   ·   about %.1f catches per point"):format(i.cpp) or ""))
   if i.capped then
     p.l3:SetText(RED .. "Capped. Catches aren't giving skill until you train.|r")

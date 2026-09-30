@@ -94,6 +94,8 @@ local function Skill()
   if not db then return r, m, mx end
   local c = CharRec()
   if r then c.skill = r; if mx and mx > 0 then c.skillMax = mx end; return r, m, mx or c.skillMax end
+  -- the game's list loaded without this profession: not learned (or unlearned), so drop the old value
+  if ForeverArtisan.ProfessionListLoaded and ForeverArtisan.ProfessionListLoaded() then c.skill = nil; return nil end
   return c.skill, nil, c.skillMax
 end
 ns.Skill = Skill
@@ -362,96 +364,109 @@ function ns.MakeNow()
   return out, skill
 end
 
--- Add what `crafts` of recipe r use to the need table.
-local function AddNeed(need, r, crafts)
-  for _, g in ipairs(r.reagents or {}) do
-    if g.id then
-      local e = need[g.id] or { id = g.id, name = g.name, need = 0 }
-      e.need = e.need + crafts * (g.n or 1)
-      need[g.id] = e
-    end
-  end
-end
-
--- Materials one of your learned recipes makes (cured hides, and so on) are crafted, not bought:
--- only the part you don't already have, and their own materials go on the list instead.
-local function ResolveSubCrafts(need)
-  local makes = {}
-  for _, r in pairs(CharRec().recipes) do
-    if r.learned and r.itemId and not makes[r.itemId] then makes[r.itemId] = r end
-  end
-  for _ = 1, 3 do -- a sub-craft can need another sub-craft; three levels is plenty
-    local todo = {}
-    for id, e in pairs(need) do
-      if makes[id] and not e.checked then todo[#todo + 1] = e end
-    end
-    if #todo == 0 then break end
-    for _, e in ipairs(todo) do
-      e.checked = true
-      local short = e.need - Count(e.id)
-      if short > 0 then
-        local via = makes[e.id]
-        e.craft = math.ceil(short / (via.makes or 1))
-        e.via = via
-        AddNeed(need, via, e.craft)
-      end
-    end
-  end
-end
-
--- Plan crafts from your skill to a target. Picks the best learned recipe at each point.
--- Returns steps { r, crafts, from, to }, shopping { id, name, need, have, source, craft, via }, stuckAt
+-- Plan crafts from your skill to a target, one craft at a time. At each step it makes the best
+-- learned recipe; materials one of your recipes makes (cured hides, Light Leather, potions for
+-- elixirs...) are crafted first when you're short, and those crafts give skill-ups too, so they
+-- count toward the target. Skill is tracked as an expected value (a 50% craft adds half a point).
+-- Returns steps { r, crafts, from, to, sub = { [recipe] = n } },
+-- shopping { id, name, need, have, source, craft, via }, stuckAt, target, max
+local PLAN_LIMIT = 6000 -- crafts; stops a plan built on a nearly-gray recipe from running forever
 function ns.Plan(target)
   local skill = Skill()
   if not skill then return {}, {}, nil end
   local _, _, maxr = Skill()
   target = math.min(tonumber(target) or (skill + 25), 300)
-  local learned = {}
+  local learned, makes = {}, {}
   for _, r in pairs(CharRec().recipes) do
-    if r.learned and not Skipped(r) then learned[#learned + 1] = r end
+    if r.learned then
+      if not Skipped(r) then learned[#learned + 1] = r end
+      if r.itemId and not makes[r.itemId] then makes[r.itemId] = r end
+    end
   end
-  local steps, byName, s, stuck = {}, {}, skill, nil
-  local guard = 0
-  while s < target and guard < 400 do
-    guard = guard + 1
-    local best, bestChance, bestScore
-    for _, r in ipairs(learned) do
-      local ch = ns.Chance(r, s)
-      if ch > 0 then
-        -- prefer the best skill-up chance, but favor recipes you can already make from your bags
-        local score = ch + (ns.Makeable(r) > 0 and 0.15 or 0)
-        if not best or score > bestScore + 0.001 then best, bestChance, bestScore = r, ch, score end
+
+  local stock, used, crafted, names = {}, {}, {}, {}
+  local function Have(id) if stock[id] == nil then stock[id] = Count(id) end; return stock[id] end
+  local s, total, cur = skill, 0, nil
+  local Craft
+  -- make sure n of id are on hand, crafting the shortfall when you know a recipe for it
+  local function Gather(id, n, depth)
+    local via = makes[id]
+    local short = n - Have(id)
+    if short > 0 and via and depth < 3 then
+      for _ = 1, math.ceil(short / (via.makes or 1)) do Craft(via, depth + 1) end
+    end
+  end
+  Craft = function(r, depth)
+    for _, g in ipairs(r.reagents or {}) do
+      if g.id then
+        names[g.id] = names[g.id] or g.name
+        Gather(g.id, g.n or 1, depth)
+        stock[g.id] = Have(g.id) - (g.n or 1)
+        used[g.id] = (used[g.id] or 0) + (g.n or 1)
       end
     end
-    if not best then stuck = s; break end
-    local st = byName[best.name]
-    if not st or steps[#steps] ~= st then
-      st = { r = best, crafts = 0, from = s, to = s }
-      steps[#steps + 1] = st
-      byName[best.name] = st
+    s = s + ns.Chance(r, math.floor(s)) * (r.ups or 1)
+    total = total + 1
+    if r.itemId then stock[r.itemId] = Have(r.itemId) + (r.makes or 1) end
+    if depth > 0 then
+      if r.itemId then crafted[r.itemId] = (crafted[r.itemId] or 0) + 1 end
+      cur.sub[r] = (cur.sub[r] or 0) + 1
     end
-    st.crafts = st.crafts + 1 / bestChance
-    s = s + (best.ups or 1)
-    st.to = s
   end
-  local need = {}
-  for _, st in ipairs(steps) do
-    st.crafts = math.ceil(st.crafts)
-    AddNeed(need, st.r, st.crafts)
+
+  -- materials per craft, counting through what you'd make yourself (3 scraps per Light Leather)
+  local costMemo = {}
+  local function Cost(r, depth)
+    if costMemo[r] then return costMemo[r] end
+    local n = 0
+    for _, g in ipairs(r.reagents or {}) do
+      local via = g.id and makes[g.id]
+      local each = (via and via ~= r and (depth or 0) < 3) and (Cost(via, (depth or 0) + 1) / (via.makes or 1)) or 1
+      n = n + (g.n or 1) * each
+    end
+    costMemo[r] = n
+    return n
   end
-  ResolveSubCrafts(need)
+
+  local steps, stuck = {}, nil
+  while math.floor(s) < target and total < PLAN_LIMIT do
+    local at = math.floor(s)
+    local best, bestScore, bestCost
+    for _, r in ipairs(learned) do
+      local ch = ns.Chance(r, at)
+      if ch > 0 then
+        -- prefer the best skill-up chance, but favor recipes you can already make from your bags;
+        -- on a tie, the one that uses fewer materials (Handstitched Cloak over the Vest)
+        local score = ch + (ns.Makeable(r) > 0 and 0.15 or 0)
+        local cost = Cost(r)
+        if not best or score > bestScore + 0.001
+          or (math.abs(score - bestScore) <= 0.001 and cost < bestCost) then
+          best, bestScore, bestCost = r, score, cost
+        end
+      end
+    end
+    if not best then stuck = at; break end
+    if not cur or cur.r ~= best then
+      cur = { r = best, crafts = 0, from = at, to = at, sub = {} }
+      steps[#steps + 1] = cur
+    end
+    Craft(best, 0)
+    cur.crafts = cur.crafts + 1
+    cur.to = math.floor(s)
+  end
+  if not stuck and math.floor(s) < target then stuck = math.floor(s) end
+
   local shopping = {}
-  for _, e in pairs(need) do
-    e.name = ItemName(e.id, e.name)
-    e.have = Count(e.id)
-    if e.craft then
+  for id, n in pairs(used) do
+    local e = { id = id, name = ItemName(id, names[id]), need = n, have = Count(id) }
+    if crafted[id] then
+      e.craft, e.via = crafted[id], makes[id]
       local parts = {}
       for _, g in ipairs(e.via.reagents or {}) do parts[#parts + 1] = ItemName(g.id, g.name) end
       e.source = ("Craft %d yourself: %s (%s)"):format(e.craft, e.via.name, table.concat(parts, " + "))
     else
-      e.source = ns.SourceFor(e.id, e.name)
+      e.source = ns.SourceFor(id, e.name)
     end
-    e.checked = nil
     shopping[#shopping + 1] = e
   end
   table.sort(shopping, function(a, b)

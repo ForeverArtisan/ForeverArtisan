@@ -33,7 +33,7 @@ end
 function ns.SkillInfo()
   local rank, mod, max = ns.FishingSkill()
   local info = { rank = rank, mod = mod, max = max }
-  if not rank then return info end
+  if not rank then info.notLearned = ns.FishingNotLearned and ns.FishingNotLearned(); return info end
   session.startSkill = session.startSkill or rank
   info.gained = rank - session.startSkill
   -- catches per skill point: this session if we have skill-ups, else recent history

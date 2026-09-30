@@ -363,21 +363,53 @@ function ns.GearFits(id, slot)
   return OH_OK[loc] or false
 end
 
+-- Per-character data (skill, pole, swap weapons). The DB is shared by the whole account,
+-- so an alt must not show your main's skill or try to equip your main's pole.
+local function Has(id)
+  if not id then return false end
+  if IsEquippedItem and IsEquippedItem(id) then return true end
+  return (GetItemCount and GetItemCount(id) or 0) > 0
+end
+function ns.CharRec()
+  if not db then return nil end
+  db.byChar = db.byChar or {}
+  local key = (UnitName("player") or "?") .. "-" .. ((GetRealmName and GetRealmName()) or "")
+  local c = db.byChar[key]
+  if not c then c = { gear = {} }; db.byChar[key] = c end
+  c.gear = c.gear or {}
+  if not c.adopted then ns.AdoptOldGear(c) end
+  return c
+end
+
+-- Older versions kept one set for the whole account: each character takes over only the
+-- items it has. Bags and gear aren't readable right at load, so this repeats until the
+-- world is entered (then c.adopted is set and it never runs again).
+function ns.AdoptOldGear(c)
+  local s = db.settings or {}
+  if not c.pole and Has(s.pole) then c.pole = s.pole end
+  for _, k in ipairs({ "mh", "oh" }) do
+    if not c.gear[k] and s.gear and Has(s.gear[k]) then c.gear[k] = s.gear[k] end
+  end
+  if not c.lastGear and db.lastGear and Has(db.lastGear.mh) then c.lastGear = { mh = db.lastGear.mh, oh = db.lastGear.oh } end
+end
+
 -- remember what you wear so empty slots still work
 function ns.TrackGear()
+  local c = ns.CharRec(); if not c then return end
   local mh, oh = GetInventoryItemID("player", 16), GetInventoryItemID("player", 17)
-  if IsPole(mh) then db.settings.pole = mh
-  elseif mh then db.lastGear = { mh = mh, oh = oh } end
+  if IsPole(mh) then c.pole = mh
+  elseif mh then c.lastGear = { mh = mh, oh = oh } end
 end
 
 -- effective set: slots you filled win, otherwise what you last wore
 function ns.GearSet()
-  local g = db.settings.gear or {}
-  local last = db.lastGear or {}
+  local c = ns.CharRec() or { gear = {} }
+  local g = c.gear
+  local last = c.lastGear or {}
   local mh, oh = g.mh, g.oh
   if not mh then mh, oh = last.mh, (g.oh or last.oh) end
   if EquipLoc(mh) == "INVTYPE_2HWEAPON" then oh = nil end
-  return mh, oh, db.settings.pole
+  return mh, oh, c.pole
 end
 
 local function EquipName(id)
@@ -406,8 +438,8 @@ function ns.UpdateGear()
 end
 
 function ns.SetGear(slot, id)
-  if slot == "pole" then db.settings.pole = id
-  else db.settings.gear = db.settings.gear or {}; db.settings.gear[slot] = id end
+  local c = ns.CharRec(); if not c then return end
+  if slot == "pole" then c.pole = id else c.gear[slot] = id end
   ns.UpdateGear()
   if ns.OnChange then ns.OnChange() end
 end
@@ -477,16 +509,24 @@ local skillSource = "none"
 
 local function IsFishingName(n) return n and (n == FISHING or n == "Fishing") end
 
+local CharSkill = ns.CharRec
+
 local FishingSkillLive
+local noFishing = false -- the game's profession list loaded and Fishing isn't on it
 local function FishingSkill()
   local r, m, mx = FishingSkillLive()
-  if r and skillSource ~= "chat" and db then db.skill = r; if mx and mx > 0 then db.skillMax = mx end end
-  return r, m, mx or (db and db.skillMax)
+  local c = CharSkill()
+  if r and skillSource ~= "chat" and c then c.r = r; if mx and mx > 0 then c.max = mx end end
+  return r, m, mx or (c and c.max)
 end
+function ns.FishingNotLearned() return noFishing end
 FishingSkillLive = function()
+  noFishing = false
+  local listed = false
   -- 1) modern: GetProfessions() -> fishing slot -> GetProfessionInfo
   if GetProfessions and GetProfessionInfo then
     local ok, p1, p2, arch, fish, cook = pcall(GetProfessions)
+    listed = ok and (p1 or p2 or arch or fish or cook) and true or false
     if ok then
       for _, idx in pairs({ fish, p1, p2, cook, arch }) do -- pairs: a profession you lack is nil, and ipairs would stop there
         if idx then
@@ -514,8 +554,11 @@ FishingSkillLive = function()
       end
     end
   end
-  -- 4) last value seen in chat ("Your skill in Fishing has increased to N.")
-  if db and db.skill then skillSource = "chat"; return db.skill, nil, db.skillMax end
+  -- 4) last value seen in chat ("Your skill in Fishing has increased to N."), this character only
+  local c = CharSkill()
+  if c and c.r then skillSource = "chat"; return c.r, nil, c.max end
+  -- the profession list loaded (this character has at least one) and none of it is Fishing
+  if listed then noFishing = true end
 end
 
 local function Where()
@@ -655,6 +698,11 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     return
   elseif e == "PLAYER_ENTERING_WORLD" or e == "PLAYER_EQUIPMENT_CHANGED" or e == "PLAYER_REGEN_ENABLED" then
     if e == "PLAYER_EQUIPMENT_CHANGED" then ns.TrackGear(); CheckPole() end
+    if e == "PLAYER_ENTERING_WORLD" then
+      local c = ns.CharRec()
+      if c and not c.adopted then ns.AdoptOldGear(c); c.adopted = true end
+      ns.TrackGear() -- a pole or weapons you log in wearing count as "last worn"
+    end
     if e ~= "PLAYER_REGEN_ENABLED" then ns.UpdateEnv() end
     if e ~= "PLAYER_REGEN_ENABLED" or pendingMode then UpdateMode() end
     if e ~= "PLAYER_REGEN_ENABLED" then UpdateModeSoon() end
@@ -705,7 +753,7 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     if type(a1) == "string" and (a1:find(FISHING, 1, true) or a1:find("Fishing", 1, true)) then
       local n = tonumber(a1:match("(%d+)"))
       if n then
-        db.skill = n
+        local c = CharSkill(); if c then c.r = n end
         if ns.OnSkillUp then ns.OnSkillUp(n) end
         if ns.OnChange then ns.OnChange() end
       end

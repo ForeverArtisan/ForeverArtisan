@@ -1,6 +1,6 @@
 # ForeverArtisan changelog
 
-## 0.9.5 (unreleased)
+## 0.9.5 (2026-09-29)
 - Trade Contacts: a crafting NPC you talked to is saved even when no trainer or shop window opens (a trainer who won't train you yet only shows chat). They show as "visited, no list yet" instead of "seen, not visited".
 - Trade Contacts search: one row per trainer, with the ranks they teach on it ("trains 16 · Apprentice").
 - Trade Contacts: two checkboxes on the Search tab replace the scout and todo commands. "Show NPC names in town" finds crafting NPCs as you pass; "Only not visited" lists the ones you haven't talked to, nearest first. The slash commands still work.
@@ -9,6 +9,9 @@
 - Hover either "Show NPC names in town" checkbox for what it does and how many NPCs you have seen. Ticking it says so in chat, and clicking a checkbox's label works too.
 - Search with "Only not visited" ticked now says when it hid a match ("Karolek matches, but you've already visited") instead of "Nobody left to visit".
 - Trade Contacts, Contacts tab: grouped under town headers (click one to fold it), with a Zone picker (All zones, Where I am, or one zone) and a Trade picker (All crafting, one profession, Trade & general goods, or Everyone). Innkeepers, class and riding trainers saved by older versions are hidden unless you pick Everyone. The "before update" tag is gone from each row; a grey name means the same thing.
+- Fix: Fishing kept one skill, pole and weapon set for the whole account, so an alt without Fishing showed your main's skill (and "capped, train!") and your main's pole. Each character now has its own; an alt without Fishing shows "not learned yet". Poles and weapons you already set move to the characters that own them.
+- Fix: after you unlearn a profession, its module kept showing your old skill (for example "Herbalism 3 / 75" after dropping Herbalism). All modules now show it as not learned, Progress tabs included.
+- Crafting plans (Alchemy, Leatherworking): materials you have to make first, like Light Leather from scraps or cured hides, now count toward your skill-ups, so the plan needs fewer of the main craft. Each step shows what it makes along the way ("+ 119 Light Leather"). When two recipes are equally good for skill-ups, the plan picks the one that uses fewer materials (a Handstitched Cloak over the Vest).
 
 ## 0.9.4 (2026-09-29)
 - Alchemy (new module): what to make now for skill-ups, a plan to your target skill with a shopping list, a craft log, a recipe book, where to train next, and Alchemy lines on herb and vial tooltips. Herbs you're short on point to where your Herbalism log found them. Transmutes stay out of the plan because of their cooldowns. `/fa alch`

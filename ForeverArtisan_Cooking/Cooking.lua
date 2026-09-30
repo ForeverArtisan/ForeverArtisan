@@ -79,6 +79,8 @@ local function Skill()
   if not db then return r, m, mx end
   local c = CharRec()
   if r then c.skill = r; if mx and mx > 0 then c.skillMax = mx end; return r, m, mx or c.skillMax end
+  -- the game's list loaded without this profession: not learned (or unlearned), so drop the old value
+  if ForeverArtisan.ProfessionListLoaded and ForeverArtisan.ProfessionListLoaded() then c.skill = nil; return nil end
   return c.skill, nil, c.skillMax
 end
 ns.Skill = Skill

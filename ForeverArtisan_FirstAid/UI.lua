@@ -154,7 +154,7 @@ local function RefreshProgressPage(p)
   else
     p.skillBar:Set(nil); p.rate:SetText(GRAY .. "You haven't learned First Aid on this character.|r")
   end
-  if i.rank then p.rate:SetText(("%d crafts since your last skill-up  ·  "):format(i.sinceUp or 0) .. (p.rate:GetText() or "")) end
+  if i.rank then p.rate:SetText(("%d craft%s since your last skill-up  ·  "):format(i.sinceUp or 0, (i.sinceUp or 0) == 1 and "" or "s") .. (p.rate:GetText() or "")) end
   p.open:ShowIf(ns.Knows() and not ns.HasRecipes())
   if not (ns.Knows() and ns.HasRecipes()) then
     Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); p.note:SetText(""); p.target:SetTextColor(1, 1, 1)

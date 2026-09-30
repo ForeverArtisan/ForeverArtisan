@@ -155,7 +155,7 @@ local function RefreshProgressPage(p)
   else
     p.skillBar:Set(nil); p.rate:SetText(GRAY .. "You haven't learned Leatherworking on this character.|r")
   end
-  if i.rank then p.rate:SetText(("%d crafts since your last skill-up  ·  "):format(i.sinceUp or 0) .. (p.rate:GetText() or "")) end
+  if i.rank then p.rate:SetText(("%d craft%s since your last skill-up  ·  "):format(i.sinceUp or 0, (i.sinceUp or 0) == 1 and "" or "s") .. (p.rate:GetText() or "")) end
   p.open:ShowIf(ns.Knows() and not ns.HasRecipes())
   if not (ns.Knows() and ns.HasRecipes()) then
     Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); p.note:SetText(""); p.target:SetTextColor(1, 1, 1)
@@ -171,9 +171,18 @@ local function RefreshProgressPage(p)
   local plan = {}
   for _, st in ipairs(steps) do
     local c = ns.ColorFor(st.r, st.from)
+    -- materials made along the way (they give skill-ups too): "+ 300 Light Leather"
+    local extra, tipExtra = {}, {}
+    for sr, n in pairs(st.sub or {}) do
+      extra[#extra + 1] = n .. " " .. sr.name
+      tipExtra[#tipExtra + 1] = ("Also makes %d %s along the way (counted in the skill range)."):format(n, sr.name)
+    end
+    table.sort(extra)
     plan[#plan + 1] = { id = st.r.itemId, icon = Icon(st.r.itemId),
-      left = ns.COLOR_CODE[c] .. st.r.name .. "|r  " .. GRAY .. "x" .. st.crafts .. "|r",
-      right = GRAY .. ("skill %d-%d"):format(st.from, st.to) .. "|r", tip = ReagentTip(st.r) }
+      left = ns.COLOR_CODE[c] .. st.r.name .. "|r  " .. GRAY .. "x" .. st.crafts
+        .. (#extra > 0 and ("  + " .. table.concat(extra, ", ")) or "") .. "|r",
+      right = GRAY .. ("skill %d-%d"):format(st.from, st.to) .. "|r",
+      tip = ReagentTip(st.r) .. (#tipExtra > 0 and ("\n" .. table.concat(tipExtra, "\n")) or "") }
   end
   if #plan == 0 and i.rank and target <= i.rank then
     plan[1] = { icon = 134400, left = GREEN .. "You're already there.|r", right = "" }

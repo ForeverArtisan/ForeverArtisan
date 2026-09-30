@@ -39,6 +39,17 @@ end
 
 -- Dev build? The working copy between releases is "x.y.z-dev". It never ships:
 -- tools/release.py replaces it with the real version before tagging.
+-- True once the game's profession list has loaded (this character has at least one profession
+-- in it). Modules use it to tell "not learned (or unlearned)" from "can't read it yet": a saved
+-- skill is only a fallback while the list isn't readable.
+function FA.ProfessionListLoaded()
+  if not GetProfessions then return false end
+  local got = { pcall(GetProfessions) }
+  if not got[1] then return false end
+  for i = 2, table.maxn(got) do if got[i] then return true end end
+  return false
+end
+
 function FA.IsDev()
   return FA.Version():lower():find("-dev", 1, true) ~= nil
 end
@@ -191,7 +202,9 @@ function UI.SkillBar(parent, y, name)
       self.big:SetText(("%s %d%s"):format(name or "Skill", rank, max and (" / " .. max) or ""))
       self.bar:Set((max and max > 0) and rank / max or 0, capped and "capped" or nil)
     else
-      self.big:SetText(FA.GRAY .. "Can't read your " .. (name or "skill") .. " yet.|r")
+      local notLearned = FA.ProfessionListLoaded and FA.ProfessionListLoaded()
+      self.big:SetText(FA.GRAY .. (notLearned and ((name or "This profession") .. " not learned yet.")
+        or ("Can't read your " .. (name or "skill") .. " yet.")) .. "|r")
       self.bar:Set(0)
     end
   end

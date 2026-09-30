@@ -21,17 +21,17 @@ Run this in game before every build goes to the site or CurseForge/Wago. Screens
 
 ## 3. Every window: open each one and click every tab
 Look for overlapping text, rows running off the edge, and anything cut off.
-- [ ] Fishing: Fishing / Progress / Catch log / Derby
+- [ ] Fishing: Fishing / Progress / Catch log / Cast marker
 - [ ] Cooking: Cooking / Progress / Cook log / Recipe book
-- [ ] First Aid: First Aid / Progress / Craft log / Recipe book
+- [ ] First Aid, Alchemy, Leatherworking: Main / Progress / Craft log / Recipe book
 - [ ] Herbalism, Mining, Skinning: Main / Progress / Log / Guide
-- [ ] Trade Contacts: Search / Contacts / Limited stock
+- [ ] Trade Contacts: Search / Contacts / Limited stock; both pickers on Contacts open inside the window
 - [ ] Windows drag, remember where you left them, and close with Esc
 
 ## 4. Saved data survives the update
-- [ ] Fishing catch log, goals and key bindings
+- [ ] Fishing catch log, goals and key bindings; your main keeps its Fishing skill and pole, an alt without Fishing shows "not learned yet"
 - [ ] Trade Contacts entries
-- [ ] Cooking and First Aid recipes (if missing, open the profession window once)
+- [ ] Cooking, First Aid, Alchemy and Leatherworking recipes (if missing, open the profession window once)
 
 ## 5. Fishing
 - [ ] The cast key casts, and applies a lure when none is on the pole
@@ -39,10 +39,11 @@ Look for overlapping text, rows running off the edge, and anything cut off.
 - [ ] Weapon swap works, including in combat
 - [ ] Marker test works, and the cast marker shows where you set it
 - [ ] Catches show in the Catch log and count toward goals
-- [ ] The Derby tab shows the countdown
+- [ ] The Cast marker tab shows the derby countdown
 
 ## 6. Crafting and gathering
-- [ ] Cooking and First Aid: "Make now" and a plan with a shopping list
+- [ ] Cooking, First Aid, Alchemy, Leatherworking: "Make now" and a plan with a shopping list
+- [ ] On a character without the profession: "Learn from: <trainer>" with a Waypoint button, or the Open window button once learned
 - [ ] Capped and "Next rank" text reads right
 - [ ] Progress tabs: the skill bar fills correctly
 - [ ] Herbalism, Mining, Skinning: typing a new goal amount sticks, the goal bar fills, and extra goals scroll
@@ -54,7 +55,10 @@ Look for overlapping text, rows running off the edge, and anything cut off.
 - [ ] `/fa <item>` finds results, and clicking one sets a waypoint
 - [ ] An item's tooltip shows "Sold by ..."
 - [ ] The Limited stock tab lists limited items
-- [ ] Riding past a known contact doesn't cause errors; after a game patch, older contacts show "before update"
+- [ ] Riding past a known contact doesn't cause errors; after a game patch, older contacts have grey names
+- [ ] Contacts tab: Zone and Trade pickers filter, town headers fold, innkeepers only under Everyone
+- [ ] "Show NPC names in town" (in `/fa` and on Search) turns nameplate titles on and off; hover shows the tooltip
+- [ ] Search with "Only not visited" says when it hid a match; results are nearest first
 - [ ] Right-clicking a contact twice forgets it
 
 ## 8. Publish

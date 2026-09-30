@@ -95,6 +95,8 @@ local function SkillLive()
   end
   if db then
     local c = CharRec()
+    -- the game's list loaded without this profession: not learned (or unlearned), so drop the old value
+    if ForeverArtisan.ProfessionListLoaded and ForeverArtisan.ProfessionListLoaded() then c.skill = nil; return end
     if c.skill then skillSource = "chat"; return c.skill, nil, c.skillMax end
   end
 end

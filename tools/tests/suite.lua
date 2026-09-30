@@ -211,7 +211,7 @@ assert(cured and cured.craft, "cured hide should be a sub-craft")
 local hillCrafts=0 for _,x in ipairs(st) do if x.r.name=="Hillman's Shoulders" then hillCrafts=hillCrafts+x.crafts end end
 local directCured=0 for _,x in ipairs(st) do if x.r.name=="Cured Light Hide" then directCured=directCured+x.crafts end end
 assert(cured.need==hillCrafts*2, "cured need")
-assert(cured.craft==cured.need-1, "craft only the shortfall")
+assert(cured.craft+directCured==cured.need-1, "craft only the shortfall (direct crafts count toward it)")
 assert(hide and hide.need==cured.craft+directCured, "light hide = sub-crafts + direct cured crafts")
 assert(hide.source:find("Crossroads") and hide.source:find("Skinning log"), "light hide should point to Skinning log")
 run("FALW","plan 140"); run("FALW","next"); run("FALW","")
@@ -365,6 +365,79 @@ do
   local tn=0 for _,it in ipairs(pg.tradePick.menu.items) do if it._shown then tn=tn+1 end end
   print("TRADE CHOICES", tn, pg.tradePick._text); assert(tn>=3)
   set.listZone, set.listTrade = nil, nil
+end
+-- Fishing: skill and gear are per character (an alt without Fishing must not show the main's skill or pole)
+do
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local main=fns.SkillInfo()
+  print("FISH MAIN", main.rank, main.notLearned)
+  assert(main.rank, "main reads its fishing skill")
+  fns.SetGear("pole", 6256)
+  assert(select(3, fns.GearSet())==6256, "main keeps its pole")
+  local oldName, oldProf = UnitName, GetProfessions
+  UnitName=function() return "Alt" end
+  GetProfessions=function() return 7,nil,nil,nil,5,6 end
+  local alt=fns.SkillInfo()
+  print("FISH ALT", alt.rank, alt.notLearned, select(3, fns.GearSet()))
+  assert(alt.rank==nil and alt.notLearned, "alt without Fishing shows not learned")
+  assert(select(3, fns.GearSet())==nil, "alt doesn't get the main's pole")
+  UnitName, GetProfessions = oldName, oldProf
+  assert(fns.SkillInfo().rank and select(3, fns.GearSet())==6256, "back on the main, all still there")
+  -- old account-wide pole: a character takes it over once its bags are readable
+  ForeverArtisanFishingDB.settings.pole=6256
+  UnitName=function() return "Old" end
+  assert(select(3, fns.GearSet())==nil, "bags not loaded yet: no pole")
+  COUNTS[6256]=1
+  assert(select(3, fns.GearSet())==6256, "adopts the old pole once it has one")
+  COUNTS[6256]=nil
+  UnitName=oldName
+  -- the Fishing tab renders the not-learned line without errors
+  UnitName=function() return "Alt" end GetProfessions=function() return 7,nil,nil,nil,5,6 end
+  run("FAFISH",""); run("FAFISH","")
+  UnitName, GetProfessions = oldName, oldProf
+end
+-- Plan: materials you craft (Light Leather from scraps) give skill-ups too, so fewer vests are needed
+do
+  local function lwWindow(leatherLearned)
+    local R={[2881]={name="Light Leather",learned=leatherLearned,maxTrivialLevel=40,relativeDifficulty=0,out=2318,reag={{2934,3}}},
+     [3753]={name="Handstitched Leather Vest",learned=true,maxTrivialLevel=75,relativeDifficulty=0,out=5957,reag={{2318,3},{2320,1}}},
+     [9058]={name="Handstitched Leather Cloak",learned=true,maxTrivialLevel=75,relativeDifficulty=0,out=5961,reag={{2318,2},{2320,1}}}}
+    C_TradeSkillUI={GetAllRecipeIDs=function() local t={} for k in pairs(R) do t[#t+1]=k end return t end,
+     GetRecipeInfo=function(id) local r=R[id] return {name=r.name,learned=r.learned,maxTrivialLevel=r.maxTrivialLevel,relativeDifficulty=r.relativeDifficulty} end,
+     GetTradeSkillLineForRecipe=function() return 165,"Leatherworking",165 end,
+     GetRecipeSchematic=function(id) local r=R[id] local sl={} for _,g in ipairs(r.reag) do sl[#sl+1]={reagents={{itemID=g[1]}},quantityRequired=g[2]} end return {outputItemID=r.out,reagentSlotSchematics=sl,quantityMin=1} end}
+    wipe(lw.CharRec().recipes) -- only these two recipes
+    fire("TRADE_SKILL_SHOW")
+  end
+  local baseProf2=GetProfessionInfo
+  GetProfessionInfo=function(i) if i==8 then return "Leatherworking",1,30,75,0,0,165,0 end return baseProf2(i) end
+  local function vests(st) local n,sub=0,0 for _,x in ipairs(st) do if x.r.name~="Light Leather" then n=n+x.crafts for _,k in pairs(x.sub) do sub=sub+k end end end return n,sub end
+  lwWindow(false)
+  local bought=vests((lw.Plan(60)))
+  lwWindow(true)
+  local st,sh=lw.Plan(60)
+  local made,sub=vests(st)
+  local leather for _,e in ipairs(sh) do if e.id==2318 then leather=e end end
+  print("PLAN SUBSKILL vests bought-leather", bought, "made-leather", made, "leather made along the way", sub, leather and leather.craft)
+  assert(sub>0 and leather and leather.craft==sub, "Light Leather made along the way")
+  assert(made<bought, "leather crafts should count toward skill, so fewer vests")
+  local names={} for _,x in ipairs(st) do names[#names+1]=x.r.name end
+  print("PLAN PICKS", table.concat(names,", "))
+  assert(not table.concat(names,","):find("Vest"), "same skill-up chance: the cloak uses less leather than the vest")
+  GetProfessionInfo=baseProf2
+end
+-- unlearning a profession: the saved skill must not keep it "learned"
+do
+  local hns=loadedFrames["ForeverArtisan_Herbalism"].ns
+  local cns2=loadedFrames["ForeverArtisan_Cooking"].ns
+  assert(hns.Skill() and cns2.Skill(), "learned at first")
+  local oldProf=GetProfessions
+  GetProfessions=function() return nil,2,nil,4,nil,6 end -- Herbalism and Cooking dropped
+  print("UNLEARNED", hns.Skill(), hns.Knows(), cns2.Skill())
+  assert(hns.Skill()==nil and not hns.Knows(), "herbalism unlearned")
+  assert(cns2.Skill()==nil, "cooking unlearned")
+  GetProfessions=oldProf
+  assert(hns.Skill(), "relearned shows again")
 end
 print("CRAFTS OK")
 print("SUITE OK")
