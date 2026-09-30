@@ -349,6 +349,7 @@ FA.Vendors = {
   search = search,
   hitsForLink = hitsForLink,
   open = function(q) if ns.OpenSearch then ns.OpenSearch(q) end end,
+  waypoint = function(npc) if npc then ns.SetWaypoint(npc) end end,
 }
 
 SLASH_FASEARCH1 = "/fasearch"

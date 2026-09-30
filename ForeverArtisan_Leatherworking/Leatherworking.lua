@@ -463,6 +463,19 @@ function ns.Plan(target)
   return steps, shopping, stuck, target, maxr
 end
 
+---------------------------------------------------------------- where to learn it
+-- Not learned yet: the nearest trainer in your Trade Contacts whose list includes the
+-- Apprentice rank (an Expert-only trainer is skipped). Nil when you haven't met one.
+function ns.LearnFrom()
+  local V = ForeverArtisan and ForeverArtisan.Vendors
+  if not (V and V.search) then return end
+  local prof = PROF:lower()
+  for _, h in ipairs(V.search(prof) or {}) do
+    local n = h.item and h.item.train and h.item.n and h.item.n:lower()
+    if n and n:find("apprentice", 1, true) and n:find(prof, 1, true) then return h.npc end
+  end
+end
+
 ---------------------------------------------------------------- session + craft log
 local session = { crafts = 0, ups = 0, start = nil, last = nil }
 ns.session = session

@@ -33,7 +33,12 @@ local NOW_ROWS = 9
 local function BuildMainPage(p)
   p.skill = Text(p, "GameFontNormalLarge", "TOPLEFT", 18, -6)
   p.color = Text(p, "GameFontHighlightSmall", "TOPLEFT", 18, -28); p.color:SetWidth(430); p.color:SetWordWrap(true)
-  p.find = Text(p, "GameFontHighlight", "TOPLEFT", 18, -60); p.find:SetWidth(430)
+  p.find = Text(p, "GameFontHighlight", "TOPLEFT", 18, -60); p.find:SetWidth(330)
+  p.learnBtn = FA.UI.Button(p, "Waypoint", 90, function()
+    local V = ForeverArtisan.Vendors
+    if p.learnFrom and V and V.waypoint then V.waypoint(p.learnFrom) end
+  end)
+  p.learnBtn:SetPoint("TOPRIGHT", -20, -56); p.learnBtn:Hide()
 
   Header(p, -88, "This session")
   p.sess = Text(p, "GameFontHighlight", "TOPLEFT", 18, -108); p.sess:SetWidth(430)
@@ -99,6 +104,19 @@ local function RefreshMainPage(p)
     p.sess:SetText(GRAY .. "Nothing made yet this session.|r"); p.last:SetText("")
   end
   p.open:ShowIf(knows and not ns.HasRecipes())
+  -- not learned: say where to learn it
+  p.learnFrom = nil
+  if not i.rank then
+    local npc = ns.LearnFrom and ns.LearnFrom()
+    p.learnFrom = npc
+    if npc then
+      p.find:SetText(GOLD .. "Learn from: " .. npc.n .. ", " .. (npc.s or npc.z or "?") .. "|r")
+    else
+      p.find:SetText(GRAY .. "Ask a city guard for a First Aid trainer.|r")
+    end
+  end
+  p.find:SetWidth(p.learnFrom and 330 or 430)
+  p.learnBtn:SetShown(p.learnFrom ~= nil)
   for _, c in ipairs(p.checks) do c:Sync() end
 end
 

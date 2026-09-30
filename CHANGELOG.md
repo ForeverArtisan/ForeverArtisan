@@ -11,6 +11,7 @@
 - Trade Contacts: trainer entries no longer end in "(available)" or "(unavailable)".
 - Every list: long names and long details share the row instead of printing over each other.
 - Cooking, First Aid, Alchemy, Leatherworking: until your recipes are read, every tab shows an "Open <profession> window" button. One click opens the window and the recipes are read.
+- Cooking, First Aid, Alchemy, Leatherworking: on a character that hasn't learned the profession, the window names the nearest trainer from your Trade Contacts who teaches Apprentice, with a Waypoint button.
 - No more BETA tag on tested releases. Only builds named "-beta" show it now, and the login popup went with it. `/fa feedback` still shows where to send bugs and ideas.
 
 ## 0.9.3 (2026-09-28)

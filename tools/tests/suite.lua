@@ -300,5 +300,17 @@ do
   assert(j[1] and j[1].npc.n=="Carolai Anise", "closest NPC should come first even if only seen")
   C_Map.GetWorldPosFromMapPos=oldWorld
 end
+-- where to learn: an Expert-only trainer is skipped, the Apprentice one is named
+do
+  local db=ForeverArtisanContactsDB
+  db.entries["trainer:901"]={kind="trainer",npcId=901,name="Brawn",title="Expert Leatherworker",zone="Stranglethorn Vale",subzone="Grom'gol Base Camp",mapID=1434,x=31.6,y=28.8,
+    skills={{name="Expert Leatherworking",skillReq="Leatherworking 125"}}}
+  db.entries["trainer:777"].skills[#db.entries["trainer:777"].skills+1]={name="Apprentice Leatherworking",rank="available"}
+  loadedFrames["ForeverArtisan_Contacts"].ns.OnContactsChanged()
+  local who=lw.LearnFrom()
+  print("LEARN FROM", who and who.n)
+  assert(who and who.n=="Chaw Stronghide", "should name the trainer who teaches Apprentice, not Brawn")
+  assert(alch.LearnFrom()==nil, "no alchemy trainer met yet")
+end
 print("CRAFTS OK")
 print("SUITE OK")
