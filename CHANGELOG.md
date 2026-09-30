@@ -1,5 +1,7 @@
 # ForeverArtisan changelog
 
+## 0.9.6 (unreleased)
+
 ## 0.9.5 (2026-09-29)
 - Trade Contacts: a crafting NPC you talked to is saved even when no trainer or shop window opens (a trainer who won't train you yet only shows chat). They show as "visited, no list yet" instead of "seen, not visited".
 - Trade Contacts search: one row per trainer, with the ranks they teach on it ("trains 16 · Apprentice").
