@@ -112,18 +112,40 @@ local function playerPos()
   return m, x * 100, y * 100
 end
 
--- same map first (nearest first), then by town and name
+-- Map position (0-100) -> continent and world position in yards, so NPCs in different
+-- zones can be compared. Nil when the client can't convert (then only same-map distance works).
+local function worldPos(m, x, y)
+  if not (m and x and y and C_Map and C_Map.GetWorldPosFromMapPos and CreateVector2D) then return end
+  local ok, cont, pos = pcall(C_Map.GetWorldPosFromMapPos, m, CreateVector2D(x / 100, y / 100))
+  if not ok or not cont or not pos then return end
+  local wx, wy = pos.x, pos.y
+  if pos.GetXY then wx, wy = pos:GetXY() end
+  if wx and wy then return cont, wx, wy end
+end
+
+-- Nearest first: across zones on your continent when the game can convert map positions,
+-- otherwise on your current map. Then other continents, by town. NPCs within about the same
+-- distance (same 50-yard band) put the ones you've met ahead of seen-only ones.
 local function sortHits(hits)
   local m, px, py = playerPos()
+  local pc, pwx, pwy = worldPos(m, px, py)
   for _, h in ipairs(hits) do
-    if m and px and h.npc.m == m and h.npc.x then
-      local dx, dy = h.npc.x - px, h.npc.y - py
-      h.dist = math.sqrt(dx * dx + dy * dy)
-    else
-      h.dist = 1e9
+    local npc = h.npc
+    h.dist = 1e9
+    if pc and npc.x then
+      if npc.wc == nil and npc.m then npc.wc, npc.wx, npc.wy = worldPos(npc.m, npc.x, npc.y); npc.wc = npc.wc or false end
+      if npc.wc and npc.wc == pc then
+        local dx, dy = npc.wx - pwx, npc.wy - pwy
+        h.dist = math.sqrt(dx * dx + dy * dy)
+      end
+    elseif m and px and npc.m == m and npc.x then
+      local dx, dy = npc.x - px, npc.y - py
+      h.dist = math.sqrt(dx * dx + dy * dy) * 10 -- map percent, roughly yards-scaled for the band below
     end
+    h.band = math.floor(h.dist / 50)
   end
   table.sort(hits, function(a, b)
+    if a.band ~= b.band then return a.band < b.band end
     if (a.seen or false) ~= (b.seen or false) then return not a.seen end
     if (a.npc.age or 0) ~= (b.npc.age or 0) then return (a.npc.age or 0) < (b.npc.age or 0) end
     if a.dist ~= b.dist then return a.dist < b.dist end

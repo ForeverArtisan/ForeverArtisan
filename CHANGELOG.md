@@ -7,7 +7,7 @@
 - Fishing: the Derby tab is now the Cast marker tab. The marker tools sit at the top; the derby countdown, rules and catches are still there underneath.
 - Trade Contacts: riding instructors and weapon masters are no longer saved as contacts (class trainers already weren't). Ones saved before stay until you forget them.
 - Fix: First Aid said "You haven't learned First Aid" on characters without Cooking. The same check in Cooking, Fishing, Herbalism, Mining and Skinning could miss a profession the same way.
-- Trade Contacts search: a trainer shows as one row ("trains 33") instead of one row per recipe; "alchemy" now finds Alchemists and "leatherworking" finds Leatherworkers; NPCs you've passed but not talked to show up too, marked "seen, not visited yet". Use `/fa search alchemy` when the word is also a module name.
+- Trade Contacts search: a trainer shows as one row ("trains 33") instead of one row per recipe; "alchemy" now finds Alchemists and "leatherworking" finds Leatherworkers; NPCs you've passed but not talked to show up too, marked "seen, not visited yet". Results are nearest first, across zones on your continent. Use `/fa search alchemy` when the word is also a module name.
 - Trade Contacts: trainer entries no longer end in "(available)" or "(unavailable)".
 - Every list: long names and long details share the row instead of printing over each other.
 - No more BETA tag on tested releases. Only builds named "-beta" show it now, and the login popup went with it. `/fa feedback` still shows where to send bugs and ideas.

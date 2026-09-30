@@ -289,6 +289,16 @@ do
   print("SEARCH SEEN", seen)
   assert(seen, "seen-only alchemist should be found by 'alchemy'")
   for _,h in ipairs(cns3.Search("salty")) do assert(not h.seen, "seen-only NPCs match on name/title only") end
+  -- nearest first across zones: you're in Brill (Tirisfal), Chaw is on another continent
+  CreateVector2D=function(x,y) return {x=x,y=y} end
+  local oldWorld=C_Map.GetWorldPosFromMapPos
+  C_Map.GetWorldPosFromMapPos=function(m,v) local c=({[1420]=0,[1412]=1})[m]; if c==nil then return nil end return c,{x=v.x*1000,y=v.y*1000} end
+  C_Map.GetBestMapForUnit=function() return 1420 end
+  C_Map.GetPlayerMapPosition=function() return {GetXY=function() return .618,.528 end} end
+  local j=cns3.Search("journeyman")
+  print("SEARCH NEAREST", j[1] and j[1].npc.n)
+  assert(j[1] and j[1].npc.n=="Carolai Anise", "closest NPC should come first even if only seen")
+  C_Map.GetWorldPosFromMapPos=oldWorld
 end
 print("CRAFTS OK")
 print("SUITE OK")
