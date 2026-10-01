@@ -265,7 +265,8 @@ local function BookData()
     if view.bookAll or r.learned then list[#list + 1] = r end
   end
   table.sort(list, function(a, b)
-    if (a.grayAt or 0) ~= (b.grayAt or 0) then return (a.grayAt or 0) < (b.grayAt or 0) end
+    local ga, gb = ns.GrayAt(a) or 0, ns.GrayAt(b) or 0
+    if ga ~= gb then return ga < gb end
     return a.name < b.name
   end)
   local data = {}
@@ -278,7 +279,9 @@ local function BookData()
     end
     data[#data + 1] = { id = r.itemId, icon = Icon(r.itemId),
       left = ns.COLOR_CODE[col] .. r.name .. "|r",
-      right = (r.grayAt and (GRAY .. "gray at " .. r.grayAt .. "|r") or "") .. (r.learned and "" or (GRAY .. "  ·  not learned|r")),
+      right = (r.grayAt and (GRAY .. "gray at " .. r.grayAt .. "|r")
+          or (ns.GrayAt(r) and (GRAY .. "gray at ~" .. ns.GrayAt(r) .. "|r")) or "")
+        .. (r.learned and "" or (GRAY .. "  ·  not learned|r")),
       tip = tip }
   end
   return data

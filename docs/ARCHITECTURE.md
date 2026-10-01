@@ -24,7 +24,7 @@ ONE app, ONE download, ONE version, built as a SUITE: **ForeverArtisan_Core** is
 - Kerry's research: `/fa contacts dev` also saves full profession-window dumps for the website pipeline (dump.lua reads ForeverArtisanContactsDB).
 
 ## Packaging and release (GitHub)
-- Repo root: the ten `ForeverArtisan_*` folders, `.pkgmeta`, `.github\workflows\release.yml`, `CHANGELOG.md`, `README.md`, `docs\` (this file, RELEASE-CHECKLIST.md), `tools\` (release.py, build_crafts.py + templates\, tests\suite.lua: `lua5.1 tools/tests/suite.lua .` must end with SUITE OK before a release). New module folders also need a `move-folders` line in `.pkgmeta`. `.pkgmeta` keeps docs/tools/README/CHANGELOG out of the player zip.
+- Repo root: the fourteen `ForeverArtisan_*` folders, `.pkgmeta`, `.github\workflows\release.yml`, `CHANGELOG.md`, `README.md`, `docs\` (this file, RELEASE-CHECKLIST.md), `tools\` (release.py, build_crafts.py + templates\, tests\suite.lua: `lua5.1 tools/tests/suite.lua .` must end with SUITE OK before a release). New module folders also need a `move-folders` line in `.pkgmeta`. `.pkgmeta` keeps docs/tools/README/CHANGELOG out of the player zip.
 - As you work: add player-facing lines under `## x.y.z (unreleased)` at the top of CHANGELOG.md.
 - Ship: run `docs\RELEASE-CHECKLIST.md` in game → `python tools\release.py . 0.9.2` → commit in GitHub Desktop → tag the commit `v0.9.2` (tag = TOC version with a `v`) → Push origin.
 - The tag runs the BigWigs packager (GitHub Actions): one zip `ForeverArtisan-<version>.zip` with every module folder at the top level, attached to a GitHub Release and uploaded to CurseForge and Wago with the changelog. Keys live only in GitHub Secrets (`CF_API_KEY`, `WAGO_API_TOKEN`); project IDs in Core's TOC (`## X-Curse-Project-ID`, `## X-Wago-ID`).
@@ -67,7 +67,9 @@ Per-character vs account data: SavedVariables are per account. Anything that bel
   - Where to train: a trainer from Trade Contacts who teaches the next rank wins; otherwise the Classic answer, labeled as such.
   - The window check is strict: a module only reads a profession window the game says is its own, so Alchemy never reads a Leatherworking window.
 - First Aid and Cooking predate the engine and are still their own files. Move them onto it when they next need real work.
-- Next on the engine: Tailoring, Enchanting, Blacksmithing, Engineering (one CRAFTS entry each, plus anything profession-specific).
+- On the engine: Alchemy, Leatherworking, Blacksmithing, Tailoring, Engineering, Enchanting. All 12 professions have a module as of 0.9.7.
+- Window APIs, tried in order: `C_TradeSkillUI` (modern), `GetTradeSkillInfo` (old trade skill window), `GetCraftInfo` (Classic's Craft window, which Enchanting uses). The old APIs give only today's color, not the gray level, so `ns.GrayAt` estimates it from that color (orange +45, yellow +30, green +10); the Recipe book shows it as "gray at ~N".
+- Material sources (`ns.SourceFor`): Trade Contacts vendor, Core vendor hint, gathering logs, then by name: Ore (mine it), Bar (smelt), Rough/Coarse/Heavy/Solid/Dense Stone (mining veins), Dust/Essence/Shard (disenchant), Cloth (humanoid drops).
 
 ## Suite style rules (every module, including new professions)
 - Build windows only through `FA.UI.Kit`: `K.Window` with tabs **Main (profession name) / Progress / Log / Guide** (Fishing's 4th tab is Cast marker: marker tools on top, fishing derby below).

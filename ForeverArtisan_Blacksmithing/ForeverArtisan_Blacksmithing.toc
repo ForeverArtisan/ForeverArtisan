@@ -1,15 +1,15 @@
 ## Interface: 16001
-## Title: ForeverArtisan: Leatherworking
-## Notes: What to make next for skill-ups, a plan and shopping list to your target skill (cured hides counted as crafts, leather points to your Skinning log), a craft log, where to train next, and material tooltips.
+## Title: ForeverArtisan: Blacksmithing
+## Notes: What to make next for skill-ups, a plan and shopping list to your target skill (ore and stone point to your Mining log), a craft log, where to train next, and material tooltips.
 ## Author: ForeverArtisan
 ## Version: 0.9.7-dev
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core
 ## OptionalDeps: ForeverArtisan_Contacts, ForeverArtisan_Herbalism, ForeverArtisan_Skinning, ForeverArtisan_Mining, ForeverArtisan_Fishing
-## SavedVariables: ForeverArtisanLeatherworkingDB
-## X-FA-Slash: FALW
-## X-FA-Alias: lw
+## SavedVariables: ForeverArtisanBlacksmithingDB
+## X-FA-Slash: FABS
+## X-FA-Alias: bs
 
-Leatherworking.lua
+Blacksmithing.lua
 UI.lua

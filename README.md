@@ -5,10 +5,10 @@ Free tradeskill addons for WoW Forever. One download, one version; `ForeverArtis
 Site, guides and feedback: https://foreverartisan.app
 
 ## Layout
-- `ForeverArtisan_*` – the ten addon folders (the game reads these through junctions in `Interface\AddOns`).
+- `ForeverArtisan_*` – the fourteen addon folders (the game reads these through junctions in `Interface\AddOns`).
 - `docs\` – ARCHITECTURE.md (read first) and RELEASE-CHECKLIST.md.
 - `tools\release.py` – sets the version in every TOC, syntax-checks, dates the changelog.
-- `tools\build_crafts.py` – writes the crafting modules that share one engine (Alchemy, Leatherworking) from `tools\templates\`. Edit the template, never the generated files.
+- `tools\build_crafts.py` – writes the crafting modules that share one engine (Alchemy, Leatherworking, Blacksmithing, Tailoring, Engineering, Enchanting) from `tools\templates\`. Edit the template, never the generated files.
 
 ## Releasing
 1. Add changes under `## x.y.z (unreleased)` at the top of `CHANGELOG.md` as you go.

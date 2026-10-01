@@ -1,4 +1,4 @@
-# BigWigs packager config. One repo, ten addon folders.
+# BigWigs packager config. One repo, fourteen addon folders.
 # The packager zips the repo as one folder, then move-folders splits it back
 # into the separate AddOns folders the game expects.
 package-as: ForeverArtisan
@@ -14,6 +14,10 @@ move-folders:
   ForeverArtisan/ForeverArtisan_Contacts: ForeverArtisan_Contacts
   ForeverArtisan/ForeverArtisan_Alchemy: ForeverArtisan_Alchemy
   ForeverArtisan/ForeverArtisan_Leatherworking: ForeverArtisan_Leatherworking
+  ForeverArtisan/ForeverArtisan_Blacksmithing: ForeverArtisan_Blacksmithing
+  ForeverArtisan/ForeverArtisan_Tailoring: ForeverArtisan_Tailoring
+  ForeverArtisan/ForeverArtisan_Engineering: ForeverArtisan_Engineering
+  ForeverArtisan/ForeverArtisan_Enchanting: ForeverArtisan_Enchanting
 
 # Dev files that stay out of the player download.
 ignore:

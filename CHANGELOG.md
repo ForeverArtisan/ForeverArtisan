@@ -1,5 +1,11 @@
 # ForeverArtisan changelog
 
+## 0.9.7 (unreleased)
+- Blacksmithing, Tailoring, Engineering and Enchanting (new modules): the same window as Alchemy and Leatherworking, with what to make now, a plan to your target skill with a shopping list, a craft log, a recipe book and where to train next. Every one of the 12 professions now has a module. `/fa bs`, `/fa tailor`, `/fa eng`, `/fa ench`
+- Tailoring counts bolts of cloth as crafts. Blacksmithing and Engineering point ore to your Mining log and say where bars come from. Enchanting points dust and essences to disenchanting.
+- Enchanting works with the older Classic Enchanting window. When the game doesn't give a recipe's gray level, the plan estimates it from today's color and the Recipe book shows it as "gray at ~N".
+- The `/fa` panel uses shorter rows so all 13 modules fit; hover a row for its description.
+
 ## 0.9.6 (2026-09-30)
 - Fishing: setting the reel-in key to your fishing key now shows it on the reel-in row ("Space (same key)") instead of "none", so one-button fishing is clear. Clear on that row turns it off.
 

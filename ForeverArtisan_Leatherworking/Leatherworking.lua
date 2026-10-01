@@ -105,15 +105,26 @@ function ns.Knows() return Skill() ~= nil end
 ---------------------------------------------------------------- recipe colors
 -- Forever reports the skill where a recipe turns gray. The live color from your last window scan
 -- is used first; otherwise green is guessed 20 below gray and yellow 40 below.
+-- Older windows (the Classic Craft window Enchanting uses) give only today's color, not the gray
+-- level. Then the gray level is estimated from that color so plans still work past today's skill.
+local GRAY_GUESS = { orange = 45, yellow = 30, green = 10, gray = 0 }
+local function GrayAt(r)
+  if r.grayAt then return r.grayAt end
+  local g = r.color and r.scanSkill and GRAY_GUESS[r.color]
+  return g and (r.scanSkill + g) or nil
+end
+ns.GrayAt = GrayAt
+
 function ns.ColorFor(r, skill)
   if not r then return "unknown" end
   if not r.learned then return "unlearned" end
   if not skill then return "unknown" end
   if r.scanSkill == skill and r.color then return r.color end
-  if r.grayAt then
-    if skill >= r.grayAt then return "gray" end
-    if skill >= r.grayAt - 20 then return "green" end
-    if skill >= r.grayAt - 40 then return "yellow" end
+  local gray = GrayAt(r)
+  if gray then
+    if skill >= gray then return "gray" end
+    if skill >= gray - 20 then return "green" end
+    if skill >= gray - 40 then return "yellow" end
     return "orange"
   end
   return "unknown"
@@ -123,8 +134,9 @@ end
 function ns.Chance(r, skill)
   local c = ns.ColorFor(r, skill)
   if c == "orange" then return 1 end
-  if (c == "yellow" or c == "green") and r.grayAt then
-    return math.max(0.05, math.min(1, (r.grayAt - skill) / 40))
+  local gray = GrayAt(r)
+  if (c == "yellow" or c == "green") and gray then
+    return math.max(0.05, math.min(1, (gray - skill) / 40))
   end
   if c == "yellow" then return 0.75 end
   if c == "green" then return 0.25 end
@@ -230,6 +242,8 @@ local function ScanOld()
     if kind == "header" then header = rname
     elseif rname then
       local r = { name = rname, learned = true, group = header, color = OLD_KIND[kind], scanSkill = rank, reagents = {} }
+      local rl = GetTradeSkillRecipeLink and GetTradeSkillRecipeLink(i)
+      r.id = rl and tonumber(rl:match("enchant:(%d+)")) or nil
       local link = GetTradeSkillItemLink and GetTradeSkillItemLink(i)
       r.itemId = link and tonumber(link:match("item:(%d+)"))
       local made = GetTradeSkillNumMade and GetTradeSkillNumMade(i)
@@ -245,6 +259,34 @@ local function ScanOld()
   return out
 end
 
+-- Classic's Enchanting uses the older Craft window (CraftFrame) instead of the trade skill one.
+local function ScanCraft()
+  if not (GetNumCrafts and GetCraftInfo) then return end
+  local name = (GetCraftDisplaySkillLine and GetCraftDisplaySkillLine()) or (GetCraftName and GetCraftName())
+  if not IsProfName(name) then return end
+  local rank = Skill()
+  local out, header = {}, nil
+  for i = 1, (GetNumCrafts() or 0) do
+    local cname, _, kind = GetCraftInfo(i)
+    if kind == "header" then header = cname
+    elseif cname then
+      local r = { name = cname, learned = true, group = header, color = OLD_KIND[kind], scanSkill = rank, reagents = {} }
+      local link = GetCraftItemLink and GetCraftItemLink(i)
+      if link then
+        r.id = tonumber(link:match("enchant:(%d+)")) or nil
+        r.itemId = tonumber(link:match("item:(%d+)")) or nil
+      end
+      for j = 1, ((GetCraftNumReagents and GetCraftNumReagents(i)) or 0) do
+        local n, _, cnt = GetCraftReagentInfo(i, j)
+        local rl = GetCraftReagentItemLink and GetCraftReagentItemLink(i, j)
+        r.reagents[#r.reagents + 1] = { id = rl and tonumber(rl:match("item:(%d+)")), n = cnt or 1, name = n }
+      end
+      out[cname] = r
+    end
+  end
+  return out
+end
+
 local recipeBySpell = {}
 local function IndexRecipes()
   wipe(recipeBySpell)
@@ -253,8 +295,8 @@ end
 
 local function Scan()
   if not db then return end
-  local got = ScanModern() or ScanOld()
-  if not got then return end
+  local got = ScanModern() or ScanOld() or ScanCraft()
+  if not got or next(got) == nil then return end
   local c, n, learned = CharRec(), 0, 0
   for name, r in pairs(got) do
     n = n + 1
@@ -317,6 +359,16 @@ function ns.SourceFor(id, name)
     return "Leather: skin beasts. Not in your Skinning log yet."
   end
   if name:find("Cloth$") then return "Cloth: drops from humanoid mobs" end
+  if name:find(" Ore$") then return "Ore: mine it. Not in your Mining log yet." end
+  if name:find(" Bar$") then return "Bar: smelt ore at a forge (Mining), or the Auction House" end
+  if name:find("^Rough Stone$") or name:find("^Coarse Stone$") or name:find("^Heavy Stone$")
+    or name:find("^Solid Stone$") or name:find("^Dense Stone$") then
+    return "Stone: comes from mining veins. Not in your Mining log yet."
+  end
+  if name:find(" Dust$") or name:find(" Essence$") or name:find(" Shard$") then
+    return "Disenchant green (uncommon) gear, or the Auction House"
+  end
+  if (class == 7 and sub == 7) then return "Mining: ore, bars or stone. Mine it or check the Auction House." end
   return "Drops from mobs, or the Auction House"
 end
 
@@ -657,7 +709,7 @@ end
 ---------------------------------------------------------------- events
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "TRADE_SKILL_SHOW",
-  "TRADE_SKILL_LIST_UPDATE", "TRADE_SKILL_DATA_SOURCE_CHANGED", "UNIT_SPELLCAST_SUCCEEDED",
+  "TRADE_SKILL_LIST_UPDATE", "TRADE_SKILL_DATA_SOURCE_CHANGED", "CRAFT_SHOW", "CRAFT_UPDATE", "UNIT_SPELLCAST_SUCCEEDED",
   "CHAT_MSG_SKILL", "SKILL_LINES_CHANGED", "BAG_UPDATE_DELAYED" }) do
   pcall(ev.RegisterEvent, ev, e)
 end
@@ -687,7 +739,8 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     HookTooltips()
   elseif e == "PLAYER_ENTERING_WORLD" then
     Skill(); IndexRecipes(); IndexUses()
-  elseif e == "TRADE_SKILL_SHOW" or e == "TRADE_SKILL_LIST_UPDATE" or e == "TRADE_SKILL_DATA_SOURCE_CHANGED" then
+  elseif e == "TRADE_SKILL_SHOW" or e == "TRADE_SKILL_LIST_UPDATE" or e == "TRADE_SKILL_DATA_SOURCE_CHANGED"
+    or e == "CRAFT_SHOW" or e == "CRAFT_UPDATE" then
     ScanSoon()
   elseif e == "UNIT_SPELLCAST_SUCCEEDED" and a1 == "player" then
     local r = a3 and recipeBySpell[a3]

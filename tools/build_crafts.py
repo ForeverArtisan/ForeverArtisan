@@ -1,4 +1,5 @@
-"""Writes the crafting modules that share the First Aid engine (Alchemy, Leatherworking, ...).
+"""Writes the crafting modules that share the First Aid engine (Alchemy, Leatherworking, Blacksmithing,
+Tailoring, Engineering, Enchanting).
 
 usage (from the repo):  python tools\\build_crafts.py .
 
@@ -61,6 +62,111 @@ CRAFTS = [
                 75: "Journeyman: any Leatherworking trainer (needs 50, level 10).",
                 150: "Expert: a Leatherworking trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
                 225: "Artisan: Drakk Stonehand, Aerie Peak, The Hinterlands (needs 200, level 35). Classic answer, not confirmed in Forever.",
+                300: "Top rank. Nothing left to train.",
+            },
+        },
+    },
+    {
+        "ID": "Blacksmithing", "NAME": "Blacksmithing", "LINE": 164,
+        "SLASH": "FABS", "SLASHCMD": "/fabs", "ALIAS": "bs",
+        "DB": "ForeverArtisanBlacksmithingDB", "FLAG": "faBsDone",
+        "GROUPS": ["blacksmithing", "sharpening", "weightstone", "plate", "sword", "axe", "mace", "buckle"],
+        "PREFIXES": ["Plans: "],
+        "SKIP": None,
+        "SUBEXAMPLE": "grinding stones",
+        "EMPTYLOG": "Nothing made yet. Grab some bars and stone!",
+        "NOTES": "What to make next for skill-ups, a plan and shopping list to your target skill "
+                 "(ore and stone point to your Mining log), a craft log, where to train next, and material tooltips.",
+        "ADVICE": {
+            "Horde": {
+                75: "Journeyman: any Blacksmithing trainer (needs 50, level 10).",
+                150: "Expert: a Blacksmithing trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
+                225: "Artisan: ask a capital-city guard for an Artisan Blacksmithing trainer (needs 200, level 35).",
+                300: "Top rank. Nothing left to train.",
+            },
+            "Alliance": {
+                75: "Journeyman: any Blacksmithing trainer (needs 50, level 10).",
+                150: "Expert: a Blacksmithing trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
+                225: "Artisan: ask a capital-city guard for an Artisan Blacksmithing trainer (needs 200, level 35).",
+                300: "Top rank. Nothing left to train.",
+            },
+        },
+    },
+    {
+        "ID": "Tailoring", "NAME": "Tailoring", "LINE": 197,
+        "SLASH": "FATAILOR", "SLASHCMD": "/fatailor", "ALIAS": "tailor",
+        "DB": "ForeverArtisanTailoringDB", "FLAG": "faTailorDone",
+        "GROUPS": ["tailoring", "cloth", "robe", "shirt", "bag", "bolt", "cloak"],
+        "PREFIXES": ["Pattern: "],
+        "SKIP": "^Mooncloth$",
+        "SUBEXAMPLE": "bolts of cloth",
+        "EMPTYLOG": "Nothing made yet. Grab some cloth and thread!",
+        "NOTES": "What to make next for skill-ups, a plan and shopping list to your target skill "
+                 "(bolts of cloth counted as crafts), a craft log, where to train next, and material tooltips.",
+        "ADVICE": {
+            "Horde": {
+                75: "Journeyman: any Tailoring trainer (needs 50, level 10).",
+                150: "Expert: a Tailoring trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
+                225: "Artisan: ask a capital-city guard for an Artisan Tailoring trainer (needs 200, level 35).",
+                300: "Top rank. Nothing left to train.",
+            },
+            "Alliance": {
+                75: "Journeyman: any Tailoring trainer (needs 50, level 10).",
+                150: "Expert: a Tailoring trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
+                225: "Artisan: ask a capital-city guard for an Artisan Tailoring trainer (needs 200, level 35).",
+                300: "Top rank. Nothing left to train.",
+            },
+        },
+    },
+    {
+        "ID": "Engineering", "NAME": "Engineering", "LINE": 202,
+        "SLASH": "FAENG", "SLASHCMD": "/faeng", "ALIAS": "eng",
+        "DB": "ForeverArtisanEngineeringDB", "FLAG": "faEngDone",
+        "GROUPS": ["engineering", "explosive", "device", "goggles", "gun", "scope", "parts", "bomb"],
+        "PREFIXES": ["Schematic: "],
+        "SKIP": None,
+        "SUBEXAMPLE": "blasting powder, bolts and tubes",
+        "EMPTYLOG": "Nothing made yet. Grab some bars and stone!",
+        "NOTES": "What to make next for skill-ups, a plan and shopping list to your target skill "
+                 "(powders, bolts and tubes counted as crafts, ore points to your Mining log), a craft log, "
+                 "where to train next, and material tooltips.",
+        "ADVICE": {
+            "Horde": {
+                75: "Journeyman: any Engineering trainer (needs 50, level 10).",
+                150: "Expert: a Engineering trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
+                225: "Artisan: ask a capital-city guard for an Artisan Engineering trainer (needs 200, level 35).",
+                300: "Top rank. Nothing left to train.",
+            },
+            "Alliance": {
+                75: "Journeyman: any Engineering trainer (needs 50, level 10).",
+                150: "Expert: a Engineering trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
+                225: "Artisan: ask a capital-city guard for an Artisan Engineering trainer (needs 200, level 35).",
+                300: "Top rank. Nothing left to train.",
+            },
+        },
+    },
+    {
+        "ID": "Enchanting", "NAME": "Enchanting", "LINE": 333,
+        "SLASH": "FAENCH", "SLASHCMD": "/faench", "ALIAS": "ench",
+        "DB": "ForeverArtisanEnchantingDB", "FLAG": "faEnchDone",
+        "GROUPS": ["enchanting", "enchant", "oil", "wand", "rod"],
+        "PREFIXES": ["Formula: "],
+        "SKIP": None,
+        "SUBEXAMPLE": "runed rods",
+        "EMPTYLOG": "Nothing enchanted yet. Disenchant some greens for dust!",
+        "NOTES": "What to enchant next for skill-ups, a plan and shopping list to your target skill "
+                 "(dust and essences from disenchanting), a craft log, where to train next, and material tooltips.",
+        "ADVICE": {
+            "Horde": {
+                75: "Journeyman: any Enchanting trainer (needs 50, level 10).",
+                150: "Expert: a Enchanting trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
+                225: "Artisan: ask a capital-city guard for an Artisan Enchanting trainer (needs 200, level 35).",
+                300: "Top rank. Nothing left to train.",
+            },
+            "Alliance": {
+                75: "Journeyman: any Enchanting trainer (needs 50, level 10).",
+                150: "Expert: a Enchanting trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
+                225: "Artisan: ask a capital-city guard for an Artisan Enchanting trainer (needs 200, level 35).",
                 300: "Top rank. Nothing left to train.",
             },
         },

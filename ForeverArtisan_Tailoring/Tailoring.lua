@@ -1,20 +1,20 @@
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
--- ForeverArtisan: @@NAME@@
--- Reads your recipes from the @@NAME@@ window, shows what you can make right now for skill-ups,
+-- ForeverArtisan: Tailoring
+-- Reads your recipes from the Tailoring window, shows what you can make right now for skill-ups,
 -- plans the crafts to reach a target skill with a shopping list (bags, vendors, your gathering
--- logs), crafts in-between materials (@@SUBEXAMPLE@@) instead of buying them, logs what you make,
--- tells you where the next rank is trained, and adds @@NAME@@ lines to material tooltips.
+-- logs), crafts in-between materials (bolts of cloth) instead of buying them, logs what you make,
+-- tells you where the next rank is trained, and adds Tailoring lines to material tooltips.
 -- Built on the same engine as First Aid; tools/build_crafts.py writes this file from a template.
 local ADDON, ns = ...
-ADDON = ADDON or "ForeverArtisan_@@ID@@"
+ADDON = ADDON or "ForeverArtisan_Tailoring"
 ns = ns or {}
 
 local GREEN, YELLOW, RED, GRAY = "|cff40ff40", "|cffffff00", "|cffff4040", "|cff9d9d9d"
 local GOLD = "|cffd4a94e"
-local PROF = "@@NAME@@"
-local SKILL_LINE = @@LINE@@
+local PROF = "Tailoring"
+local SKILL_LINE = 197
 -- recipes the plan never picks (cooldowns make them useless for leveling)
-local SKIP_IN_PLAN = @@SKIP@@
+local SKIP_IN_PLAN = "^Mooncloth$"
 
 local db
 local say = ForeverArtisan.Printer(PROF)
@@ -152,9 +152,9 @@ ns.COLOR_WORD = {
   green = "green: sometimes a skill-up", gray = "gray: no skill-ups", unlearned = "not learned", unknown = "",
 }
 
----------------------------------------------------------------- reading the @@NAME@@ window
+---------------------------------------------------------------- reading the Tailoring window
 -- recipe group names that only this profession uses (a last resort when the game won't say)
-local GROUP_WORDS = @@GROUPS@@
+local GROUP_WORDS = { "tailoring", "cloth", "robe", "shirt", "bag", "bolt", "cloak" }
 local function IsProfGroup(g)
   if not g then return false end
   g = g:lower()
@@ -373,7 +373,7 @@ function ns.SourceFor(id, name)
 end
 
 -- where to buy an unlearned recipe, if Trade Contacts knows
-local RECIPE_PREFIXES = @@PREFIXES@@
+local RECIPE_PREFIXES = { "Pattern: " }
 function ns.RecipeSource(name)
   for _, pre in ipairs(RECIPE_PREFIXES) do
     local v, price = VendorFor(pre .. name)
@@ -562,7 +562,18 @@ end
 -- A trainer you've met (Trade Contacts) wins. Otherwise the Classic answer, marked as such.
 local RANK_AT = { [75] = { "Journeyman", 50, 10 }, [150] = { "Expert", 125, 20 }, [225] = { "Artisan", 200, 35 } }
 local ADVICE = {
-@@ADVICE@@
+  Horde = {
+    [75]  = "Journeyman: any Tailoring trainer (needs 50, level 10).",
+    [150] = "Expert: a Tailoring trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
+    [225] = "Artisan: ask a capital-city guard for an Artisan Tailoring trainer (needs 200, level 35).",
+    [300] = "Top rank. Nothing left to train.",
+  },
+  Alliance = {
+    [75]  = "Journeyman: any Tailoring trainer (needs 50, level 10).",
+    [150] = "Expert: a Tailoring trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
+    [225] = "Artisan: ask a capital-city guard for an Artisan Tailoring trainer (needs 200, level 35).",
+    [300] = "Top rank. Nothing left to train.",
+  },
 }
 local function Faction()
   local f = UnitFactionGroup and UnitFactionGroup("player")
@@ -647,7 +658,7 @@ local function RecipeNameFromItem(name)
 end
 
 local function ItemTip(tt)
-  if not db or db.settings.tooltips == false or not tt or tt.@@FLAG@@ or not ns.Knows() then return end
+  if not db or db.settings.tooltips == false or not tt or tt.faTailorDone or not ns.Knows() then return end
   local name, link = tt:GetItem()
   local id = link and tonumber(link:match("item:(%d+)"))
   if not id then return end
@@ -655,7 +666,7 @@ local function ItemTip(tt)
   local skill = Skill()
   local rname = RecipeNameFromItem(name)
   if rname and recipes[rname] then
-    tt.@@FLAG@@ = true
+    tt.faTailorDone = true
     local r = recipes[rname]
     tt:AddLine(" ")
     tt:AddLine(("%s%s|r  %s%s|r%s"):format(GOLD, PROF, r.learned and GREEN or YELLOW, r.learned and "You know this recipe" or "Not learned yet",
@@ -665,7 +676,7 @@ local function ItemTip(tt)
   end
   local uses = usedBy[id]
   if not uses or #uses == 0 then return end
-  tt.@@FLAG@@ = true
+  tt.faTailorDone = true
   tt:AddLine(" ")
   tt:AddLine(GOLD .. PROF .. ":|r used in")
   local shown = 0
@@ -681,7 +692,7 @@ local function ItemTip(tt)
 end
 
 local function HookTooltips()
-  local function clear(self) self.@@FLAG@@ = nil end
+  local function clear(self) self.faTailorDone = nil end
   if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tt)
       if tt == GameTooltip or tt == ItemRefTooltip then pcall(ItemTip, tt) end
@@ -716,8 +727,8 @@ end
 
 ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
   if e == "ADDON_LOADED" and a1 == ADDON then
-    @@DB@@ = @@DB@@ or {}
-    db = @@DB@@
+    ForeverArtisanTailoringDB = ForeverArtisanTailoringDB or {}
+    db = ForeverArtisanTailoringDB
     db.version = ForeverArtisan.Version()
     db.settings = db.settings or {}
     if db.settings.tooltips == nil then db.settings.tooltips = true end
@@ -756,8 +767,8 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
 end)
 
 ---------------------------------------------------------------- slash
-SLASH_@@SLASH@@1 = "@@SLASHCMD@@"
-SlashCmdList.@@SLASH@@ = function(msg)
+SLASH_FATAILOR1 = "/fatailor"
+SlashCmdList.FATAILOR = function(msg)
   if not db then return end
   local cmd, rest = (msg or ""):match("^(%S*)%s*(.-)$")
   cmd = (cmd or ""):lower()
@@ -799,6 +810,6 @@ SlashCmdList.@@SLASH@@ = function(msg)
     local n, learned = 0, 0
     for _, r in pairs(CharRec().recipes) do n = n + 1; if r.learned then learned = learned + 1 end end
     say(("Skill: %s  ·  %d recipes read, %d learned"):format(i.rank and (i.rank .. (i.max and ("/" .. i.max) or "")) or "?", n, learned))
-    say("Commands: /fa @@ALIAS@@ (window), next, plan [skill], tooltips, reset confirm")
+    say("Commands: /fa tailor (window), next, plan [skill], tooltips, reset confirm")
   end
 end

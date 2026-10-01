@@ -126,7 +126,7 @@ end
 
 ---------------------------------------------------------------- panel
 
-local ROW_H = 44
+local ROW_H = 30 -- compact: every profession has a module now, so notes live in the hover tooltip
 local panel
 
 -- a module whose version doesn't match Core came from a different download
@@ -198,7 +198,7 @@ local function buildPanel()
   FA.UI.Header(panel, -34, "Modules", 18)
 
   panel.rows = {}
-  for i = 1, 12 do
+  for i = 1, 16 do
     local row = CreateFrame("Frame", nil, panel)
     row:SetSize(420, ROW_H)
     row:SetPoint("TOPLEFT", 16, -54 - (i - 1) * ROW_H)
@@ -208,17 +208,18 @@ local function buildPanel()
       if row.m then setEnabled(row.m, self:GetChecked() and true or false); refreshPanel() end
     end)
     row.title = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.title:SetPoint("TOPLEFT", 34, -6); row.title:SetJustifyH("LEFT")
+    row.title:SetPoint("LEFT", 34, 0); row.title:SetJustifyH("LEFT")
     row.open = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.open:SetSize(60, 20); row.open:SetPoint("TOPRIGHT", -2, -4); row.open:SetText("Open")
+    row.open:SetSize(60, 20); row.open:SetPoint("RIGHT", -2, 0); row.open:SetText("Open")
     row.open:SetScript("OnClick", function()
       local m = row.m
       if m and m.slash and SlashCmdList[m.slash] then panel:Hide(); SlashCmdList[m.slash]("") end
     end)
     row.status = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.status:SetPoint("TOPRIGHT", -70, -8)
+    row.status:SetPoint("RIGHT", -70, 0)
     row.notes = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     row.notes:SetPoint("TOPLEFT", 34, -22); row.notes:SetWidth(310); row.notes:SetJustifyH("LEFT"); row.notes:SetWordWrap(false)
+    row.notes:Hide() -- shown in the hover tooltip instead
     row:EnableMouse(true)
     row:SetScript("OnEnter", function(self)
       if not self.m then return end

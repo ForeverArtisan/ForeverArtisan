@@ -1,5 +1,5 @@
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
--- ForeverArtisan: @@NAME@@: window (/fa @@ALIAS@@) with @@NAME@@ / Progress / Craft log / Recipe book tabs
+-- ForeverArtisan: Enchanting: window (/fa ench) with Enchanting / Progress / Craft log / Recipe book tabs
 -- Same window as First Aid; tools/build_crafts.py writes this file from a template.
 local _, ns = ...
 if not ns or not ns.DB then return end
@@ -29,7 +29,7 @@ local function ReagentTip(r)
   return table.concat(lines, "\n")
 end
 
----------------------------------------------------------------- page 1: @@NAME@@
+---------------------------------------------------------------- page 1: Enchanting
 local NOW_ROWS = 9
 local function BuildMainPage(p)
   p.skill = Text(p, "GameFontNormalLarge", "TOPLEFT", 18, -6)
@@ -49,21 +49,21 @@ local function BuildMainPage(p)
   Text(p, "GameFontDisableSmall", "TOPLEFT", 90, -160):SetText("recipes that still give skill-ups")
   p.rows = MakeRows(p, NOW_ROWS, -178, false)
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 20, -182); p.empty:SetWidth(420)
-  p.open = FA.UI.ProfessionButton(p, "@@NAME@@", 240); p.open:SetPoint("TOPLEFT", 20, -208)
+  p.open = FA.UI.ProfessionButton(p, "Enchanting", 240); p.open:SetPoint("TOPLEFT", 20, -208)
 
   p.checks = {
-    Check(p, "Show @@NAME@@ info on material tooltips", 16, -412,
+    Check(p, "Show Enchanting info on material tooltips", 16, -412,
       function() return S().tooltips end, function(v) S().tooltips = v end),
   }
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
-  help:SetText("/fa @@ALIAS@@ next  ·  /fa @@ALIAS@@ plan 225  ·  open your @@NAME@@ window to refresh recipes")
+  help:SetText("/fa ench next  ·  /fa ench plan 225  ·  open your Enchanting window to refresh recipes")
 end
 
 local function RefreshMainPage(p)
   local i = ns.SkillInfo()
   local knows = ns.Knows()
   if i.rank then
-    p.skill:SetText(("@@NAME@@ %d%s%s"):format(i.rank, i.max and (" / " .. i.max) or "",
+    p.skill:SetText(("Enchanting %d%s%s"):format(i.rank, i.max and (" / " .. i.max) or "",
       (i.mod and i.mod > 0) and (GREEN .. "  (+" .. i.mod .. ")|r") or ""))
     if i.capped then
       p.color:SetText(RED .. ("Capped at %d.|r "):format(i.max) .. (i.advice or "Train the next rank to keep gaining skill."))
@@ -71,8 +71,8 @@ local function RefreshMainPage(p)
       p.color:SetText(i.advice and (GRAY .. "Next rank: " .. i.advice .. "|r") or "")
     end
   else
-    p.skill:SetText("@@NAME@@")
-    p.color:SetText(GRAY .. "You haven't learned @@NAME@@ on this character.|r")
+    p.skill:SetText("Enchanting")
+    p.color:SetText(GRAY .. "You haven't learned Enchanting on this character.|r")
   end
 
   local list = {}
@@ -90,7 +90,7 @@ local function RefreshMainPage(p)
     p.empty:SetText(#list == 0 and "None of your recipes give skill-ups right now. Learn new ones or train." or "")
   elseif knows then
     p.find:SetText(YELLOW .. "Your recipes haven't been read yet.|r")
-    p.empty:SetText(YELLOW .. "Open the @@NAME@@ window once and every recipe is read. Click here:|r")
+    p.empty:SetText(YELLOW .. "Open the Enchanting window once and every recipe is read. Click here:|r")
   else
     p.find:SetText(""); p.empty:SetText("")
   end
@@ -113,7 +113,7 @@ local function RefreshMainPage(p)
     if npc then
       p.find:SetText(GOLD .. "Learn from: " .. npc.n .. ", " .. (npc.s or npc.z or "?") .. "|r")
     else
-      p.find:SetText(GRAY .. "Ask a city guard for a @@NAME@@ trainer.|r")
+      p.find:SetText(GRAY .. "Ask a city guard for a Enchanting trainer.|r")
     end
   end
   p.find:SetWidth(p.learnFrom and 330 or 430)
@@ -124,7 +124,7 @@ end
 ---------------------------------------------------------------- page 2: Progress (plan + shopping list)
 local PLAN_ROWS, SHOP_ROWS = 5, 8
 local function BuildProgressPage(p)
-  p.skillBar = K.SkillBar(p, -2, "@@NAME@@")
+  p.skillBar = K.SkillBar(p, -2, "Enchanting")
   p.rate = Text(p, "GameFontHighlightSmall", "TOPLEFT", 18, -36); p.rate:SetWidth(430)
 
   Header(p, -54, "Plan to skill")
@@ -142,7 +142,7 @@ local function BuildProgressPage(p)
   Text(p, "GameFontDisableSmall", "TOPLEFT", 120, -240):SetText("have / need  ·  hover for source  ·  gold = you craft it")
   p.shopRows = MakeRows(p, SHOP_ROWS, -258, false)
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 20, -104); p.empty:SetWidth(420)
-  p.open = FA.UI.ProfessionButton(p, "@@NAME@@", 240); p.open:SetPoint("TOPLEFT", 20, -128)
+  p.open = FA.UI.ProfessionButton(p, "Enchanting", 240); p.open:SetPoint("TOPLEFT", 20, -128)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("Craft counts are estimates: orange always skills up, yellow and green less often.")
 end
@@ -153,13 +153,13 @@ local function RefreshProgressPage(p)
     p.skillBar:Set(i.rank, i.max, i.capped)
     p.rate:SetText(i.cpp and ("About %.1f crafts per point lately"):format(i.cpp) or (GRAY .. "Make a few things and your pace shows here.|r"))
   else
-    p.skillBar:Set(nil); p.rate:SetText(GRAY .. "You haven't learned @@NAME@@ on this character.|r")
+    p.skillBar:Set(nil); p.rate:SetText(GRAY .. "You haven't learned Enchanting on this character.|r")
   end
   if i.rank then p.rate:SetText(("%d craft%s since your last skill-up  ·  "):format(i.sinceUp or 0, (i.sinceUp or 0) == 1 and "" or "s") .. (p.rate:GetText() or "")) end
   p.open:ShowIf(ns.Knows() and not ns.HasRecipes())
   if not (ns.Knows() and ns.HasRecipes()) then
     Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); p.note:SetText(""); p.target:SetTextColor(1, 1, 1)
-    p.empty:SetText(ns.Knows() and "Open your @@NAME@@ window once so I can read your recipes." or "")
+    p.empty:SetText(ns.Knows() and "Open your Enchanting window once so I can read your recipes." or "")
     return
   end
   p.empty:SetText("")
@@ -252,7 +252,7 @@ local function RefreshLogPage(p)
   local data = LogData()
   view.logOff = math.min(view.logOff, math.max(0, #data - LOG_ROWS))
   Fill(p.rows, data, view.logOff)
-  p.empty:SetText(#data == 0 and "@@EMPTYLOG@@" or "")
+  p.empty:SetText(#data == 0 and "Nothing enchanted yet. Disenchant some greens for dust!" or "")
 end
 
 ---------------------------------------------------------------- page 4: Recipe book
@@ -295,7 +295,7 @@ local function BuildGuidePage(p)
   p.tLearned, p.tAll = tLearned, tAll
   p.rows = MakeRows(p, BOOK_ROWS, -30, false)
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -100, p, "TOP"); p.empty:SetJustifyH("CENTER")
-  p.open = FA.UI.ProfessionButton(p, "@@NAME@@", 240); p.open:SetPoint("TOP", 0, -126)
+  p.open = FA.UI.ProfessionButton(p, "Enchanting", 240); p.open:SetPoint("TOP", 0, -126)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("Hover a recipe for its materials and, if you don't know it, who sells it.")
   Wheel(p, "guideOff", function() return #BookData() - BOOK_ROWS end)
@@ -305,7 +305,7 @@ local function RefreshGuidePage(p)
   local data = BookData()
   view.guideOff = math.min(view.guideOff, math.max(0, #data - BOOK_ROWS))
   Fill(p.rows, data, view.guideOff)
-  p.empty:SetText(#data == 0 and "Open your @@NAME@@ window once so I can read your recipes." or "")
+  p.empty:SetText(#data == 0 and "Open your Enchanting window once so I can read your recipes." or "")
   p.open:ShowIf(ns.Knows() and not ns.HasRecipes())
   p.tLearned:SetEnabled(view.bookAll)
   p.tAll:SetEnabled(not view.bookAll)
@@ -322,8 +322,8 @@ local function ShowTab(name)
 end
 
 local function Build()
-  local order = { { "main", "@@NAME@@" }, { "progress", "Progress" }, { "log", "Craft log" }, { "guide", "Recipe book" } }
-  f = K.Window({ name = "ForeverArtisan@@ID@@Frame", title = "@@NAME@@", tabs = order, pages = pages, tabButtons = tabs, onTab = ShowTab })
+  local order = { { "main", "Enchanting" }, { "progress", "Progress" }, { "log", "Craft log" }, { "guide", "Recipe book" } }
+  f = K.Window({ name = "ForeverArtisanEnchantingFrame", title = "Enchanting", tabs = order, pages = pages, tabButtons = tabs, onTab = ShowTab })
   BuildMainPage(pages.main)
   BuildProgressPage(pages.progress)
   BuildLogPage(pages.log)

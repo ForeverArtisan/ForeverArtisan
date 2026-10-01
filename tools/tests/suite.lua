@@ -64,7 +64,7 @@ GetGameTime=function() return 12,0 end
 GetBuildInfo=function() return "1.16.0","16001","Sep 1 2026",11601 end
 GetLocale=function() return "enUS" end GetRealmName=function() return "Beta" end UnitClass=function() return "Druid","DRUID" end UnitRace=function() return "Tauren","Tauren" end GetMoney=function() return 0 end
 -- addon list
-local ADDONS={"ForeverArtisan_Core","ForeverArtisan_Contacts","ForeverArtisan_Fishing","ForeverArtisan_Cooking","ForeverArtisan_Herbalism","ForeverArtisan_Mining","ForeverArtisan_Skinning","ForeverArtisan_FirstAid","ForeverArtisan_Alchemy","ForeverArtisan_Leatherworking"}
+local ADDONS={"ForeverArtisan_Core","ForeverArtisan_Contacts","ForeverArtisan_Fishing","ForeverArtisan_Cooking","ForeverArtisan_Herbalism","ForeverArtisan_Mining","ForeverArtisan_Skinning","ForeverArtisan_FirstAid","ForeverArtisan_Alchemy","ForeverArtisan_Leatherworking","ForeverArtisan_Blacksmithing","ForeverArtisan_Tailoring","ForeverArtisan_Engineering","ForeverArtisan_Enchanting"}
 local META={}
 C_AddOns={GetNumAddOns=function() return #ADDONS end,
   GetAddOnInfo=function(i) local n=type(i)=="number" and ADDONS[i] or i; return n, "ForeverArtisan: "..n:gsub("ForeverArtisan_",""), "notes", true, nil end,
@@ -129,9 +129,9 @@ C_Map.GetPlayerMapPosition=function() return {GetXY=function() return .5,.5 end}
 cns.TouchContact(2394,"target")
 for _,n in ipairs(cns.Contacts()) do print("AFTER TOUCH", n.n, n.age, n.x, n.y, n.s) end
 cns.Forget("trainer:3363"); print("AFTER FORGET", #cns.Contacts())
-for _,alias in ipairs({"fish","cook","herb","mine","skin","aid","contacts","alch","lw"}) do run("FOREVERARTISAN", alias.." help") end
+for _,alias in ipairs({"fish","cook","herb","mine","skin","aid","contacts","alch","lw","bs","tailor","eng","ench"}) do run("FOREVERARTISAN", alias.." help") end
 -- open every module window and click every tab
-local wins={ForeverArtisanFishingFrame="FAFISH",ForeverArtisanCookingFrame="FACOOK",ForeverArtisanHerbalismFrame="FAHERB",ForeverArtisanMiningFrame="FAMINING",ForeverArtisanSkinningFrame="FASKIN",ForeverArtisanFirstAidFrame="FAAID",ForeverArtisanContactsFrame="FACONTACTS",ForeverArtisanAlchemyFrame="FAALCH",ForeverArtisanLeatherworkingFrame="FALW"}
+local wins={ForeverArtisanFishingFrame="FAFISH",ForeverArtisanCookingFrame="FACOOK",ForeverArtisanHerbalismFrame="FAHERB",ForeverArtisanMiningFrame="FAMINING",ForeverArtisanSkinningFrame="FASKIN",ForeverArtisanFirstAidFrame="FAAID",ForeverArtisanContactsFrame="FACONTACTS",ForeverArtisanAlchemyFrame="FAALCH",ForeverArtisanLeatherworkingFrame="FALW",ForeverArtisanBlacksmithingFrame="FABS",ForeverArtisanTailoringFrame="FATAILOR",ForeverArtisanEngineeringFrame="FAENG",ForeverArtisanEnchantingFrame="FAENCH"}
 for wname,cmd in pairs(wins) do
   local before=#frames
   run(cmd,"")
@@ -139,7 +139,7 @@ for wname,cmd in pairs(wins) do
   if not w then print("NO WINDOW",wname) os.exit(1) end
   print("WINDOW",wname,"title:",(w.title._text or ""):gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r",""), "shown", w._shown)
   for i=before+1,#frames do local b=frames[i]
-    if b._text and b.scripts.OnClick and ({Progress=1,Fishing=1,["Catch log"]=1,["Cast marker"]=1,Herbalism=1,Mining=1,Skinning=1,Cooking=1,["Gather log"]=1,["Herb guide"]=1,["Mining log"]=1,["Node guide"]=1,["Skinning log"]=1,["Level guide"]=1,["Cook log"]=1,["Recipe book"]=1,["First Aid"]=1,["Craft log"]=1,Search=1,Contacts=1,["Limited stock"]=1,Alchemy=1,Leatherworking=1})[b._text] then
+    if b._text and b.scripts.OnClick and ({Progress=1,Fishing=1,["Catch log"]=1,["Cast marker"]=1,Herbalism=1,Mining=1,Skinning=1,Cooking=1,["Gather log"]=1,["Herb guide"]=1,["Mining log"]=1,["Node guide"]=1,["Skinning log"]=1,["Level guide"]=1,["Cook log"]=1,["Recipe book"]=1,["First Aid"]=1,["Craft log"]=1,Search=1,Contacts=1,["Limited stock"]=1,Alchemy=1,Leatherworking=1,Blacksmithing=1,Tailoring=1,Engineering=1,Enchanting=1})[b._text] then
       local ok,err=pcall(b.scripts.OnClick,b) if not ok then print("TAB ERROR",wname,b._text,err) os.exit(1) end
     end
   end
@@ -449,6 +449,72 @@ do
   fns.SetKey("reelKey","")
   assert(st.reelSameKey==false and st.key=="F", "Clear on reel-in turns it off, fishing key kept")
   st.reelSameKey=true
+end
+-- the four new crafting modules: Tailoring makes its own bolts, Blacksmithing points ore to the Mining log,
+-- Enchanting reads the old Craft window (Classic) and logs casts
+do
+  local tl=loadedFrames["ForeverArtisan_Tailoring"].ns
+  local bs=loadedFrames["ForeverArtisan_Blacksmithing"].ns
+  local en=loadedFrames["ForeverArtisan_Enchanting"].ns
+  local eg=loadedFrames["ForeverArtisan_Engineering"].ns
+  assert(not tl.Knows() and not bs.Knows() and not en.Knows() and not eg.Knows(), "not learned on this character")
+  local baseProf3=GetProfessionInfo
+  local extra={[9]={"Tailoring",197},[10]={"Blacksmithing",164},[11]={"Enchanting",333},[12]={"Engineering",202}}
+  local oldProfs=GetProfessions
+  GetProfessions=function() return 1,2,3,4,5,6,7,8,9,10,11,12 end
+  GetProfessionInfo=function(i) local e=extra[i] if e then return e[1],1,60,75,0,0,e[2],0 end return baseProf3(i) end
+  -- Tailoring: Bolt of Linen Cloth is crafted for the Linen Bag
+  local TR={[2963]={name="Bolt of Linen Cloth",learned=true,maxTrivialLevel=75,relativeDifficulty=0,out=2996,reag={{2589,2}}},
+   [3755]={name="Linen Bag",learned=true,maxTrivialLevel=95,relativeDifficulty=0,out=4238,reag={{2996,3},{2320,3}}}}
+  local function window(R,line,name)
+    C_TradeSkillUI={GetAllRecipeIDs=function() local t={} for k in pairs(R) do t[#t+1]=k end return t end,
+     GetRecipeInfo=function(id) local r=R[id] return {name=r.name,learned=r.learned,maxTrivialLevel=r.maxTrivialLevel,relativeDifficulty=r.relativeDifficulty} end,
+     GetTradeSkillLineForRecipe=function() return line,name,line end,
+     GetRecipeSchematic=function(id) local r=R[id] local sl={} for _,g in ipairs(r.reag) do sl[#sl+1]={reagents={{itemID=g[1]}},quantityRequired=g[2]} end return {outputItemID=r.out,reagentSlotSchematics=sl,quantityMin=1} end}
+    fire("TRADE_SKILL_SHOW")
+  end
+  window(TR,197,"Tailoring")
+  assert(tl.HasRecipes() and not bs.HasRecipes(), "tailoring read only by tailoring")
+  local st,sh=tl.Plan(80)
+  local bolt for _,e in ipairs(sh) do if e.id==2996 then bolt=e end end
+  print("TAILOR PLAN", #st, bolt and bolt.need, bolt and bolt.craft)
+  assert(bolt and bolt.craft, "bolts are crafted, not bought")
+  -- Blacksmithing: copper bars and rough stone; ore and stone sources
+  NAMES[2770]="Copper Ore"; NAMES[2835]="Rough Stone"; NAMES[2840]="Copper Bar"
+  local BR={[2660]={name="Rough Sharpening Stone",learned=true,maxTrivialLevel=65,relativeDifficulty=0,out=2862,reag={{2835,1}}},
+   [2663]={name="Copper Bracers",learned=true,maxTrivialLevel=80,relativeDifficulty=0,out=2853,reag={{2840,2}}}}
+  window(BR,164,"Blacksmithing")
+  assert(bs.HasRecipes(), "blacksmithing read")
+  local _,bsh=bs.Plan(80)
+  for _,e in ipairs(bsh) do print("   bs shop",e.name,e.need,e.source) end
+  local bar,stone for _,e in ipairs(bsh) do if e.id==2840 then bar=e end if e.id==2835 then stone=e end end
+  assert(bar and bar.source:find("smelt") , "bars: smelt ore")
+  assert(stone and (stone.source:find("Stone") or stone.source:find("Mining")), "stone points to mining")
+  -- Enchanting through the Classic Craft window
+  C_TradeSkillUI=nil
+  local CR={{"Enchanting","","header"},{"Enchant Bracer - Minor Health","","optimal",10},{"Runed Copper Rod","","easy",nil}}
+  GetCraftDisplaySkillLine=function() return "Enchanting",60,75 end
+  GetNumCrafts=function() return #CR end
+  GetCraftInfo=function(i) local c=CR[i] return c[1],c[2],c[3] end
+  GetCraftItemLink=function(i) if i==2 then return "|cffffffff|Henchant:7418|h[Enchant Bracer - Minor Health]|h|r" end return "|cffffffff|Hitem:6218|h[Runed Copper Rod]|h|r" end
+  GetCraftNumReagents=function(i) return i==2 and 1 or 2 end
+  GetCraftReagentInfo=function(i,j) if i==2 then return "Strange Dust",nil,1 end return (j==1 and "Copper Rod" or "Strange Dust"),nil,1 end
+  GetCraftReagentItemLink=function(i,j) if i==2 or j==2 then return "|Hitem:10940|h" end return "|Hitem:6217|h" end
+  NAMES[10940]="Strange Dust"
+  fire("CRAFT_SHOW")
+  print("ENCH read", en.HasRecipes(), "tailor still", tl.HasRecipes())
+  assert(en.HasRecipes(), "enchanting read from the Craft window")
+  local r=en.CharRec().recipes["Enchant Bracer - Minor Health"]
+  assert(r and r.id==7418 and r.reagents[1].id==10940, "enchant spell id and dust read")
+  local _,esh=en.Plan(70)
+  local dust for _,e in ipairs(esh) do if e.id==10940 then dust=e end end
+  print("ENCH dust", dust and dust.need, dust and dust.source)
+  assert(dust and dust.source:find("Disenchant"), "dust comes from disenchanting")
+  fire("UNIT_SPELLCAST_SUCCEEDED","player","guid",7418)
+  assert(en.SessionInfo().crafts==1, "enchant cast logged")
+  run("FAENCH","plan 70"); run("FAENCH","next"); run("FABS","plan 80"); run("FATAILOR","plan 80"); run("FAENG","")
+  GetCraftDisplaySkillLine,GetNumCrafts,GetCraftInfo,GetCraftItemLink,GetCraftNumReagents,GetCraftReagentInfo,GetCraftReagentItemLink=nil
+  GetProfessions,GetProfessionInfo=oldProfs,baseProf3
 end
 print("CRAFTS OK")
 print("SUITE OK")

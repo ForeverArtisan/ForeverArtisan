@@ -23,7 +23,7 @@ Run this in game before every build goes to the site or CurseForge/Wago. Screens
 Look for overlapping text, rows running off the edge, and anything cut off.
 - [ ] Fishing: Fishing / Progress / Catch log / Cast marker
 - [ ] Cooking: Cooking / Progress / Cook log / Recipe book
-- [ ] First Aid, Alchemy, Leatherworking: Main / Progress / Craft log / Recipe book
+- [ ] First Aid, Alchemy, Leatherworking, Blacksmithing, Tailoring, Engineering, Enchanting: Main / Progress / Craft log / Recipe book
 - [ ] Herbalism, Mining, Skinning: Main / Progress / Log / Guide
 - [ ] Trade Contacts: Search / Contacts / Limited stock; both pickers on Contacts open inside the window
 - [ ] Windows drag, remember where you left them, and close with Esc
@@ -31,7 +31,7 @@ Look for overlapping text, rows running off the edge, and anything cut off.
 ## 4. Saved data survives the update
 - [ ] Fishing catch log, goals and key bindings; your main keeps its Fishing skill and pole, an alt without Fishing shows "not learned yet"
 - [ ] Trade Contacts entries
-- [ ] Cooking, First Aid, Alchemy and Leatherworking recipes (if missing, open the profession window once)
+- [ ] Recipes in every crafting module (if missing, open the profession window once)
 
 ## 5. Fishing
 - [ ] The cast key casts, and applies a lure when none is on the pole
@@ -42,7 +42,10 @@ Look for overlapping text, rows running off the edge, and anything cut off.
 - [ ] The Cast marker tab shows the derby countdown
 
 ## 6. Crafting and gathering
-- [ ] Cooking, First Aid, Alchemy, Leatherworking: "Make now" and a plan with a shopping list
+- [ ] Every crafting module: "Make now" and a plan with a shopping list
+- [ ] Enchanting: opening the Enchanting window reads recipes (it may be the older Craft window); casting an enchant shows in the Craft log
+- [ ] Tailoring: bolts of cloth show as "craft N" in the shopping list; Blacksmithing and Engineering: bars say "smelt", ore points to your Mining log
+- [ ] `/fa` panel: all 13 modules fit in the window
 - [ ] On a character without the profession: "Learn from: <trainer>" with a Waypoint button, or the Open window button once learned
 - [ ] Capped and "Next rank" text reads right
 - [ ] Progress tabs: the skill bar fills correctly
