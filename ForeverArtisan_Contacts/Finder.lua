@@ -239,10 +239,10 @@ function ns.DetailText(npc, it)
       for _, sp in ipairs(npc.items) do list[#list + 1] = sp end
       local function need(x) return tonumber(x.sk and x.sk:match("(%d+)%s*$")) or 0 end
       table.sort(list, function(a, b) if need(a) ~= need(b) then return need(a) < need(b) end return a.n < b.n end)
-      lines[#lines + 1] = GOLD .. ("Teaches %d recipe%s:"):format(#list, #list == 1 and "" or "s") .. "|r"
+      lines[#lines + 1] = GOLD .. ("Teaches %d recipe%s (skill needed, recipe, cost):"):format(#list, #list == 1 and "" or "s") .. "|r"
       for i = 1, math.min(8, #list) do
         local sp = list[i]
-        lines[#lines + 1] = ("  %s%s  %s"):format(sp.n, sp.sk and (GREY .. "  needs " .. sp.sk .. "|r") or "", money(sp))
+        lines[#lines + 1] = ("  %s%3d|r  %s  %s"):format(GREY, need(sp), sp.n, money(sp))
       end
       if #list > 8 then lines[#lines + 1] = GREY .. "  ...and " .. (#list - 8) .. " more. Search a recipe name to find it.|r" end
     end

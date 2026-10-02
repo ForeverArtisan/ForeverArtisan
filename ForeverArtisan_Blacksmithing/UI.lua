@@ -302,9 +302,28 @@ local function BookData()
   for _, r in pairs(c.recipes) do
     if show == "all" or (show == "learned") == (r.learned and true or false) then list[#list + 1] = r end
   end
-  -- one list: what you know first, then what's still out there, each by gray level
+  -- where to get each recipe you don't know (looked up once)
+  local where = {}
+  for _, r in ipairs(list) do
+    if not r.learned then
+      local w = {}
+      if FA.RecipeWhere then
+        w.lines, w.tag, w.npc = FA.RecipeWhere(r.name, ns.RecipePrefixes)
+      else
+        local src = ns.RecipeSource(r.name)
+        w.lines = { src and ("Sold by: " .. src) or "Not from a vendor you've met yet." }
+      end
+      where[r] = w
+    end
+  end
+  -- one list: what you know first, then what's still out there (ones you know a source for first),
+  -- each by gray level
   table.sort(list, function(a, b)
     if a.learned ~= b.learned then return a.learned end
+    if not a.learned then
+      local fa, fb = where[a].tag ~= nil, where[b].tag ~= nil
+      if fa ~= fb then return fa end
+    end
     local ga, gb = ns.GrayAt(a) or 0, ns.GrayAt(b) or 0
     if ga ~= gb then return ga < gb end
     return a.name < b.name
@@ -325,13 +344,8 @@ local function BookData()
     local tip = ReagentTip(r)
     local tag, npc
     if not r.learned then
-      local lines
-      if FA.RecipeWhere then
-        lines, tag, npc = FA.RecipeWhere(r.name, ns.RecipePrefixes)
-      else
-        local src = ns.RecipeSource(r.name)
-        lines = { src and ("Sold by: " .. src) or "Not from a vendor you've met yet." }
-      end
+      local lines = where[r].lines
+      tag, npc = where[r].tag, where[r].npc
       tip = GOLD .. "Where to get it|r\n" .. table.concat(lines, "\n")
         .. (npc and ("\n|cff80c0ffClick for a waypoint|r") or "") .. "\n\n" .. tip
     end
