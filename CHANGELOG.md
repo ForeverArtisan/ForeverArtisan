@@ -4,6 +4,9 @@
 - Blacksmithing, Tailoring, Engineering and Enchanting (new modules): the same window as Alchemy and Leatherworking, with what to make now, a plan to your target skill with a shopping list, a craft log, a recipe book and where to train next. Every one of the 12 professions now has a module. `/fa bs`, `/fa tailor`, `/fa eng`, `/fa ench`
 - Tailoring counts bolts of cloth as crafts. Blacksmithing and Engineering point ore to your Mining log and say where bars come from. Enchanting points dust and essences to disenchanting.
 - Enchanting works with the older Classic Enchanting window. When the game doesn't give a recipe's gray level, the plan estimates it from today's color and the Recipe book shows it as "gray at ~N".
+- Welcome notice (once per account): what ForeverArtisan is for. It remembers where you've been, not where you're going, with a "Pick my professions" button and where to send bugs and ideas. `/fa welcome` brings it back. It replaces the old beta notice.
+- Where to get recipes you don't have (Recipe book, every crafting module including Cooking and First Aid): choose "All recipes" and each recipe you haven't learned says where it comes from: a trainer you've met (with the skill needed), a vendor you've met (price, limited stock), a recipe you looted (which mob, where) or a quest that offered it. Click one for a waypoint. Only what you've seen in Forever, no guesses; anything else says it could be a quest, a drop or a vendor you haven't visited.
+- Tools and stations (all crafting modules): a recipe that needs a tool you don't have says so in Make now ("needs Blacksmith Hammer") instead of "can make". Tools go at the top of the plan's shopping list, and hovering a recipe shows its tool and where it's made ("Made at: Anvil").
 - The `/fa` panel uses shorter rows so all 13 modules fit; hover a row for its description.
 
 ## 0.9.6 (2026-09-30)

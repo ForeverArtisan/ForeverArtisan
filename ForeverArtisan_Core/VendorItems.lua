@@ -29,6 +29,7 @@ local ITEMS = {
   -- Blacksmithing / Engineering / Smelting
   ["Weak Flux"] = SMITH, ["Strong Flux"] = SMITH, ["Coal"] = SMITH,
   ["Wooden Stock"] = ENG, ["Heavy Stock"] = ENG,
+  ["Blacksmith Hammer"] = SMITH, ["Mining Pick"] = SMITH, ["Arclight Spanner"] = ENG,
   -- Alchemy
   ["Empty Vial"] = ALCH, ["Leaded Vial"] = ALCH, ["Crystal Vial"] = ALCH, ["Flask of Oil"] = TRADE,
   -- Tailoring / Leatherworking

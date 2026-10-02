@@ -12,4 +12,5 @@
 UI.lua
 VendorItems.lua
 Modules.lua
+RecipeFinds.lua
 Minimap.lua

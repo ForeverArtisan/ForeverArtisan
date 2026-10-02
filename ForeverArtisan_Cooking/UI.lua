@@ -261,13 +261,22 @@ local function BookData()
   for _, r in ipairs(list) do
     local col = ns.ColorFor(r, skill)
     local tip = ReagentTip(r)
+    local tag, npc
     if not r.learned then
-      local src = ns.RecipeSource(r.name)
-      tip = (src and ("Recipe sold by " .. src) or "Recipe source not in your vendor list yet.") .. "\n" .. tip
+      local lines
+      if FA.RecipeWhere then
+        lines, tag, npc = FA.RecipeWhere(r.name, ns.RecipePrefixes)
+      else
+        local src = ns.RecipeSource(r.name)
+        lines = { src and ("Sold by: " .. src) or "Not from a vendor you've met yet." }
+      end
+      tip = GOLD .. "Where to get it|r\n" .. table.concat(lines, "\n")
+        .. (npc and ("\n|cff80c0ffClick for a waypoint|r") or "") .. "\n\n" .. tip
     end
     data[#data + 1] = { id = r.itemId, icon = Icon(r.itemId),
       left = ns.COLOR_CODE[col] .. r.name .. "|r",
-      right = (r.grayAt and (GRAY .. "gray at " .. r.grayAt .. "|r") or "") .. (r.learned and "" or (GRAY .. "  ·  not learned|r")),
+      right = (r.grayAt and (GRAY .. "gray at " .. r.grayAt .. "|r") or "") .. (r.learned and "" or (GRAY .. "  ·  " .. (tag or "not found yet") .. "|r")),
+      npc = npc,
       tip = tip }
   end
   return data
@@ -280,10 +289,17 @@ local function BuildGuidePage(p)
   tAll:SetPoint("LEFT", tLearned, "RIGHT", 6, 0)
   p.tLearned, p.tAll = tLearned, tAll
   p.rows = MakeRows(p, BOOK_ROWS, -30, false)
+  -- an unlearned recipe with a trainer or vendor you've met: click for a waypoint
+  for _, r in ipairs(p.rows) do
+    r:SetScript("OnClick", function(self)
+      local d = self.data
+      if d and d.npc and FA.Vendors and FA.Vendors.waypoint then FA.Vendors.waypoint(d.npc) end
+    end)
+  end
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -100, p, "TOP"); p.empty:SetJustifyH("CENTER")
   p.open = FA.UI.ProfessionButton(p, "Cooking", 240); p.open:SetPoint("TOP", 0, -126)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
-  help:SetText("Hover a recipe for its ingredients and, if you don't know it, who sells it.")
+  help:SetText("All recipes: hover one you don't know for where to get it, click for a waypoint.")
   Wheel(p, "guideOff", function() return #BookData() - BOOK_ROWS end)
 end
 

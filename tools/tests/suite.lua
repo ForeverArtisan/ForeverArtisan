@@ -466,8 +466,8 @@ do
   -- Tailoring: Bolt of Linen Cloth is crafted for the Linen Bag
   local TR={[2963]={name="Bolt of Linen Cloth",learned=true,maxTrivialLevel=75,relativeDifficulty=0,out=2996,reag={{2589,2}}},
    [3755]={name="Linen Bag",learned=true,maxTrivialLevel=95,relativeDifficulty=0,out=4238,reag={{2996,3},{2320,3}}}}
-  local function window(R,line,name)
-    C_TradeSkillUI={GetAllRecipeIDs=function() local t={} for k in pairs(R) do t[#t+1]=k end return t end,
+  local function window(R,line,name,tools)
+    C_TradeSkillUI={GetRecipeTools=tools,GetAllRecipeIDs=function() local t={} for k in pairs(R) do t[#t+1]=k end return t end,
      GetRecipeInfo=function(id) local r=R[id] return {name=r.name,learned=r.learned,maxTrivialLevel=r.maxTrivialLevel,relativeDifficulty=r.relativeDifficulty} end,
      GetTradeSkillLineForRecipe=function() return line,name,line end,
      GetRecipeSchematic=function(id) local r=R[id] local sl={} for _,g in ipairs(r.reag) do sl[#sl+1]={reagents={{itemID=g[1]}},quantityRequired=g[2]} end return {outputItemID=r.out,reagentSlotSchematics=sl,quantityMin=1} end}
@@ -483,8 +483,20 @@ do
   NAMES[2770]="Copper Ore"; NAMES[2835]="Rough Stone"; NAMES[2840]="Copper Bar"
   local BR={[2660]={name="Rough Sharpening Stone",learned=true,maxTrivialLevel=65,relativeDifficulty=0,out=2862,reag={{2835,1}}},
    [2663]={name="Copper Bracers",learned=true,maxTrivialLevel=80,relativeDifficulty=0,out=2853,reag={{2840,2}}}}
-  window(BR,164,"Blacksmithing")
+  window(BR,164,"Blacksmithing",function(id) if id==2663 then return "|cffff2020Blacksmith Hammer|r, Anvil" end end)
   assert(bs.HasRecipes(), "blacksmithing read")
+  -- tools: the hammer isn't in the bags, so Copper Bracers says what it needs, and the plan lists the hammer
+  COUNTS[2840]=10
+  local now=bs.MakeNow() local brac for _,e in ipairs(now) do if e.r.name=="Copper Bracers" then brac=e end end
+  print("TOOLS", brac and table.concat(brac.missing,","), brac and table.concat(brac.stations,","), brac and brac.make)
+  assert(brac and brac.missing[1]=="Blacksmith Hammer" and brac.stations[1]=="Anvil" and brac.make==0, "missing hammer, made at anvil")
+  local _,tsh=bs.Plan(80) local hammer for _,e in ipairs(tsh) do if e.tool then hammer=e end end
+  assert(hammer and hammer.name=="Blacksmith Hammer" and hammer.have==0 and tsh[1]==hammer, "hammer first on the shopping list")
+  COUNTS["Blacksmith Hammer"]=1
+  now=bs.MakeNow() for _,e in ipairs(now) do if e.r.name=="Copper Bracers" then brac=e end end
+  assert(#brac.missing==0 and brac.make==5, "with the hammer in bags it can be made")
+  COUNTS["Blacksmith Hammer"]=nil COUNTS[2840]=nil
+  run("FABS","next"); bs.OnChange()
   local _,bsh=bs.Plan(80)
   for _,e in ipairs(bsh) do print("   bs shop",e.name,e.need,e.source) end
   local bar,stone for _,e in ipairs(bsh) do if e.id==2840 then bar=e end if e.id==2835 then stone=e end end
@@ -500,12 +512,17 @@ do
   GetCraftNumReagents=function(i) return i==2 and 1 or 2 end
   GetCraftReagentInfo=function(i,j) if i==2 then return "Strange Dust",nil,1 end return (j==1 and "Copper Rod" or "Strange Dust"),nil,1 end
   GetCraftReagentItemLink=function(i,j) if i==2 or j==2 then return "|Hitem:10940|h" end return "|Hitem:6217|h" end
+  GetCraftSpellFocus=function(i) if i==2 then return "Runed Copper Rod",nil end end
   NAMES[10940]="Strange Dust"
   fire("CRAFT_SHOW")
   print("ENCH read", en.HasRecipes(), "tailor still", tl.HasRecipes())
   assert(en.HasRecipes(), "enchanting read from the Craft window")
   local r=en.CharRec().recipes["Enchant Bracer - Minor Health"]
   assert(r and r.id==7418 and r.reagents[1].id==10940, "enchant spell id and dust read")
+  assert(r.tools and r.tools[1].name=="Runed Copper Rod" and not r.tools[1].station, "rod read as a tool")
+  local rodShop=select(2,en.Plan(70)) local rod for _,e in ipairs(rodShop) do if e.tool then rod=e end end
+  print("ROD", rod and rod.source)
+  assert(rod and rod.source:find("Made with Enchanting"), "rod source")
   local _,esh=en.Plan(70)
   local dust for _,e in ipairs(esh) do if e.id==10940 then dust=e end end
   print("ENCH dust", dust and dust.need, dust and dust.source)
@@ -513,8 +530,59 @@ do
   fire("UNIT_SPELLCAST_SUCCEEDED","player","guid",7418)
   assert(en.SessionInfo().crafts==1, "enchant cast logged")
   run("FAENCH","plan 70"); run("FAENCH","next"); run("FABS","plan 80"); run("FATAILOR","plan 80"); run("FAENG","")
-  GetCraftDisplaySkillLine,GetNumCrafts,GetCraftInfo,GetCraftItemLink,GetCraftNumReagents,GetCraftReagentInfo,GetCraftReagentItemLink=nil
+  GetCraftDisplaySkillLine,GetNumCrafts,GetCraftInfo,GetCraftItemLink,GetCraftNumReagents,GetCraftReagentInfo,GetCraftReagentItemLink,GetCraftSpellFocus=nil
   GetProfessions,GetProfessionInfo=oldProfs,baseProf3
+end
+-- where to get a recipe you don't have: trainers and vendors you've met, drops you looted, quest rewards
+do
+  local FA=ForeverArtisan
+  ForeverArtisanContactsDB.entries["trainer:9100"]={kind="trainer",npcId=9100,name="Magar",title="Tailoring Trainer",zone="Orgrimmar",mapID=1454,x=63,y=51,
+    skills={{name="Bolt of Silk Cloth",priceCopper=1000,skillReq="Tailoring 125"}}}
+  loadedFrames["ForeverArtisan_Contacts"].ns.OnContactsChanged()
+  local lines,tag,npc,sk=FA.RecipeWhere("Bolt of Silk Cloth",{"Pattern: "})
+  print("WHERE trainer", tag, npc and npc.n, sk, lines[1])
+  assert(tag=="trainer" and npc and npc.n=="Magar" and lines[1]:find("Train: Magar"), "trainer you met")
+  lines,tag,npc=FA.RecipeWhere("Red Woolen Bag",{"Pattern: "})
+  print("WHERE vendor", tag, lines[1])
+  assert(tag=="vendor" and lines[1]:find("Sold by: Mallen Swain") and lines[1]:find("limited"), "vendor you met")
+  lines,tag=FA.RecipeWhere("Goretusk Liver Pie",{"Recipe: "})
+  assert(tag==nil and lines[1]:find("Not found yet"), "unknown source")
+  -- loot a recipe from the mob you're targeting
+  local saved={GetNumLootItems,GetLootSlotLink,GetLootSourceInfo,UnitGUID,UnitName}
+  GetNumLootItems=function() return 1 end
+  GetLootSlotLink=function() return "|cffffffff|Hitem:2697|h[Recipe: Goretusk Liver Pie]|h|r" end
+  GetLootSourceInfo=function() return "Creature-0-1-2-3-157-0000" end
+  UnitGUID=function(u) if u=="target" then return "Creature-0-1-2-3-157-0000" end end
+  UnitName=function(u) if u=="target" then return "Goretusk" end return "Tester" end
+  fire("LOOT_OPENED")
+  lines,tag=FA.RecipeWhere("Goretusk Liver Pie",{"Recipe: "})
+  print("WHERE drop", tag, lines[1])
+  assert(tag=="drop" and lines[1]:find("Dropped by Goretusk") and lines[1]:find("Desolace"), "drop you looted")
+  GetNumLootItems,GetLootSlotLink,GetLootSourceInfo,UnitGUID,UnitName=saved[1],saved[2],saved[3],saved[4],saved[5]
+  -- a quest that rewards a recipe
+  GetTitleText=function() return "Kaldorei Spider Kabob" end
+  GetNumQuestRewards=function() return 1 end GetNumQuestChoices=function() return 0 end
+  GetQuestItemLink=function() return "|Hitem:5482|h[Recipe: Kaldorei Spider Kabob]|h" end
+  fire("QUEST_DETAIL")
+  lines,tag=FA.RecipeWhere("Kaldorei Spider Kabob",{"Recipe: "})
+  print("WHERE quest", tag, lines[1])
+  assert(tag=="quest" and lines[1]:find("Quest reward: Kaldorei Spider Kabob"), "quest reward")
+  GetTitleText,GetNumQuestRewards,GetNumQuestChoices,GetQuestItemLink=nil
+  -- the Recipe book renders unlearned recipes with a source tag
+  run("FATAILOR",""); run("FACOOK",""); run("FAAID","")
+  for _,b in ipairs(frames) do if b._text=="All recipes" and b.scripts.OnClick then b.scripts.OnClick(b) end end
+  loadedFrames["ForeverArtisan_Tailoring"].ns.OnChange(); loadedFrames["ForeverArtisan_Cooking"].ns.OnChange()
+end
+-- welcome notice: shown once, "Got it" remembers it, /fa welcome brings it back
+do
+  local w=_G.ForeverArtisanWelcome
+  assert(w and w._shown, "welcome shows on first login")
+  for _,b in ipairs(frames) do if b._text=="Got it" and b.scripts.OnClick then b.scripts.OnClick(b) end end
+  assert(not w._shown and ForeverArtisanSettings.welcomeSeen==1, "Got it closes and remembers")
+  run("FOREVERARTISAN","welcome")
+  assert(w._shown, "/fa welcome reopens it")
+  for _,b in ipairs(frames) do if b._text=="Pick my professions" and b.scripts.OnClick then b.scripts.OnClick(b) end end
+  assert(not w._shown and _G.ForeverArtisanPanel and _G.ForeverArtisanPanel._shown, "opens the module panel")
 end
 print("CRAFTS OK")
 print("SUITE OK")

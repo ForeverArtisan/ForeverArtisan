@@ -152,6 +152,56 @@ ns.COLOR_WORD = {
   green = "green: sometimes a skill-up", gray = "gray: no skill-ups", unlearned = "not learned", unknown = "",
 }
 
+---------------------------------------------------------------- tools and stations
+-- Some recipes need a tool in your bags (Blacksmith Hammer, Arclight Spanner, a runed rod) or a
+-- station you stand next to (anvil, forge). Read from the window and kept on the recipe as r.tools.
+local function IsStation(name)
+  local n = (name or ""):lower()
+  return n:find("anvil", 1, true) or n:find("forge", 1, true) or n:find("moonwell", 1, true)
+    or n:find("cooking fire", 1, true) or n:find("campfire", 1, true)
+end
+local function CleanTool(s)
+  s = (s or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("^%s*[Rr]equires:?%s*", "")
+  return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+-- from "name, has, name, has, ..." (GetTradeSkillTools, GetCraftSpellFocus)
+local function ToolsFromPairs(...)
+  local out = {}
+  for k = 1, select("#", ...), 2 do
+    local name = select(k, ...)
+    if type(name) == "string" and name ~= "" then
+      name = CleanTool(name)
+      out[#out + 1] = { name = name, station = IsStation(name) and true or nil }
+    end
+  end
+  return #out > 0 and out or nil
+end
+-- from one string, "Blacksmith Hammer, Anvil" (C_TradeSkillUI.GetRecipeTools)
+local function ToolsFromString(str)
+  if type(str) ~= "string" or str == "" then return end
+  local out = {}
+  for part in str:gmatch("[^,]+") do
+    local name = CleanTool(part)
+    if name ~= "" then out[#out + 1] = { name = name, station = IsStation(name) and true or nil } end
+  end
+  return #out > 0 and out or nil
+end
+
+-- tools (not stations) for this recipe that aren't in your bags
+function ns.MissingTools(r)
+  local out = {}
+  for _, t in ipairs(r and r.tools or {}) do
+    if not t.station and Count(t.name) == 0 then out[#out + 1] = t.name end
+  end
+  return out
+end
+-- stations this recipe is made at
+function ns.Stations(r)
+  local out = {}
+  for _, t in ipairs(r and r.tools or {}) do if t.station then out[#out + 1] = t.name end end
+  return out
+end
+
 ---------------------------------------------------------------- reading the Engineering window
 -- recipe group names that only this profession uses (a last resort when the game won't say)
 local GROUP_WORDS = { "engineering", "explosive", "device", "goggles", "gun", "scope", "parts", "bomb" }
@@ -214,6 +264,7 @@ local function ScanModern()
                 grayAt = (ri.maxTrivialLevel and ri.maxTrivialLevel > 0) and ri.maxTrivialLevel or nil,
                 ups = (ri.numSkillUps and ri.numSkillUps > 1) and ri.numSkillUps or nil,
                 color = ri.learned and DIFF[ri.relativeDifficulty] or nil, scanSkill = rank, reagents = {} }
+    if T.GetRecipeTools then r.tools = ToolsFromString((Try(T.GetRecipeTools, e.id))) end
     local sch = T.GetRecipeSchematic and Try(T.GetRecipeSchematic, e.id, false)
     if type(sch) == "table" then
       r.itemId = sch.outputItemID
@@ -242,6 +293,7 @@ local function ScanOld()
     if kind == "header" then header = rname
     elseif rname then
       local r = { name = rname, learned = true, group = header, color = OLD_KIND[kind], scanSkill = rank, reagents = {} }
+      if GetTradeSkillTools then r.tools = ToolsFromPairs(GetTradeSkillTools(i)) end
       local rl = GetTradeSkillRecipeLink and GetTradeSkillRecipeLink(i)
       r.id = rl and tonumber(rl:match("enchant:(%d+)")) or nil
       local link = GetTradeSkillItemLink and GetTradeSkillItemLink(i)
@@ -271,6 +323,7 @@ local function ScanCraft()
     if kind == "header" then header = cname
     elseif cname then
       local r = { name = cname, learned = true, group = header, color = OLD_KIND[kind], scanSkill = rank, reagents = {} }
+      if GetCraftSpellFocus then r.tools = ToolsFromPairs(GetCraftSpellFocus(i)) end
       local link = GetCraftItemLink and GetCraftItemLink(i)
       if link then
         r.id = tonumber(link:match("enchant:(%d+)")) or nil
@@ -365,6 +418,7 @@ function ns.SourceFor(id, name)
     or name:find("^Solid Stone$") or name:find("^Dense Stone$") then
     return "Stone: comes from mining veins. Not in your Mining log yet."
   end
+  if name:find("^Runed .+ Rod$") then return "Made with Enchanting (the " .. name .. " recipe)" end
   if name:find(" Dust$") or name:find(" Essence$") or name:find(" Shard$") then
     return "Disenchant green (uncommon) gear, or the Auction House"
   end
@@ -374,6 +428,7 @@ end
 
 -- where to buy an unlearned recipe, if Trade Contacts knows
 local RECIPE_PREFIXES = { "Schematic: " }
+ns.RecipePrefixes = RECIPE_PREFIXES
 function ns.RecipeSource(name)
   for _, pre in ipairs(RECIPE_PREFIXES) do
     local v, price = VendorFor(pre .. name)
@@ -405,7 +460,9 @@ function ns.MakeNow()
   for _, r in pairs(CharRec().recipes) do
     local c = ns.ColorFor(r, skill)
     if (c == "orange" or c == "yellow" or c == "green") and not Skipped(r) then
-      out[#out + 1] = { r = r, color = c, chance = ns.Chance(r, skill), make = ns.Makeable(r) }
+      local missing = ns.MissingTools(r)
+      out[#out + 1] = { r = r, color = c, chance = ns.Chance(r, skill), make = #missing > 0 and 0 or ns.Makeable(r),
+        missing = missing, stations = ns.Stations(r) }
     end
   end
   table.sort(out, function(a, b)
@@ -509,6 +566,22 @@ function ns.Plan(target)
   if not stuck and math.floor(s) < target then stuck = math.floor(s) end
 
   local shopping = {}
+  -- tools the planned crafts need (not stations): one each, kept in your bags
+  local tools = {}
+  local function NeedTools(r)
+    for _, t in ipairs(r.tools or {}) do
+      if not t.station and not tools[t.name] then
+        tools[t.name] = true
+        local have = math.min(1, Count(t.name))
+        shopping[#shopping + 1] = { name = t.name, need = 1, have = have, tool = true,
+          source = "Tool: keep it in your bags while you craft. " .. ns.SourceFor(nil, t.name) }
+      end
+    end
+  end
+  for _, st in ipairs(steps) do
+    NeedTools(st.r)
+    for sr in pairs(st.sub or {}) do NeedTools(sr) end
+  end
   for id, n in pairs(used) do
     local e = { id = id, name = ItemName(id, names[id]), need = n, have = Count(id) }
     if crafted[id] then
@@ -522,6 +595,7 @@ function ns.Plan(target)
     shopping[#shopping + 1] = e
   end
   table.sort(shopping, function(a, b)
+    if (a.tool and a.have < 1) ~= (b.tool and b.have < 1) then return a.tool and a.have < 1 end
     local sa, sb = a.need - a.have, b.need - b.have
     if (sa > 0) ~= (sb > 0) then return sa > 0 end
     if (a.craft ~= nil) ~= (b.craft ~= nil) then return a.craft ~= nil end
@@ -785,7 +859,8 @@ SlashCmdList.FAENG = function(msg)
     for i = 1, math.min(6, #list) do
       local e = list[i]
       say(("  %s%s|r  %s"):format(ns.COLOR_CODE[e.color], e.r.name,
-        e.make > 0 and (GREEN .. "can make " .. e.make .. "|r") or (GRAY .. "missing materials|r")))
+        (#e.missing > 0 and (RED .. "needs " .. table.concat(e.missing, ", ") .. "|r"))
+        or (e.make > 0 and (GREEN .. "can make " .. e.make .. "|r")) or (GRAY .. "missing materials|r")))
     end
   elseif cmd == "plan" or cmd == "shop" then
     local steps, shopping, stuck, target = ns.Plan(tonumber(rest))

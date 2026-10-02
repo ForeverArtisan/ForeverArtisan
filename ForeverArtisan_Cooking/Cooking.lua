@@ -291,6 +291,8 @@ function ns.SourceFor(id, name)
   return "Drops from mobs"
 end
 
+ns.RecipePrefixes = { "Recipe: " }
+
 -- where to buy an unlearned recipe, if Core's vendor list knows
 function ns.RecipeSource(name)
   local v, price = VendorFor("Recipe: " .. name)

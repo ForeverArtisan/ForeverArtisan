@@ -311,33 +311,35 @@ local function registerOptions()
   end
 end
 
----------------------------------------------------------------- beta / feedback notice
--- Shown once per version on "-beta" builds only. /fa feedback (or /fa beta) opens it any time;
--- on a normal release it just says where to send bugs and ideas.
+---------------------------------------------------------------- welcome notice
+-- Who ForeverArtisan is for, shown once per account (and again if WELCOME_REV goes up because the
+-- message changed). /fa welcome, /fa about or /fa feedback opens it any time. Beta builds add a line.
 local FEEDBACK_URL = "https://foreverartisan.app"
-local betaFrame
+local WELCOME_REV = 1
+local welcomeFrame
 
-local function showBeta()
-  if not betaFrame then
-    local b = FA.UI.Frame({ name = "ForeverArtisanBeta", title = FA.IsBeta() and "Beta" or "Feedback", width = 420, height = 250, strata = "DIALOG",
-      defaultPos = { "CENTER", 0, 120 } })
+local WELCOME_TEXT =
+  "Like many players, I'm treating Forever as a chance to rediscover the game. The magic of WoW "
+  .. "is that first journey, and this addon is built to support that experience.\n\n"
+  .. "While ForeverArtisan lists every recipe, where to get each one comes from your own play. It remembers "
+  .. "where you've been, not where you're going: the trainers you meet, what you gather, the recipes "
+  .. "you find. Want to look ahead? Crowdsourced sites have that covered.\n\n"
+  .. "Feedback and ideas:"
+
+local function showWelcome()
+  if not welcomeFrame then
+    local b = FA.UI.Frame({ name = "ForeverArtisanWelcome", title = "Welcome", width = 440, height = 340, strata = "DIALOG",
+      defaultPos = { "CENTER", 0, 80 } })
     local head = b:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     head:SetPoint("TOP", 0, -34)
-    head:SetText(GOLD .. (FA.IsBeta() and "Thanks for testing ForeverArtisan!" or "Thanks for using ForeverArtisan!") .. "|r")
+    head:SetText(GOLD .. "Welcome to ForeverArtisan|r")
 
     local body = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    body:SetPoint("TOPLEFT", 20, -62); body:SetWidth(380); body:SetJustifyH("LEFT"); body:SetSpacing(2)
-    if FA.IsBeta() then
-      body:SetText("This is a test build. Some features may change, and a few things may not work "
-        .. "quite right yet.\n\n"
-        .. "Spotted a bug or have an idea? We'd love your feedback:")
-    else
-      body:SetText("ForeverArtisan is free, and bug reports and ideas shape what comes next.\n\n"
-        .. "Spotted a bug or have an idea? We'd love your feedback:")
-    end
+    body:SetPoint("TOPLEFT", 22, -62); body:SetWidth(396); body:SetJustifyH("LEFT"); body:SetSpacing(2)
+    body:SetText(WELCOME_TEXT)
 
     local link = CreateFrame("EditBox", nil, b, "InputBoxTemplate")
-    link:SetSize(250, 22); link:SetPoint("TOPLEFT", 26, -168)
+    link:SetSize(250, 22); link:SetPoint("TOPLEFT", body, "BOTTOMLEFT", 6, -8)
     link:SetAutoFocus(false); link:SetText(FEEDBACK_URL)
     link:SetScript("OnTextChanged", function(self) self:SetText(FEEDBACK_URL); self:HighlightText() end)
     link:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
@@ -345,24 +347,32 @@ local function showBeta()
     local hint = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     hint:SetPoint("LEFT", link, "RIGHT", 8, 0); hint:SetText("click, then Ctrl+C")
 
-    local ok = CreateFrame("Button", nil, b, "UIPanelButtonTemplate")
-    ok:SetSize(120, 24); ok:SetPoint("BOTTOM", 0, 14); ok:SetText("Got it")
-    ok:SetScript("OnClick", function()
-      -- only a click on "Got it" counts as seen, so a notice that never really showed comes back next login
-      ForeverArtisanSettings = ForeverArtisanSettings or {}
-      ForeverArtisanSettings.betaSeen = FA.Version()
-      b:Hide()
-    end)
-    local note = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    note:SetPoint("BOTTOM", ok, "TOP", 0, 6); note:SetText("You can bring this back any time with /fa feedback")
-    betaFrame = b
-  end
-  betaFrame:Show()
-end
+    local enjoy = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    enjoy:SetPoint("TOPLEFT", link, "BOTTOMLEFT", -6, -12); enjoy:SetText("Enjoy the journey!")
 
-local function betaVersion()
-  return FA.Version()
+    local beta = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    beta:SetPoint("TOPLEFT", enjoy, "BOTTOMLEFT", 0, -8); beta:SetWidth(396); beta:SetJustifyH("LEFT")
+    beta:SetText(FA.IsBeta() and "This is a test build: some things may change or not work quite right yet." or "")
+
+    local ok = CreateFrame("Button", nil, b, "UIPanelButtonTemplate")
+    ok:SetSize(120, 24); ok:SetPoint("BOTTOMRIGHT", b, "BOTTOM", -6, 14); ok:SetText("Got it")
+    local function seen()
+      -- only a click counts as seen, so a notice that never really showed comes back next login
+      ForeverArtisanSettings = ForeverArtisanSettings or {}
+      ForeverArtisanSettings.welcomeSeen = WELCOME_REV
+      b:Hide()
+    end
+    ok:SetScript("OnClick", seen)
+    local mods = CreateFrame("Button", nil, b, "UIPanelButtonTemplate")
+    mods:SetSize(150, 24); mods:SetPoint("BOTTOMLEFT", b, "BOTTOM", 6, 14); mods:SetText("Pick my professions")
+    mods:SetScript("OnClick", function() seen(); if not panel then buildPanel() end; panel:Show() end)
+    local note = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    note:SetPoint("BOTTOM", 0, 44); note:SetText("Bring this back any time with /fa welcome")
+    welcomeFrame = b
+  end
+  welcomeFrame:Show()
 end
+FA.ShowWelcome = showWelcome
 
 -- warn once per login if any module is from a different release than Core
 local function checkVersions()
@@ -381,11 +391,11 @@ ev:RegisterEvent("PLAYER_LOGIN")
 ev:SetScript("OnEvent", function()
   pcall(registerOptions)
   pcall(checkVersions)
-  -- show the beta notice once per version ("-beta" builds only)
+  -- the welcome notice, once per account (again when the message changes)
   FA.Migrate("ForeverArtisanSettings", "MatsledgerSettings")
   ForeverArtisanSettings = ForeverArtisanSettings or {}
-  if FA.IsBeta() and ForeverArtisanSettings.betaSeen ~= betaVersion() then
-    if C_Timer then C_Timer.After(4, showBeta) else showBeta() end
+  if ForeverArtisanSettings.welcomeSeen ~= WELCOME_REV then
+    if C_Timer then C_Timer.After(4, showWelcome) else showWelcome() end
   end
 end)
 
@@ -395,7 +405,7 @@ local function help()
   print(PREFIX .. "version " .. FA.Version() .. "  -  commands")
   print("  /fa  - module panel (turn modules on/off)")
   print("  /fa version  - suite version, and a check that every part matches")
-  print("  /fa feedback  - where to send bugs and ideas")
+  print("  /fa welcome  - what ForeverArtisan is for, and where to send bugs and ideas")
   print("  /fa minimap [angle | reset]  - show/hide or move the minimap button")
   if FA.Vendors then print("  /fa <item, vendor or town>  - search your Trade Contacts") end
   print("  /fa enable <module>  |  /fa disable <module>")
@@ -419,9 +429,8 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     togglePanel()
   elseif lower == "minimap" then
     if ForeverArtisan and ForeverArtisan.minimap then ForeverArtisan.minimap(rest) end
-  elseif lower == "beta" or lower == "feedback" then
-    showBeta()
-    print(PREFIX .. "Feedback: " .. FEEDBACK_URL)
+  elseif lower == "beta" or lower == "feedback" or lower == "welcome" or lower == "about" then
+    showWelcome()
   elseif lower == "version" or lower == "ver" then
     print(PREFIX .. "ForeverArtisan " .. FA.Version())
     checkVersions()

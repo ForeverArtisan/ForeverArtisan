@@ -11,7 +11,7 @@ Run this in game before every build goes to the site or CurseForge/Wago. Screens
 - [ ] Log in with no red Lua errors (also after `/reload`)
 - [ ] `/fa version` shows the new number, and there's no "different release" warning
 - [ ] The minimap button tooltip shows the version (no BETA or DEV on a normal release)
-- [ ] -beta builds only: the beta notice shows once, and "Got it" closes it; `/fa feedback` opens it on any build
+- [ ] The welcome notice shows once per account; "Got it" closes it for good, "Pick my professions" opens `/fa`; `/fa welcome` brings it back; the text fits
 
 ## 2. /fa panel
 - [ ] Every module is listed and says "Running"
@@ -45,6 +45,8 @@ Look for overlapping text, rows running off the edge, and anything cut off.
 - [ ] Every crafting module: "Make now" and a plan with a shopping list
 - [ ] Enchanting: opening the Enchanting window reads recipes (it may be the older Craft window); casting an enchant shows in the Craft log
 - [ ] Tailoring: bolts of cloth show as "craft N" in the shopping list; Blacksmithing and Engineering: bars say "smelt", ore points to your Mining log
+- [ ] Recipe book > All recipes: an unlearned recipe from a trainer or vendor you've met says "trainer"/"vendor"; hover shows where; click sets a waypoint (check Cooking)
+- [ ] Tools: without a Blacksmith Hammer (or Arclight Spanner, runed rod) Make now says "needs ..."; with it in bags it says "can make"; hover shows "Made at: Anvil"
 - [ ] `/fa` panel: all 13 modules fit in the window
 - [ ] On a character without the profession: "Learn from: <trainer>" with a Waypoint button, or the Open window button once learned
 - [ ] Capped and "Next rank" text reads right
