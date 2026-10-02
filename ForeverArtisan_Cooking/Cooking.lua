@@ -402,6 +402,8 @@ function ns.LearnFrom()
       if n:find("apprentice", 1, true) and n:find(prof, 1, true) then return h.npc end
     end
   end
+  -- no Apprentice trainer on file: the closest trainer for it you've met or passed
+  if V.nearestTrainer then return V.nearestTrainer("Cooking") end
 end
 
 ---------------------------------------------------------------- session + cook log

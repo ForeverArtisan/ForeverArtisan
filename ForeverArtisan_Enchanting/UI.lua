@@ -122,9 +122,10 @@ local function RefreshMainPage(p)
     local npc = ns.LearnFrom and ns.LearnFrom()
     p.learnFrom = npc
     if npc then
-      p.find:SetText(GOLD .. "Learn from: " .. npc.n .. ", " .. (npc.s or npc.z or "?") .. "|r")
+      p.find:SetText(GOLD .. "Learn from: " .. npc.n .. ", " .. (npc.s or npc.z or "?") .. "|r"
+        .. (npc.seenOnly and (GRAY .. "  (seen, talk to them)|r") or ""))
     else
-      p.find:SetText(GRAY .. "Ask a city guard for a Enchanting trainer.|r")
+      p.find:SetText(GRAY .. "Ask a city guard for " .. (("Enchanting"):find("^[AEIOU]") and "an" or "a") .. " Enchanting trainer.|r")
     end
   end
   p.find:SetWidth(p.learnFrom and 330 or 430)

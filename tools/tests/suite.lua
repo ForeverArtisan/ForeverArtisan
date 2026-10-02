@@ -313,7 +313,9 @@ do
   local who=lw.LearnFrom()
   print("LEARN FROM", who and who.n)
   assert(who and who.n=="Chaw Stronghide", "should name the trainer who teaches Apprentice, not Brawn")
-  assert(alch.LearnFrom()==nil, "no alchemy trainer met yet")
+  -- no Apprentice alchemy trainer on file: falls back to the closest alchemy trainer you passed
+  local a=alch.LearnFrom()
+  assert(a and a.n=="Carolai Anise" and a.seenOnly, "falls back to a seen alchemy trainer")
   -- talked to, but only the chat window opened: a contact, not "seen"
   db.entries["service:902"]={kind="service",npcId=902,name="Brawn Two",title="Expert Leatherworker",zone="Stranglethorn Vale",subzone="Grom'gol Base Camp",mapID=1434,x=31.6,y=28.8,service="expert leatherworker"}
   db.scouted[902]={name="Brawn Two",title="Expert Leatherworker",zone="Stranglethorn Vale",subzone="Grom'gol Base Camp",mapID=1434,x=31.6,y=28.8,relevant=true}
@@ -496,6 +498,14 @@ do
   now=bs.MakeNow() for _,e in ipairs(now) do if e.r.name=="Copper Bracers" then brac=e end end
   assert(#brac.missing==0 and brac.make==5, "with the hammer in bags it can be made")
   COUNTS["Blacksmith Hammer"]=nil COUNTS[2840]=nil
+  -- newer windows: tools come from the recipe's requirements ("Requires: Runed Copper Rod")
+  window(BR,164,"Blacksmithing")
+  C_TradeSkillUI.GetRecipeRequirements=function(id) if id==2663 then return {{name="Blacksmith Hammer",met=false},{name="Anvil",met=true}} end return {} end
+  fire("TRADE_SKILL_SHOW"); COUNTS[2840]=10
+  now=bs.MakeNow() brac=nil for _,e in ipairs(now) do if e.r.name=="Copper Bracers" then brac=e end end
+  print("TOOLS FROM REQUIREMENTS", brac and table.concat(brac.missing,","), brac and table.concat(brac.stations,","))
+  assert(brac and brac.missing[1]=="Blacksmith Hammer" and brac.stations[1]=="Anvil", "tools read from requirements")
+  COUNTS[2840]=nil
   run("FABS","next"); bs.OnChange()
   local _,bsh=bs.Plan(80)
   for _,e in ipairs(bsh) do print("   bs shop",e.name,e.need,e.source) end

@@ -265,6 +265,18 @@ local function ScanModern()
                 ups = (ri.numSkillUps and ri.numSkillUps > 1) and ri.numSkillUps or nil,
                 color = ri.learned and DIFF[ri.relativeDifficulty] or nil, scanSkill = rank, reagents = {} }
     if T.GetRecipeTools then r.tools = ToolsFromString((Try(T.GetRecipeTools, e.id))) end
+    -- newer windows list tools as requirements ("Requires: Runed Copper Rod")
+    if not r.tools and T.GetRecipeRequirements then
+      local req = Try(T.GetRecipeRequirements, e.id)
+      if type(req) == "table" then
+        local out = {}
+        for _, q in ipairs(req) do
+          local name = type(q) == "table" and q.name and CleanTool(q.name)
+          if name and name ~= "" then out[#out + 1] = { name = name, station = IsStation(name) and true or nil } end
+        end
+        if #out > 0 then r.tools = out end
+      end
+    end
     local sch = T.GetRecipeSchematic and Try(T.GetRecipeSchematic, e.id, false)
     if type(sch) == "table" then
       r.itemId = sch.outputItemID
@@ -489,7 +501,9 @@ function ns.Plan(target)
   for _, r in pairs(CharRec().recipes) do
     if r.learned then
       if not Skipped(r) then learned[#learned + 1] = r end
-      if r.itemId and not makes[r.itemId] then makes[r.itemId] = r end
+      -- a material counts as "craft it yourself" only if you have the tools for it now
+      -- (Dust to Motes needs the Runed Copper Rod, so until you have one, Motes are bought)
+      if r.itemId and not makes[r.itemId] and #ns.MissingTools(r) == 0 then makes[r.itemId] = r end
     end
   end
 
@@ -617,6 +631,8 @@ function ns.LearnFrom()
       if n:find("apprentice", 1, true) and n:find(prof, 1, true) then return h.npc end
     end
   end
+  -- no Apprentice trainer on file: the closest trainer for it you've met or passed
+  if V.nearestTrainer then return V.nearestTrainer(PROF) end
 end
 
 ---------------------------------------------------------------- session + craft log
@@ -789,13 +805,36 @@ for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "T
 end
 
 local scanToken = 0
+-- a failed read is kept for //faeng debug instead of vanishing (and printed on dev builds)
+function ns.SafeScan()
+  local ok, err = pcall(Scan)
+  ns.lastScan = { t = time(), ok = ok, err = (not ok) and tostring(err) or nil }
+  if not ok and ForeverArtisan.IsDev and ForeverArtisan.IsDev() then say("|cffff5555scan error:|r " .. tostring(err)) end
+end
+
 local function ScanSoon()
   scanToken = scanToken + 1
   local tok = scanToken
   if C_Timer then
-    C_Timer.After(0.5, function() if tok == scanToken then pcall(Scan); IndexUses() end end)
+    -- read twice: some windows fill their list a moment after they open
+    C_Timer.After(0.5, function() if tok == scanToken then ns.SafeScan(); IndexUses() end end)
+    C_Timer.After(2.0, function() if tok == scanToken then ns.SafeScan(); IndexUses() end end)
   else
-    pcall(Scan); IndexUses()
+    ns.SafeScan(); IndexUses()
+  end
+end
+
+-- Some clients (Forever's newer profession window) don't send the trade skill events every time.
+-- Reading when the window itself shows covers them; the frames load on demand, so hook as they appear.
+local hookedFrames = {}
+local function HookFrames()
+  for _, name in ipairs({ "ProfessionsFrame", "TradeSkillFrame", "CraftFrame" }) do
+    local f = _G[name]
+    if f and f.HookScript and not hookedFrames[name] then
+      hookedFrames[name] = true
+      f:HookScript("OnShow", ScanSoon)
+      if f.IsShown and f:IsShown() then ScanSoon() end
+    end
   end
 end
 
@@ -806,11 +845,13 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     db.version = ForeverArtisan.Version()
     db.settings = db.settings or {}
     if db.settings.tooltips == nil then db.settings.tooltips = true end
+    HookFrames()
     return
   end
+  if e == "ADDON_LOADED" then HookFrames() return end
   if not db then return end
   if e == "PLAYER_LOGIN" then
-    HookTooltips()
+    HookTooltips(); HookFrames()
   elseif e == "PLAYER_ENTERING_WORLD" then
     Skill(); IndexRecipes(); IndexUses()
   elseif e == "TRADE_SKILL_SHOW" or e == "TRADE_SKILL_LIST_UPDATE" or e == "TRADE_SKILL_DATA_SOURCE_CHANGED"
@@ -848,6 +889,28 @@ SlashCmdList.FAENG = function(msg)
   cmd = (cmd or ""):lower()
   if cmd == "" then
     if ns.ToggleWindow then ns.ToggleWindow() end
+  elseif cmd == "debug" then
+    -- what was read: last scan, and the tools saved on each learned recipe (reads now if the window is open)
+    HookFrames()
+    local open = {}
+    for name in pairs(hookedFrames) do if _G[name] and _G[name]:IsShown() then open[#open + 1] = name end end
+    if #open > 0 then ns.SafeScan() end
+    say("window hooks: " .. (next(hookedFrames) and "yes" or "none yet") .. ", open now: " .. (#open > 0 and table.concat(open, ", ") or "none"))
+    local ls = ns.lastScan
+    say(ls and (("last read %ds ago: %s"):format(time() - ls.t, ls.ok and "ok" or ("|cffff5555error|r " .. (ls.err or "?"))))
+      or "no read this session. Open your " .. PROF .. " window.")
+    local T = C_TradeSkillUI
+    say(("api: tools %s, requirements %s, old %s, craft %s"):format(tostring(T and T.GetRecipeTools ~= nil),
+      tostring(T and T.GetRecipeRequirements ~= nil), tostring(GetTradeSkillTools ~= nil), tostring(GetCraftSpellFocus ~= nil)))
+    local n = 0
+    for name, r in pairs(CharRec().recipes or {}) do
+      if r.learned and n < 12 then
+        n = n + 1
+        local t = {}
+        for _, x in ipairs(r.tools or {}) do t[#t + 1] = x.name .. (x.station and " (station)" or "") end
+        say(("  %s: id %s, tools %s"):format(name, tostring(r.id), #t > 0 and table.concat(t, ", ") or "none"))
+      end
+    end
   elseif not ns.Knows() then
     say("You haven't learned " .. PROF .. " on this character.")
   elseif not ns.HasRecipes() then
