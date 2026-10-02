@@ -181,9 +181,11 @@ local function TradesOf(npc)
   return out
 end
 
--- "crafting" (default) hides innkeepers, class and riding trainers and the like; "all" shows everyone.
+-- "crafting" (default) hides innkeepers, class and riding trainers and the like; "class" is class trainers only;
+-- "all" shows everyone.
 local function PassesTrade(npc, trade)
   if trade == "all" then return true end
+  if trade == "class" then return ns.ClassTrainer ~= nil and ns.ClassTrainer(npc.t) ~= nil end
   if ns.IsIgnored and ns.IsIgnored(npc.t) then return false end
   if trade == "crafting" or not trade then return true end
   return TradesOf(npc)[trade] == true
@@ -239,7 +241,8 @@ end
 
 -- A button that opens a small list of choices under it (no Blizzard dropdown needed).
 local openMenu
-local function Picker(p, x, w, label, options, get, set)
+local function Picker(p, x, w, label, options, get, set, menuW)
+  local mw = menuW or w -- the menu can be wider than its button
   local b = Button(p, "", w, nil)
   b:SetPoint("TOPLEFT", x, -2)
   local menu = CreateFrame("Frame", nil, p)
@@ -257,10 +260,10 @@ local function Picker(p, x, w, label, options, get, set)
       local it = menu.items[i]
       if not it then
         it = CreateFrame("Button", nil, menu)
-        it:SetSize(w - 8, 18)
+        it:SetSize(mw - 8, 18)
         it:SetPoint("TOPLEFT", 4, -4 - (i - 1) * 18)
         it:SetHighlightTexture(FA.UI.HIGHLIGHT, "ADD")
-        it.text = Text(it, "GameFontHighlightSmall", "LEFT", 4, 0, it, "LEFT"); it.text:SetWidth(w - 16); it.text:SetWordWrap(false)
+        it.text = Text(it, "GameFontHighlightSmall", "LEFT", 4, 0, it, "LEFT"); it.text:SetWidth(mw - 16); it.text:SetWordWrap(false)
         menu.items[i] = it
       end
       it.text:SetText((o.value == get() and GOLD or "") .. o.text .. (o.value == get() and "|r" or ""))
@@ -268,7 +271,7 @@ local function Picker(p, x, w, label, options, get, set)
       it:Show()
     end
     for i = #opts + 1, #menu.items do menu.items[i]:Hide() end
-    menu:SetSize(w, #opts * 18 + 8)
+    menu:SetSize(mw, #opts * 18 + 8)
   end
   b:SetScript("OnClick", function()
     if menu:IsShown() then menu:Hide(); return end
@@ -306,12 +309,13 @@ local function ZoneOptions()
 end
 
 local function TradeOptions()
-  local n, crafting, everyone = {}, 0, 0
+  local n, crafting, everyone, classes = {}, 0, 0, 0
   local zone = ListFilters()
   if zone == "here" then zone = (GetRealZoneText and GetRealZoneText()) or "all" end
   for _, npc in ipairs(ns.Contacts()) do
     local inZone = zone == "all" or npc.z == zone
     if inZone then everyone = everyone + 1 end
+    if inZone and ns.ClassTrainer and ns.ClassTrainer(npc.t) then classes = classes + 1 end
     if inZone and not (ns.IsIgnored and ns.IsIgnored(npc.t)) then
       crafting = crafting + 1
       for tr in pairs(TradesOf(npc)) do n[tr] = (n[tr] or 0) + 1 end
@@ -323,8 +327,91 @@ local function TradeOptions()
   end
   if n[GOODS] then opts[#opts + 1] = { value = GOODS, text = GOODS .. " (" .. n[GOODS] .. ")", short = "Trade goods" } end
   if n[OTHER] then opts[#opts + 1] = { value = OTHER, text = OTHER .. " (" .. n[OTHER] .. ")", short = OTHER } end
+  opts[#opts + 1] = { value = "class", text = "Class trainers (" .. classes .. ")", short = "Class trainers" }
   opts[#opts + 1] = { value = "all", text = "Everyone, incl. innkeepers (" .. everyone .. ")", short = "Everyone" }
   return opts
+end
+
+---------------------------------------------------------------- nearest trainer (Search tab)
+-- One click: a waypoint to the closest trainer you've met (or passed) for your class or a profession.
+-- Only trainers from your own play; the menu lists only what you've found.
+local PREFIX = FA.Prefix("Trade Contacts")
+local NOT_TRAINER = { "suppl", "vendor", "merchant", "goods", "wares", "reagent", "provision", "sundries",
+  "butcher", "tackle", "import", "fabric" }
+local TRAINER_WORDS = { Alchemy = { "alchem" } } -- herbalism trainers aren't alchemy trainers
+
+local function LooksLikeTrainer(npc)
+  if npc.k == "trainer" then return true end
+  if npc.k == "vendor" then return false end
+  local t = (npc.t or ""):lower()
+  if t == "" then return false end
+  for _, w in ipairs(NOT_TRAINER) do if t:find(w, 1, true) then return false end end
+  return true
+end
+
+local function TeachesTrade(npc, trade)
+  local words = TRAINER_WORDS[trade]
+  if not words then return TradesOf(npc)[trade] == true end
+  local t = (npc.t or ""):lower()
+  for _, w in ipairs(words) do if t:find(w, 1, true) then return true end end
+  return false
+end
+
+local function MyClass() return UnitClass and UnitClass("player") end
+
+local function TrainerHits(kind)
+  local hits, mine = {}, MyClass()
+  local function consider(npc, seen)
+    if (npc.age or 0) >= ns.HIDE_AFTER then return end
+    local cls = ns.ClassTrainer and ns.ClassTrainer(npc.t)
+    local ok
+    if kind == "class" then ok = cls ~= nil and mine ~= nil and cls == mine:lower()
+    else ok = not cls and LooksLikeTrainer(npc) and TeachesTrade(npc, kind) end
+    if ok then hits[#hits + 1] = { npc = npc, seen = seen or nil } end
+  end
+  for _, npc in ipairs(ns.Contacts()) do consider(npc) end
+  for _, h in ipairs(ns.Unvisited and ns.Unvisited() or {}) do consider(h.npc, true) end
+  return ns.SortHits and ns.SortHits(hits) or hits
+end
+
+local function NearestOptions()
+  local opts, mine = {}, MyClass()
+  -- each line names the closest one, so you can see where you'd go before you click
+  local function add(value, label)
+    local hits = TrainerHits(value)
+    local h = hits[1]
+    if not h then return end
+    opts[#opts + 1] = { value = value, text = label .. " trainer: " .. GOLD .. h.npc.n .. "|r" .. GRAY .. ", " .. ns.Where(h.npc)
+      .. (h.seen and " (seen)" or "") .. (#hits > 1 and ("  +" .. (#hits - 1)) or "") .. "|r" }
+  end
+  if mine then add("class", mine) end
+  for _, tr in ipairs(TRADES) do add(tr[1], tr[1]) end
+  if #opts == 0 then opts[1] = { value = "none", text = "No trainers met yet. Keep exploring." } end
+  return opts
+end
+
+local function GoNearest(kind)
+  if kind == "none" then return end
+  local h = TrainerHits(kind)[1]
+  if not h then return end
+  local label = kind == "class" and (MyClass() or "Class") or kind
+  print(PREFIX .. "nearest " .. label .. " trainer you've met: " .. h.npc.n
+    .. (h.seen and " (seen, talk to save)" or "") .. ((h.dist or 0) >= 1e9 and ", on another continent" or ""))
+  ns.SetWaypoint(h.npc)
+end
+ns.NearestTrainerHits, ns.NearestOptions, ns.GoNearest = TrainerHits, NearestOptions, GoNearest
+
+local function AddNearest(p)
+  local b = Picker(p, 16, 200, "Nearest trainer", NearestOptions, function() return nil end, GoNearest, 420)
+  b:ClearAllPoints(); b:SetPoint("TOPLEFT", 16, -442)
+  b.menu:ClearAllPoints(); b.menu:SetPoint("BOTTOMLEFT", b, "TOPLEFT", 0, 2) -- opens upward
+  b.Sync = function() b:SetText("Nearest trainer  v") end
+  b.Sync()
+  FA.UI.Tip(b, function()
+    GameTooltip:AddLine("Nearest trainer")
+    GameTooltip:AddLine("Pick your class or a profession for a waypoint to the closest trainer you've met or passed.", 1, 1, 1, true)
+  end)
+  p.nearest = b
 end
 
 local function BuildListPage(p)
@@ -433,6 +520,7 @@ local function Build()
     tabButtons = tabs, onTab = ShowTab })
   BuildSearchPage(pages.search)
   BuildListPage(pages.contacts)
+  AddNearest(pages.search)
   BuildStockPage(pages.stock)
   f:Hide()
   ShowTab("search")

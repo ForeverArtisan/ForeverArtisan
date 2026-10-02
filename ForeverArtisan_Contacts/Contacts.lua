@@ -26,7 +26,7 @@ end
 
 ---------------------------------------------------------------- helpers
 
-local isRelevant, isIgnored -- crafting filters, defined with the scout lists below
+local isRelevant, isIgnored, classTrainer, wantedHere -- crafting filters, defined with the scout lists below
 
 local function round1(n) return math.floor(n * 1000 + 0.5) / 10 end
 
@@ -328,7 +328,8 @@ local FILTERS = { "available", "unavailable", "used" }
 local function logTrainer(announce)
   local n = npcInfo("npc")
   if not n then return end
-  if n.title and isIgnored(n.title) then return 0 end -- class trainers etc.: not crafting
+  -- pet, riding and other non-crafting trainers: skip. Class trainers are kept.
+  if n.title and isIgnored(n.title) and not classTrainer(n.title) then return 0 end
   local w = where()
 
   -- Show everything (even what you can't learn yet), then put your filters back.
@@ -699,6 +700,24 @@ local IGNORE = { "guard", "grunt", "sentinel", "flight master", "wind rider", "g
   "demon trainer", "horse merchant", "cockroach", "'s pet", "bag vendor", "shipmaster", "blade trader",
   "fireworks", "prizes", "apprentice weaponsmith", "apprentice armorer", "armorer" }
 
+-- Class trainers aren't crafting, but they're part of the journey: saved and searchable,
+-- listed under Trade > Class trainers, and kept out of the crafting lists.
+local CLASSES = { "warrior", "mage", "priest", "rogue", "hunter", "warlock", "shaman", "paladin", "druid" }
+classTrainer = function(title)
+  if not title then return nil end
+  local t = title:lower()
+  for _, c in ipairs(CLASSES) do
+    if t:find(c .. " trainer", 1, true) then return c end
+  end
+end
+-- "Only not visited" lists your own class's trainers, not every class's
+wantedHere = function(title)
+  local c = classTrainer(title)
+  if not c then return true end
+  local mine = UnitClass and UnitClass("player")
+  return mine ~= nil and mine:lower() == c
+end
+
 isIgnored = function(title)
   if not title then return false end
   local t = title:lower()
@@ -708,6 +727,7 @@ end
 
 isRelevant = function(title)
   if not title then return false end
+  if classTrainer(title) then return true end
   local t = title:lower()
   for _, w in ipairs(IGNORE) do if t:find(w, 1, true) then return false end end
   for _, w in ipairs(RELEVANT) do if t:find(w, 1, true) then return true end end
@@ -883,7 +903,7 @@ local function todoList(all)
   local opened, list = openedIds(), {}
   local zone = GetRealZoneText() or GetZoneText()
   for id, s in pairs(ForeverArtisanContactsDB.scouted or {}) do
-    if isRelevant(s.title) and not opened[id] and (all or s.zone == zone) then
+    if isRelevant(s.title) and wantedHere(s.title) and not opened[id] and (all or s.zone == zone) then
       list[#list + 1] = { id = id, s = s, d = distanceTo(s) or 1e9 }
     end
   end
@@ -924,6 +944,8 @@ function ns.SetScout(on)
 end
 function ns.IsRelevant(title) return isRelevant(title) end
 function ns.IsIgnored(title) return isIgnored(title) end
+function ns.ClassTrainer(title) return classTrainer(title) end
+function ns.WantedHere(title) return wantedHere(title) end
 
 -- What the "Show NPC names in town" checkbox does, for its hover tooltip (both checkboxes use this).
 function ns.ScoutTip(tt)

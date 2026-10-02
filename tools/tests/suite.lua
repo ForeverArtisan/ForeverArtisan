@@ -584,5 +584,54 @@ do
   for _,b in ipairs(frames) do if b._text=="Pick my professions" and b.scripts.OnClick then b.scripts.OnClick(b) end end
   assert(not w._shown and _G.ForeverArtisanPanel and _G.ForeverArtisanPanel._shown, "opens the module panel")
 end
+-- class trainers: saved and searchable, kept out of the crafting lists, own class only in "not visited"
+do
+  local db=ForeverArtisanContactsDB
+  local cns=loadedFrames["ForeverArtisan_Contacts"].ns
+  db.entries["trainer:3033"]={kind="trainer",npcId=3033,name="Turak Runetotem",title="Druid Trainer",zone="Thunder Bluff",subzone="Elder Rise",mapID=1456,x=76.5,y=27.3,
+    skills={{name="Moonfire",rank="Rank 2",levelReq=10}}}
+  db.scouted[4501]={name="Ursyn Ghull",title="Mage Trainer",zone="Thunder Bluff",subzone="Spirit Rise",mapID=1456,x=25,y=20,lastSeen=1}
+  db.scouted[4502]={name="Kym Wildmane",title="Druid Trainer",zone="Thunder Bluff",subzone="Elder Rise",mapID=1456,x=76,y=28,lastSeen=1}
+  cns.OnContactsChanged()
+  assert(cns.ClassTrainer("Druid Trainer")=="druid" and cns.ClassTrainer("Pet Trainer")==nil and cns.ClassTrainer("Leatherworking Trainer")==nil, "class trainer titles")
+  assert(cns.IsRelevant("Mage Trainer") and cns.IsIgnored("Mage Trainer"), "relevant for saving, ignored for crafting lists")
+  local found=false
+  for _,n in ipairs(cns.Contacts()) do if n.n=="Turak Runetotem" then found=true end end
+  assert(found, "class trainer is a contact")
+  db.entries["trainer:3033"].skills={{name="Moonfire",rank="Rank 2",levelReq=10,priceCopper=200},{name="Rejuvenation",rank="Rank 3",levelReq=16,priceCopper=900},
+    {name="Healing Touch",rank="Rank 1",levelReq=1,priceCopper=10}}
+  cns.OnContactsChanged()
+  local oldLvl=UnitLevel; UnitLevel=function() return 12 end
+  for _,n in ipairs(cns.Contacts()) do if n.n=="Turak Runetotem" then
+    local d=cns.DetailText(n); print("CLASS TIP", (d:gsub("\n"," | ")))
+    assert(d:find("Teaches 3 spells") and d:find("Rejuvenation") and d:find("level 16"), "class trainer tooltip lists spells")
+    assert(d:find("Rejuvenation") < d:find("Moonfire"), "next spells for your level come first")
+  end end
+  UnitLevel=oldLvl
+  local mage=false
+  for _,h in ipairs(cns.Search("mage")) do if h.npc.n=="Ursyn Ghull" then mage=true end end
+  assert(mage, "search finds a seen mage trainer")
+  local mine, other=false, false
+  for _,h in ipairs(cns.Unvisited()) do
+    if h.npc.n=="Kym Wildmane" then mine=true end
+    if h.npc.n=="Ursyn Ghull" then other=true end
+  end
+  print("CLASS TRAINERS", found, mage, mine, other)
+  assert(mine and not other, "not-visited lists only your own class's trainer")
+  -- nearest trainer button: your class, and professions only from trainers (not supply vendors)
+  db.entries["vendor:7777"]={kind="vendor",npcId=7777,name="Hide Seller",title="Leatherworking Supplies",zone="Mulgore",mapID=1412,x=40,y=40,items={}}
+  db.scouted[4503]={name="Brewer Bob",title="Alchemy Supplies",zone="Thunder Bluff",mapID=1456,x=40,y=40,lastSeen=1}
+  db.scouted[4504]={name="Herb Teacher",title="Herbalism Trainer",zone="Thunder Bluff",mapID=1456,x=41,y=41,lastSeen=1}
+  cns.OnContactsChanged()
+  local names=function(k) local t={} for _,h in ipairs(cns.NearestTrainerHits(k)) do t[h.npc.n]=true end return t end
+  local cl, lw, al = names("class"), names("Leatherworking"), names("Alchemy")
+  assert(cl["Turak Runetotem"] and cl["Kym Wildmane"] and not cl["Ursyn Ghull"], "nearest class trainer: own class only")
+  assert(lw["Chaw Stronghide"] and not lw["Hide Seller"], "nearest leatherworking trainer skips the supplies vendor")
+  assert(not al["Brewer Bob"] and not al["Herb Teacher"], "alchemy: no supply vendor, no herbalism trainer")
+  local opt=cns.NearestOptions(); print("NEAREST OPTS", opt[1].text, #opt)
+  assert(opt[1].value=="class" and opt[1].text:find("Druid trainer: ") and opt[1].text:find("Turak") or opt[1].text:find("Kym"), "your class comes first, closest named")
+  cns.GoNearest("class")
+  assert(cns.Pages.search.nearest, "button on the Search tab")
+end
 print("CRAFTS OK")
 print("SUITE OK")

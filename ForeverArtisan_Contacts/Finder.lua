@@ -211,12 +211,31 @@ function ns.DetailText(npc, it)
     if it.lv then lines[#lines + 1] = "Requires level " .. it.lv end
     if it.lim then lines[#lines + 1] = "|cffff8040Limited stock|r (" .. it.lim .. " when you last looked)" end
   end
+  -- a class trainer's spells: the next ones for your level first, with level and cost
+  if not it and npc.k == "trainer" and ns.ClassTrainer and ns.ClassTrainer(npc.t) and #npc.items > 0 then
+    local me = (UnitLevel and UnitLevel("player")) or 1
+    local list = {}
+    for _, sp in ipairs(npc.items) do list[#list + 1] = sp end
+    table.sort(list, function(a, b)
+      local la, lb = a.lv or 1, b.lv or 1
+      local na, nb = la >= me, lb >= me -- coming up before already behind you
+      if na ~= nb then return na end
+      if la ~= lb then return (na and la < lb) or (not na and la > lb) end
+      return a.n < b.n
+    end)
+    lines[#lines + 1] = GOLD .. ("Teaches %d spell%s, the next ones for your level first:"):format(#list, #list == 1 and "" or "s") .. "|r"
+    for i = 1, math.min(10, #list) do
+      local sp = list[i]
+      lines[#lines + 1] = ("  level %d  %s  %s"):format(sp.lv or 1, sp.n, money(sp))
+    end
+    if #list > 10 then lines[#lines + 1] = GREY .. "  ...and " .. (#list - 10) .. " more. Search a spell name to find it.|r" end
+  end
   local note = ns.AgeNote(npc)
   if note then
     lines[#lines + 1] = "|cffff9020" .. note .. "|r"
   else
     if npc.seen then lines[#lines + 1] = GREY .. "Last seen " .. date("%b %d", npc.seen) .. "|r" end
-    if npc.visited and npc.visited ~= npc.seen then lines[#lines + 1] = GREY .. "Stock checked " .. date("%b %d", npc.visited) .. "|r" end
+    if npc.visited and npc.visited ~= npc.seen then lines[#lines + 1] = GREY .. (npc.k == "trainer" and "List checked " or "Stock checked ") .. date("%b %d", npc.visited) .. "|r" end
   end
   lines[#lines + 1] = "|cff80c0ffClick for a waypoint|r"
   return table.concat(lines, "\n")
@@ -258,6 +277,8 @@ local function seenHits(known, has)
     -- relevance by today's rules (the flag saved when scouting can be out of date)
     local relevant = s.relevant
     if ns.IsRelevant then relevant = ns.IsRelevant(s.title) end
+    -- the "not visited" list (no search text) only names your own class's trainer
+    if relevant and not has and ns.WantedHere and not ns.WantedHere(s.title) then relevant = false end
     if s.name and s.title and relevant and not known[id] and not known[s.name]
       and (not has or has(s.name) or has(s.title)) then
       out[#out + 1] = { seen = true, npc = { n = s.name, t = s.title, z = s.zone, s = s.subzone, m = s.mapID,
@@ -325,6 +346,7 @@ local function unvisited()
   return sortHits(seenHits(knownSet(), nil))
 end
 ns.Unvisited = unvisited
+ns.SortHits = sortHits
 ns.RankWord = rankWord
 
 ---------------------------------------------------------------- tooltips
