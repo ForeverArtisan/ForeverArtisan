@@ -2,7 +2,7 @@
 ## Title: ForeverArtisan: Mining
 ## Notes: Mining log by zone, skill-up tracker, what to mine next, goals, and ore tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.7-dev
+## Version: 0.9.7
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

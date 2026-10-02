@@ -2,7 +2,7 @@
 ## Title: ForeverArtisan: Engineering
 ## Notes: What to make next for skill-ups, a plan and shopping list to your target skill (powders, bolts and tubes counted as crafts, ore points to your Mining log), a craft log, where to train next, and material tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.7-dev
+## Version: 0.9.7
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core
