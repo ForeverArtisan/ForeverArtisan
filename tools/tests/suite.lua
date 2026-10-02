@@ -604,8 +604,20 @@ do
   GetTitleText,GetNumQuestRewards,GetNumQuestChoices,GetQuestItemLink=nil
   -- the Recipe book renders unlearned recipes with a source tag
   run("FATAILOR",""); run("FACOOK",""); run("FAAID","")
-  for _,b in ipairs(frames) do if b._text=="All recipes" and b.scripts.OnClick then b.scripts.OnClick(b) end end
   loadedFrames["ForeverArtisan_Tailoring"].ns.OnChange(); loadedFrames["ForeverArtisan_Cooking"].ns.OnChange()
+  for _,name in ipairs({"FACOOK","FATAILOR"}) do end
+  for _,f in pairs(frames) do if f._text=="Recipe book" and f.scripts.OnClick then f.scripts.OnClick(f) end end
+  local book=loadedFrames["ForeverArtisan_Cooking"].ns.lastBook
+  if book then
+    print("BOOK", book[1] and book[1].left, #book)
+    assert(book[1].header and book[1].left:find("Learned"), "learned header first")
+    local seenUnknown, order = false, true
+    for _,d in ipairs(book) do
+      if d.header and d.left:find("Not learned") then seenUnknown=true
+      elseif d.recipe and seenUnknown and d.recipe.learned then order=false end
+    end
+    assert(order, "learned recipes come before unlearned ones")
+  end
 end
 -- welcome notice: shown once, "Got it" remembers it, /fa welcome brings it back
 do

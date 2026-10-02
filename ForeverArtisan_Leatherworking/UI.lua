@@ -11,7 +11,7 @@ local GOLD, GRAY, GREEN, YELLOW, RED = FA.GOLD, FA.GRAY, FA.GREEN, FA.YELLOW, FA
 
 local f
 local pages, tabs = {}, {}
-local view = { tab = "main", logOff = 0, guideOff = 0, bookAll = false }
+local view = { tab = "main", logOff = 0, guideOff = 0 }
 
 ---------------------------------------------------------------- shared style kit (ForeverArtisan Core)
 local K = FA.UI.Kit(ns, view)
@@ -299,15 +299,27 @@ local function BookData()
   local skill = ns.Skill()
   local list = {}
   for _, r in pairs(c.recipes) do
-    if view.bookAll or r.learned then list[#list + 1] = r end
+    list[#list + 1] = r
   end
+  -- one list: what you know first, then what's still out there, each by gray level
   table.sort(list, function(a, b)
+    if a.learned ~= b.learned then return a.learned end
     local ga, gb = ns.GrayAt(a) or 0, ns.GrayAt(b) or 0
     if ga ~= gb then return ga < gb end
     return a.name < b.name
   end)
   local data = {}
+  local learned, unknown, headed = 0, 0, false
+  for _, r in ipairs(list) do if r.learned then learned = learned + 1 else unknown = unknown + 1 end end
+  if learned > 0 then
+    data[#data + 1] = { header = true, noIcon = true, left = GOLD .. ("Learned (%d)"):format(learned) .. "|r" }
+  end
   for _, r in ipairs(list) do
+    if not r.learned and not headed then
+      headed = true
+      data[#data + 1] = { header = true, noIcon = true,
+        left = GOLD .. ("Not learned yet (%d)"):format(unknown) .. "|r", right = GRAY .. "hover one for where to get it|r" }
+    end
     local col = ns.ColorFor(r, skill)
     local tip = ReagentTip(r)
     local tag, npc
@@ -324,9 +336,11 @@ local function BookData()
     end
     data[#data + 1] = { id = r.itemId, icon = Icon(r.itemId), recipe = r,
       left = ns.COLOR_CODE[col] .. r.name .. "|r",
-      right = (r.grayAt and (GRAY .. "gray at " .. r.grayAt .. "|r")
-          or (ns.GrayAt(r) and (GRAY .. "gray at ~" .. ns.GrayAt(r) .. "|r")) or "")
-        .. (r.learned and "" or (GRAY .. "  ·  " .. (tag or "not found yet") .. "|r")),
+      right = (function()
+        local g = (r.grayAt and ("gray at " .. r.grayAt)) or (ns.GrayAt(r) and ("gray at ~" .. ns.GrayAt(r))) or nil
+        local t = (not r.learned) and (tag or "not found yet") or nil
+        return GRAY .. ((g and t) and (g .. "  ·  " .. t) or g or t or "") .. "|r"
+      end)(),
       npc = npc,
       tip = tip }
   end
@@ -334,12 +348,7 @@ local function BookData()
 end
 
 local function BuildGuidePage(p)
-  local tLearned = Button(p, "Learned", 90, function() view.bookAll, view.guideOff = false, 0; ns.OnChange() end)
-  tLearned:SetPoint("TOPLEFT", 16, -2)
-  local tAll = Button(p, "All recipes", 90, function() view.bookAll, view.guideOff = true, 0; ns.OnChange() end)
-  tAll:SetPoint("LEFT", tLearned, "RIGHT", 6, 0)
-  p.tLearned, p.tAll = tLearned, tAll
-  p.rows = MakeRows(p, BOOK_ROWS, -30, false)
+  p.rows = MakeRows(p, BOOK_ROWS + 1, -4, false)
   -- an unlearned recipe with a trainer or vendor you've met: click for a waypoint
   for _, r in ipairs(p.rows) do
     r:SetScript("OnClick", function(self)
@@ -351,18 +360,17 @@ local function BuildGuidePage(p)
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -100, p, "TOP"); p.empty:SetJustifyH("CENTER")
   p.open = FA.UI.ProfessionButton(p, "Leatherworking", 240); p.open:SetPoint("TOP", 0, -126)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
-  help:SetText("Click a recipe you know to open it. All recipes: hover one you don't know for where to get it.")
-  Wheel(p, "guideOff", function() return #BookData() - BOOK_ROWS end)
+  help:SetText("Click a recipe you know to open it. Hover one you don't know for where to get it.")
+  Wheel(p, "guideOff", function() return #BookData() - (BOOK_ROWS + 1) end)
 end
 
 local function RefreshGuidePage(p)
   local data = BookData()
-  view.guideOff = math.min(view.guideOff, math.max(0, #data - BOOK_ROWS))
+  ns.lastBook = data -- for the test suite
+  view.guideOff = math.min(view.guideOff, math.max(0, #data - (BOOK_ROWS + 1)))
   Fill(p.rows, data, view.guideOff)
   p.empty:SetText(#data == 0 and "Open your Leatherworking window once so I can read your recipes." or "")
   p.open:ShowIf(ns.Knows() and not ns.HasRecipes())
-  p.tLearned:SetEnabled(view.bookAll)
-  p.tAll:SetEnabled(not view.bookAll)
 end
 
 ---------------------------------------------------------------- frame
