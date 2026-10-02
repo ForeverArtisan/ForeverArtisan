@@ -630,8 +630,14 @@ do
   assert(not al["Brewer Bob"] and not al["Herb Teacher"], "alchemy: no supply vendor, no herbalism trainer")
   local opt=cns.NearestOptions(); print("NEAREST OPTS", opt[1].text, #opt)
   assert(opt[1].value=="class" and opt[1].text:find("Druid trainer: ") and opt[1].text:find("Turak") or opt[1].text:find("Kym"), "your class comes first, closest named")
+  _G.ForeverArtisanContactsFrame:Show(); cns.ShowTab("search")
   cns.GoNearest("class")
   assert(cns.Pages.search.nearest, "button on the Search tab")
+  local st=cns.Pages.search.status:GetText() or ""
+  local r1=cns.Pages.search.rows[1].data
+  print("NEAREST LIST", st, r1 and r1.right)
+  assert(st:find("Druid trainers you've met, nearest first"), "nearest list status")
+  assert(r1 and (r1.npc.n=="Turak Runetotem" or r1.npc.n=="Kym Wildmane") and r1.right:find("yd") or r1.right:find("other continent"), "rows show distance")
 end
 print("CRAFTS OK")
 print("SUITE OK")

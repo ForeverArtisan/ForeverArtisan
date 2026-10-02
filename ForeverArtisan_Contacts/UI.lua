@@ -34,6 +34,13 @@ end
 
 ---------------------------------------------------------------- page 1: Search
 local SEARCH_ROWS = 15
+
+-- "350 yd" from a sorted hit; only the Nearest trainer list shows it
+local function DistText(h)
+  if not h.showDist or not h.dist then return "" end
+  if h.dist >= 1e9 then return "other continent  ·  " end
+  return ("%d yd  ·  "):format(math.floor(h.dist / 10 + 0.5) * 10)
+end
 local function SearchData()
   local data = {}
   for _, h in ipairs(view.results) do
@@ -46,13 +53,13 @@ local function SearchData()
     elseif npc.seenOnly then
       data[#data + 1] = { icon = 134400, npc = npc, tipTitle = npc.n,
         left = GOLD .. npc.n .. "|r" .. (npc.t and (GRAY .. " <" .. npc.t .. ">|r") or ""),
-        right = GRAY .. ns.Where(npc) .. "  ·  seen, talk to save|r",
+        right = GRAY .. DistText(h) .. ns.Where(npc) .. "  ·  seen, talk to save|r",
         tip = ns.Where(npc) .. (npc.x and ("  (%.1f, %.1f)"):format(npc.x, npc.y) or "")
           .. "\nYou've passed this NPC but haven't talked to them yet.\n|cff80c0ffClick for a waypoint|r" }
     else
       data[#data + 1] = { icon = npc.k == "trainer" and 136235 or 133784, npc = npc, tipTitle = npc.n,
         left = GOLD .. npc.n .. "|r" .. (npc.t and (GRAY .. " <" .. npc.t .. ">|r") or ""),
-        right = GRAY .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "")
+        right = GRAY .. DistText(h) .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "")
           .. (h.trains and ("  ·  trains " .. h.trains) or "")
           .. (h.ranks and ("  ·  " .. table.concat((function()
                 local w = {} for _, r in ipairs(h.ranks) do w[#w + 1] = ns.RankWord(r) or r end return w end)(), ", ")) or "")
@@ -67,6 +74,7 @@ local function RunSearch()
   local p = pages.search
   local q = p.box:GetText() or ""
   view.hidden, view.hiddenName = 0, nil
+  view.nearestLabel = nil
   if view.onlyNew then
     if q:match("^%s*$") then
       view.results = ns.Unvisited()
@@ -120,7 +128,9 @@ local function RefreshSearchPage(p)
   local v, t = Counts()
   local q = p.box:GetText() or ""
   local hid = view.hidden or 0
-  if view.onlyNew and hid > 0 and #data == 0 then
+  if view.nearestLabel then
+    p.status:SetText(view.nearestLabel .. GRAY .. "  Click one for a waypoint.|r")
+  elseif view.onlyNew and hid > 0 and #data == 0 then
     -- the search found someone, the checkbox hid them: say so instead of "nobody"
     p.status:SetText(YELLOW .. (hid == 1 and ((view.hiddenName or "1 NPC") .. " matches, but you've already visited.")
       or (hid .. " NPCs match, but you've already visited them.")) .. " Untick 'Only not visited' to see.|r")
@@ -335,7 +345,6 @@ end
 ---------------------------------------------------------------- nearest trainer (Search tab)
 -- One click: a waypoint to the closest trainer you've met (or passed) for your class or a profession.
 -- Only trainers from your own play; the menu lists only what you've found.
-local PREFIX = FA.Prefix("Trade Contacts")
 local NOT_TRAINER = { "suppl", "vendor", "merchant", "goods", "wares", "reagent", "provision", "sundries",
   "butcher", "tackle", "import", "fabric" }
 local TRAINER_WORDS = { Alchemy = { "alchem" } } -- herbalism trainers aren't alchemy trainers
@@ -390,14 +399,17 @@ local function NearestOptions()
   return opts
 end
 
+-- Lists every trainer of that kind you've met or passed, nearest first with distance; you pick one.
 local function GoNearest(kind)
   if kind == "none" then return end
-  local h = TrainerHits(kind)[1]
-  if not h then return end
+  local hits = TrainerHits(kind)
+  if #hits == 0 then return end
+  for _, h in ipairs(hits) do h.showDist = true end
   local label = kind == "class" and (MyClass() or "Class") or kind
-  print(PREFIX .. "nearest " .. label .. " trainer you've met: " .. h.npc.n
-    .. (h.seen and " (seen, talk to save)" or "") .. ((h.dist or 0) >= 1e9 and ", on another continent" or ""))
-  ns.SetWaypoint(h.npc)
+  pages.search.box:SetText("")
+  view.results, view.searchOff = hits, 0
+  view.nearestLabel = ("%s trainers you've met, nearest first."):format(label)
+  ns.OnChange()
 end
 ns.NearestTrainerHits, ns.NearestOptions, ns.GoNearest = TrainerHits, NearestOptions, GoNearest
 
@@ -540,6 +552,7 @@ function ns.OpenSearch(q)
   if q and q ~= "" then box:SetText(q); RunSearch() else box:SetFocus() end
 end
 
+ns.ShowTab = function(name) if f then ShowTab(name) end end -- for the test suite
 function ns.OnChange()
   if f and f:IsShown() and REFRESH[view.tab] then REFRESH[view.tab](pages[view.tab]) end
 end

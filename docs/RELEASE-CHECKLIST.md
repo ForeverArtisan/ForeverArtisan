@@ -62,7 +62,7 @@ Look for overlapping text, rows running off the edge, and anything cut off.
 - [ ] The Limited stock tab lists limited items
 - [ ] Riding past a known contact doesn't cause errors; after a game patch, older contacts have grey names
 - [ ] Contacts tab: Zone and Trade pickers filter, town headers fold, innkeepers only under Everyone
-- [ ] Nearest trainer button (Search tab): menu opens upward, lists your class + professions with counts, click sets waypoint to the closest; no supply vendors
+- [ ] Nearest trainer button (Search tab): menu opens upward, lists your class + professions with counts, picking one lists those trainers nearest first with yards; clicking a row sets the waypoint; typing in the box clears it; no supply vendors
 - [ ] Class trainers: saved when passed/talked to, listed under Trade > Class trainers, `/fa mage` finds them, Only not visited shows your class only, not under All crafting
 - [ ] "Show NPC names in town" (in `/fa` and on Search) turns nameplate titles on and off; hover shows the tooltip
 - [ ] Search with "Only not visited" says when it hid a match; results are nearest first
