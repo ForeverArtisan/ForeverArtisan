@@ -212,3 +212,34 @@ function FA.MaterialWhere(id)
   return ("Dropped by %s, %s (you looted it %s)%s"):format(best.from, Place(best),
     best.n == 1 and "once" or (best.n .. " times"), others > 0 and ("  +" .. others .. " more") or "")
 end
+
+-- Item tooltips: "Dropped by Greater Duskbat, Tirisfal Glades (you looted it 2 times)" on any material
+-- you've looted from a mob, whether or not you know a recipe that uses it yet.
+local function DropTip(tt, id)
+  if not id or tt.faDropTip then return end
+  local line = FA.MaterialWhere(id)
+  if not line then return end
+  tt.faDropTip = true
+  tt:AddLine(FA.GOLD .. "ForeverArtisan:|r " .. line, 1, 1, 1, true)
+  tt:Show()
+end
+local function HookDropTips()
+  local function clear(self) self.faDropTip = nil end
+  if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tt, data)
+      if tt == GameTooltip or tt == ItemRefTooltip then pcall(DropTip, tt, data and data.id) end
+    end)
+  else
+    for _, tt in ipairs({ GameTooltip, ItemRefTooltip }) do
+      tt:HookScript("OnTooltipSetItem", function(self)
+        local _, link = self:GetItem()
+        pcall(DropTip, self, link and tonumber(link:match("item:(%d+)")))
+      end)
+    end
+  end
+  GameTooltip:HookScript("OnTooltipCleared", clear)
+  ItemRefTooltip:HookScript("OnTooltipCleared", clear)
+end
+local tipEv = CreateFrame("Frame")
+tipEv:RegisterEvent("PLAYER_LOGIN")
+tipEv:SetScript("OnEvent", function() pcall(HookDropTips) end)
