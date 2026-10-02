@@ -10,6 +10,7 @@
 - Trade Contacts saves class trainers (Mage Trainer, Druid Trainer and so on) when you pass or talk to them. Pick Trade > Class trainers on the Contacts tab, or search `/fa mage`, for every one you've met; click for a waypoint. Open a class trainer's training window once and it saves every spell they teach; hover the trainer on the Contacts tab to see them, the next ones for your level first, with level and cost. "Only not visited" lists your own class's trainers only, and the crafting lists stay crafting-only.
 - Trade Contacts, Search tab: a "Nearest trainer" button. Each menu line names the closest trainer for your class or a profession. Pick one to list every trainer of that kind you've met or passed, nearest first with the distance, and click the one you want for a waypoint. The menu only lists trainers you've found.
 - A profession you haven't learned now says "Learn from:" with the closest trainer you've met or passed when no Apprentice trainer is on file (marked "seen" if you haven't talked to them), instead of "ask a city guard". Fixed "a Enchanting trainer".
+- Every crafting module (Cooking and First Aid too) has an "Open window" button at the top right that opens the game's profession window, and clicking a recipe you know in Make now or the Recipe book opens it on that recipe where the game allows.
 - The `/fa` panel uses shorter rows so all 13 modules fit; hover a row for its description.
 
 ## 0.9.6 (2026-09-30)

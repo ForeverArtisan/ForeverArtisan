@@ -122,13 +122,13 @@ end
 
 -- "Open Alchemy window": casts the profession spell when clicked, which opens its window so the
 -- module can read the recipes. Secure buttons can't be shown or hidden in combat, so ShowIf waits.
-function UI.ProfessionButton(parent, spellName, w)
+function UI.ProfessionButton(parent, spellName, w, label, h)
   local b = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate, UIPanelButtonTemplate")
-  b:SetSize(w or 220, 26)
+  b:SetSize(w or 220, h or 26)
   b:RegisterForClicks("AnyUp", "AnyDown")
   b:SetAttribute("type", "spell")
   b:SetAttribute("spell", spellName)
-  b:SetText("Open " .. spellName .. " window")
+  b:SetText(label or ("Open " .. spellName .. " window"))
   function b:ShowIf(on)
     if InCombatLockdown() then return end
     if on then self:Show() else self:Hide() end

@@ -30,6 +30,21 @@ end
 
 ---------------------------------------------------------------- page 1: First Aid
 local NOW_ROWS = 9
+-- Click a recipe you know: open the game's First Aid window on it (the window itself opens from a
+-- secure button, "Open window", top right; this only works once the window is open or the client allows it).
+local function OpenOnRecipe(r)
+  if not (r and r.learned) or (InCombatLockdown and InCombatLockdown()) then return end
+  local T = C_TradeSkillUI
+  local function shown()
+    for _, name in ipairs({ "ProfessionsFrame", "TradeSkillFrame", "CraftFrame" }) do
+      if _G[name] and _G[name]:IsShown() then return true end
+    end
+  end
+  if T and T.OpenRecipe and r.id then pcall(T.OpenRecipe, r.id) end
+  -- if the client didn't open it for us, say how
+  if C_Timer then C_Timer.After(0.3, function() if not shown() then print(FA.Prefix("First Aid") .. "use Open window on the first tab, then pick " .. r.name .. ".") end end) end
+end
+
 local function BuildMainPage(p)
   p.skill = Text(p, "GameFontNormalLarge", "TOPLEFT", 18, -6)
   p.color = Text(p, "GameFontHighlightSmall", "TOPLEFT", 18, -28); p.color:SetWidth(430); p.color:SetWordWrap(true)
@@ -49,6 +64,15 @@ local function BuildMainPage(p)
   p.rows = MakeRows(p, NOW_ROWS, -178, false)
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 20, -182); p.empty:SetWidth(420)
   p.open = FA.UI.ProfessionButton(p, "First Aid", 240); p.open:SetPoint("TOPLEFT", 20, -208)
+  -- always there once you know the profession: opens the game's own window
+  p.openTop = FA.UI.ProfessionButton(p, "First Aid", 110, "Open window", 22); p.openTop:SetPoint("TOPRIGHT", -16, -4)
+  FA.UI.Tip(p.openTop, function()
+    GameTooltip:AddLine("Open your First Aid window")
+    GameTooltip:AddLine("Opening it also refreshes your recipes here.", 1, 1, 1, true)
+  end)
+  for _, row in ipairs(p.rows) do
+    row:SetScript("OnClick", function(self) if self.data and self.data.recipe then OpenOnRecipe(self.data.recipe) end end)
+  end
 
   p.checks = {
     Check(p, "Show First Aid info on material tooltips", 16, -412,
@@ -81,7 +105,7 @@ local function RefreshMainPage(p)
     for _, r in pairs(c.recipes) do n = n + 1; if r.learned then learned = learned + 1 end end
     p.find:SetText(GREEN .. ("%d recipes read, %d learned|r"):format(n, learned))
     for _, e in ipairs((ns.MakeNow())) do
-      list[#list + 1] = { id = e.r.itemId, icon = Icon(e.r.itemId),
+      list[#list + 1] = { id = e.r.itemId, icon = Icon(e.r.itemId), recipe = e.r,
         left = ns.COLOR_CODE[e.color] .. e.r.name .. "|r",
         right = e.make > 0 and (GREEN .. "can make " .. e.make .. "|r") or (GRAY .. "missing materials|r"),
         tip = ReagentTip(e.r) }
@@ -104,6 +128,7 @@ local function RefreshMainPage(p)
     p.sess:SetText(GRAY .. "Nothing made yet this session.|r"); p.last:SetText("")
   end
   p.open:ShowIf(knows and not ns.HasRecipes())
+  p.openTop:ShowIf(knows and ns.HasRecipes())
   -- not learned: say where to learn it
   p.learnFrom = nil
   if not i.rank then
@@ -274,7 +299,7 @@ local function BookData()
       tip = GOLD .. "Where to get it|r\n" .. table.concat(lines, "\n")
         .. (npc and ("\n|cff80c0ffClick for a waypoint|r") or "") .. "\n\n" .. tip
     end
-    data[#data + 1] = { id = r.itemId, icon = Icon(r.itemId),
+    data[#data + 1] = { id = r.itemId, icon = Icon(r.itemId), recipe = r,
       left = ns.COLOR_CODE[col] .. r.name .. "|r",
       right = (r.grayAt and (GRAY .. "gray at " .. r.grayAt .. "|r") or "") .. (r.learned and "" or (GRAY .. "  ·  " .. (tag or "not found yet") .. "|r")),
       npc = npc,
@@ -294,13 +319,14 @@ local function BuildGuidePage(p)
   for _, r in ipairs(p.rows) do
     r:SetScript("OnClick", function(self)
       local d = self.data
-      if d and d.npc and FA.Vendors and FA.Vendors.waypoint then FA.Vendors.waypoint(d.npc) end
+      if d and d.recipe and d.recipe.learned then OpenOnRecipe(d.recipe)
+      elseif d and d.npc and FA.Vendors and FA.Vendors.waypoint then FA.Vendors.waypoint(d.npc) end
     end)
   end
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -100, p, "TOP"); p.empty:SetJustifyH("CENTER")
   p.open = FA.UI.ProfessionButton(p, "First Aid", 240); p.open:SetPoint("TOP", 0, -126)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
-  help:SetText("All recipes: hover one you don't know for where to get it, click for a waypoint.")
+  help:SetText("Click a recipe you know to open it. All recipes: hover one you don't know for where to get it.")
   Wheel(p, "guideOff", function() return #BookData() - BOOK_ROWS end)
 end
 
