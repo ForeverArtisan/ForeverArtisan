@@ -475,7 +475,7 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     if m then
       if not m.loaded then
         print(PREFIX .. m.title .. " is off. Tick it in the /fa panel (or /fa enable " .. (m.alias ~= "" and m.alias or m.key)
-          .. "), then /reload. To search vendors and trainers instead: /fa search " .. word .. ".")
+          .. "), then /reload. To search vendors and trainers instead: /fa search " .. m.title:lower() .. ".")
       elseif m.slash and SlashCmdList[m.slash] then
         SlashCmdList[m.slash](rest)
       else
