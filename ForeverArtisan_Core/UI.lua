@@ -432,6 +432,25 @@ function UI.Kit(ns, view)
         r:Hide()
       end
     end
+    -- every scrolling list says when there's more below (mouse wheel to see it)
+    local last = rows[#rows]
+    local holder = last and last.GetParent and last:GetParent()
+    if holder and holder.CreateFontString then
+      if not rows.more then
+        rows.more = holder:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        rows.more:SetPoint("TOPRIGHT", last, "BOTTOMRIGHT", -6, -1)
+      end
+      local below = #data - (offset or 0) - #rows
+      if below > 0 then
+        rows.more:SetText(("%d more below, scroll down"):format(below))
+        rows.more:Show()
+      elseif (offset or 0) > 0 then
+        rows.more:SetText(FA.GRAY .. "end of list, scroll up for the top|r")
+        rows.more:Show()
+      else
+        rows.more:Hide()
+      end
+    end
   end
 
   -- Goal rows from ns.GoalRows(): same text, bar and buttons in every module.

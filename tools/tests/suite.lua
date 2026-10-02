@@ -696,6 +696,20 @@ do
   print("FA ROUTE", hits, searched)
   assert(hits==6 and searched==1, "all six reach Blacksmithing, copper rod searches contacts")
 end
+-- scrolling lists say how many more are below
+do
+  local K=ForeverArtisan.UI.Kit({}, {})
+  local holder=CreateFrame("Frame")
+  local rows=K.MakeRows(holder, 3, 0, false)
+  for _,r in ipairs(rows) do r.GetParent=function() return holder end end
+  local data={} for i=1,10 do data[i]={left="r"..i} end
+  K.Fill(rows, data, 0)
+  print("MORE", rows.more and rows.more._text)
+  assert(rows.more and rows.more._text=="7 more below, scroll down", "more-below hint")
+  K.Fill(rows, data, 7)
+  assert(rows.more._text:find("end of list"), "end of list hint")
+  K.Fill(rows, {data[1]}, 0)
+end
 -- minimap: the anvil and the Trade Contacts book, both built (own buttons, no LibDBIcon in the test)
 do
   local book=_G.ForeverArtisanContactsMinimapButton
