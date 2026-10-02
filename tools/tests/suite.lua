@@ -568,6 +568,24 @@ do
   lines,tag=FA.RecipeWhere("Goretusk Liver Pie",{"Recipe: "})
   print("WHERE drop", tag, lines[1])
   assert(tag=="drop" and lines[1]:find("Dropped by Goretusk") and lines[1]:find("Desolace"), "drop you looted")
+  -- a crafting material off a mob you didn't target: named from the combat log, counted by quantity
+  CombatLogGetCurrentEventInfo=function() return 0,"UNIT_DIED",false,nil,nil,0,0,"Creature-0-1-2-3-1513-0001","Mangy Duskbat" end
+  fire("COMBAT_LOG_EVENT_UNFILTERED")
+  GetLootSlotLink=function() return "|cffffffff|Hitem:12223|h[Meaty Bat Wing]|h|r" end
+  GetLootSourceInfo=function() return "Creature-0-1-2-3-1513-0001" end
+  GetLootSlotInfo=function() return 0,"Meaty Bat Wing",2 end
+  fire("LOOT_OPENED"); fire("LOOT_OPENED")
+  local mw=FA.MaterialWhere(12223)
+  print("MATERIAL", mw)
+  assert(mw and mw:find("Dropped by Mangy Duskbat") and mw:find("2 times"), "material drop remembered")
+  local ck=loadedFrames["ForeverArtisan_Cooking"].ns
+  assert(ck.SourceFor(12223,"Meaty Bat Wing"):find("Mangy Duskbat"), "cooking shopping list names the mob")
+  -- from a chest or herb node: not a mob drop
+  GetLootSourceInfo=function() return "GameObject-0-1-2-3-999-0001" end
+  GetLootSlotLink=function() return "|cffffffff|Hitem:2589|h[Linen Cloth]|h|r" end
+  fire("LOOT_OPENED")
+  assert(FA.MaterialWhere(2589)==nil, "chest loot isn't a mob drop")
+  GetLootSlotInfo,CombatLogGetCurrentEventInfo=nil,nil
   GetNumLootItems,GetLootSlotLink,GetLootSourceInfo,UnitGUID,UnitName=saved[1],saved[2],saved[3],saved[4],saved[5]
   -- a quest that rewards a recipe
   GetTitleText=function() return "Kaldorei Spider Kabob" end

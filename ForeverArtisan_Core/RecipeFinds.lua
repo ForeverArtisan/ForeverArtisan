@@ -3,10 +3,27 @@
 -- Answers from what this account has actually seen in Forever, never a shipped database:
 --   trainers and vendors you've met (Trade Contacts), recipe drops you looted, quest rewards you were offered.
 -- Every crafting module's Recipe book uses FA.RecipeWhere.
+-- Crafting materials you loot from mobs (bat wings, boar meat, spider legs) are remembered the same
+-- way, so shopping lists can say "Dropped by Vampire Bat, Tirisfal Glades" (FA.MaterialWhere).
 local FA = ForeverArtisan
 
 -- recipe items, by profession: "Recipe: Spiced Wolf Meat", "Pattern: Linen Bag", ...
 local PREFIXES = { "Recipe: ", "Pattern: ", "Plans: ", "Schematic: ", "Formula: ", "Manual: " }
+
+local function MatStore()
+  ForeverArtisanSettings = ForeverArtisanSettings or {}
+  ForeverArtisanSettings.matFinds = ForeverArtisanSettings.matFinds or {}
+  return ForeverArtisanSettings.matFinds
+end
+
+-- mobs that died near you, so a corpse you loot without targeting it still has a name
+local deadNames, deadOrder = {}, {}
+local function RememberDead(guid, name)
+  if type(guid) ~= "string" or type(name) ~= "string" or deadNames[guid] then return end
+  deadNames[guid] = name
+  deadOrder[#deadOrder + 1] = guid
+  if #deadOrder > 200 then deadNames[table.remove(deadOrder, 1)] = nil end
+end
 
 local function Store()
   ForeverArtisanSettings = ForeverArtisanSettings or {}
@@ -39,24 +56,58 @@ local function Note(itemName, kind, from)
   f[kind][key] = e
 end
 
--- who dropped it: the mob you're targeting if it's the loot's source, else "a mob" / "a container"
+-- who dropped it: the mob you're targeting or one that died near you, else "a mob" / "a container".
+-- Second return: true when it came off a creature (not a chest, herb, ore vein or bag).
 local function LootFrom(slot)
   local ok, guid
   if GetLootSourceInfo then ok, guid = pcall(GetLootSourceInfo, slot) end
   if ok and type(guid) == "string" then
-    if guid:find("^Item") then return "a container" end
-    if guid:find("^GameObject") then return "a chest" end
-    if UnitGUID and UnitGUID("target") == guid then return UnitName("target") or "a mob" end
+    if guid:find("^Item") then return "a container", false end
+    if guid:find("^GameObject") then return "a chest", false end
+    if UnitGUID and UnitGUID("target") == guid then return UnitName("target") or "a mob", true end
+    if deadNames[guid] then return deadNames[guid], true end
   end
-  if UnitExists and UnitExists("target") and UnitIsDead and UnitIsDead("target") then return UnitName("target") or "a mob" end
-  return "a mob"
+  if UnitExists and UnitExists("target") and UnitIsDead and UnitIsDead("target") then return UnitName("target") or "a mob", true end
+  return "a mob", true
+end
+
+-- a crafting material (Trade Goods or Reagent): its item id, else nil
+local function MaterialId(link)
+  local id = link and tonumber(link:match("item:(%d+)"))
+  local Instant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+  if not (id and Instant) then return end
+  local ok, _, _, _, _, _, classID = pcall(Instant, id)
+  if ok and (classID == 7 or classID == 5) then return id end
+end
+
+local function NoteMat(id, from, qty)
+  if from == "a mob" then return end -- no name, nothing worth showing
+  local finds = MatStore()
+  local f = finds[id] or {}
+  finds[id] = f
+  local z, s = Where()
+  local key = from .. "|" .. z
+  local e = f[key] or { from = from, zone = z, sub = s, n = 0, q = 0 }
+  e.n, e.q, e.last = e.n + 1, e.q + (tonumber(qty) or 1), time()
+  f[key] = e
 end
 
 local function OnLoot()
   for i = 1, ((GetNumLootItems and GetNumLootItems()) or 0) do
     local link = GetLootSlotLink and GetLootSlotLink(i)
     local name = link and link:match("%[(.-)%]")
-    if IsRecipeItem(name) then Note(name, "drops", LootFrom(i)) end
+    if IsRecipeItem(name) then
+      Note(name, "drops", (LootFrom(i)))
+    else
+      local id = MaterialId(link)
+      if id then
+        local from, creature = LootFrom(i)
+        if creature then
+          local qty = GetLootSlotInfo and select(3, GetLootSlotInfo(i))
+          NoteMat(id, from, qty)
+        end
+      end
+    end
   end
 end
 
@@ -76,9 +127,14 @@ local function OnQuest()
 end
 
 local ev = CreateFrame("Frame")
-for _, e in ipairs({ "LOOT_OPENED", "QUEST_DETAIL", "QUEST_COMPLETE" }) do pcall(ev.RegisterEvent, ev, e) end
+for _, e in ipairs({ "LOOT_OPENED", "QUEST_DETAIL", "QUEST_COMPLETE", "COMBAT_LOG_EVENT_UNFILTERED" }) do pcall(ev.RegisterEvent, ev, e) end
 ev:SetScript("OnEvent", function(_, e)
-  if e == "LOOT_OPENED" then pcall(OnLoot) else pcall(OnQuest) end
+  if e == "COMBAT_LOG_EVENT_UNFILTERED" then
+    if CombatLogGetCurrentEventInfo then
+      local _, sub, _, _, _, _, _, dGUID, dName = CombatLogGetCurrentEventInfo()
+      if sub == "UNIT_DIED" or sub == "PARTY_KILL" then RememberDead(dGUID, dName) end
+    end
+  elseif e == "LOOT_OPENED" then pcall(OnLoot) else pcall(OnQuest) end
 end)
 
 local function Place(e) return e.sub and (e.sub .. ", " .. e.zone) or e.zone end
@@ -131,3 +187,21 @@ function FA.RecipeWhere(recipeName, prefixes)
 end
 
 FA.IsRecipeItem = IsRecipeItem
+
+-- Where a material dropped for you: "Dropped by Vampire Bat, Tirisfal Glades (looted 6 times)", or nil.
+function FA.MaterialWhere(id)
+  local f = id and MatStore()[id]
+  if not f then return end
+  local best, others = nil, 0
+  for _, e in pairs(f) do
+    if not best or e.n > best.n then
+      if best then others = others + 1 end
+      best = e
+    else
+      others = others + 1
+    end
+  end
+  if not best then return end
+  return ("Dropped by %s, %s (you looted it %s)%s"):format(best.from, Place(best),
+    best.n == 1 and "once" or (best.n .. " times"), others > 0 and ("  +" .. others .. " more") or "")
+end

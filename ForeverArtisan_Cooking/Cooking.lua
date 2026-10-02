@@ -287,6 +287,8 @@ function ns.SourceFor(id, name)
   if w then return "Herb: " .. w end
   w = BestLogged(ForeverArtisanMiningDB, id)
   if w then return "Mine: " .. w end
+  local drop = ForeverArtisan.MaterialWhere and ForeverArtisan.MaterialWhere(id)
+  if drop then return drop end
   if name and name:find("^Raw ") then return "Fish (not in your catch log yet)" end
   return "Drops from mobs"
 end

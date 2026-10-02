@@ -415,6 +415,8 @@ function ns.SourceFor(id, name)
   if w then return "Mine: " .. w .. ", from your Mining log" end
   w = BestLogged(ForeverArtisanFishingDB, id)
   if w then return "Fish: " .. w .. ", from your Fishing log" end
+  local drop = ForeverArtisan.MaterialWhere and ForeverArtisan.MaterialWhere(id)
+  if drop then return drop end
   local class, sub = ItemKind(id)
   name = name or ""
   if (class == 7 and sub == 9) then
