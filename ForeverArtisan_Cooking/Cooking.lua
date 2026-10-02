@@ -555,9 +555,24 @@ local function ScanSoon()
   scanToken = scanToken + 1
   local tok = scanToken
   if C_Timer then
+    -- read twice: some windows fill their list a moment after they open
     C_Timer.After(0.5, function() if tok == scanToken then pcall(Scan); IndexUses() end end)
+    C_Timer.After(2.0, function() if tok == scanToken then pcall(Scan); IndexUses() end end)
   else
     pcall(Scan); IndexUses()
+  end
+end
+
+-- Forever's newer profession window doesn't always send the trade skill events: also read when it shows.
+local hookedFrames = {}
+local function HookFrames()
+  for _, name in ipairs({ "ProfessionsFrame", "TradeSkillFrame", "CraftFrame" }) do
+    local f = _G[name]
+    if f and f.HookScript and not hookedFrames[name] then
+      hookedFrames[name] = true
+      f:HookScript("OnShow", ScanSoon)
+      if f.IsShown and f:IsShown() then ScanSoon() end
+    end
   end
 end
 
@@ -569,11 +584,13 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     db.settings = db.settings or {}
     if db.settings.tooltips == nil then db.settings.tooltips = true end
     if db.settings.verbose == nil then db.settings.verbose = false end
+    HookFrames()
     return
   end
+  if e == "ADDON_LOADED" then HookFrames() return end
   if not db then return end
   if e == "PLAYER_LOGIN" then
-    HookTooltips()
+    HookTooltips(); HookFrames()
   elseif e == "PLAYER_ENTERING_WORLD" then
     Skill(); IndexRecipes(); IndexUses()
   elseif e == "TRADE_SKILL_SHOW" or e == "TRADE_SKILL_LIST_UPDATE" or e == "TRADE_SKILL_DATA_SOURCE_CHANGED" then
