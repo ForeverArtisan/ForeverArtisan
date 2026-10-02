@@ -230,6 +230,23 @@ function ns.DetailText(npc, it)
     end
     if #list > 10 then lines[#lines + 1] = GREY .. "  ...and " .. (#list - 10) .. " more. Search a spell name to find it.|r" end
   end
+  -- a profession trainer: how many recipes, and the first few by the skill they need
+  if not it and npc.k == "trainer" and not (ns.ClassTrainer and ns.ClassTrainer(npc.t)) then
+    if #npc.items == 0 then
+      lines[#lines + 1] = GREY .. "No recipes saved yet. Open their training window again to read it.|r"
+    else
+      local list = {}
+      for _, sp in ipairs(npc.items) do list[#list + 1] = sp end
+      local function need(x) return tonumber(x.sk and x.sk:match("(%d+)%s*$")) or 0 end
+      table.sort(list, function(a, b) if need(a) ~= need(b) then return need(a) < need(b) end return a.n < b.n end)
+      lines[#lines + 1] = GOLD .. ("Teaches %d recipe%s:"):format(#list, #list == 1 and "" or "s") .. "|r"
+      for i = 1, math.min(8, #list) do
+        local sp = list[i]
+        lines[#lines + 1] = ("  %s%s  %s"):format(sp.n, sp.sk and (GREY .. "  needs " .. sp.sk .. "|r") or "", money(sp))
+      end
+      if #list > 8 then lines[#lines + 1] = GREY .. "  ...and " .. (#list - 8) .. " more. Search a recipe name to find it.|r" end
+    end
+  end
   local note = ns.AgeNote(npc)
   if note then
     lines[#lines + 1] = "|cffff9020" .. note .. "|r"
