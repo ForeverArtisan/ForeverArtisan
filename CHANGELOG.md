@@ -12,6 +12,8 @@
 - A profession you haven't learned now says "Learn from:" with the closest trainer you've met or passed when no Apprentice trainer is on file (marked "seen" if you haven't talked to them), instead of "ask a city guard". Fixed "a Enchanting trainer".
 - Every crafting module (Cooking and First Aid too) has an "Open window" button at the top right that opens the game's profession window, and clicking a recipe you know in Make now or the Recipe book opens it on that recipe where the game allows.
 - Materials you loot from mobs are remembered: shopping lists and material tooltips in every crafting module say "Dropped by Mangy Duskbat, Tirisfal Glades (you looted it 6 times)" instead of "Drops from mobs". Only your own loot; chests, herbs and ore veins aren't counted as mob drops. Hovering such a material anywhere (bags, chat links) shows the same "Dropped by" line, even before you know a recipe that uses it.
+- A second minimap button, a book, opens Trade Contacts in one click (only while Trade Contacts is on). Drag it anywhere; `/fa minimap contacts` hides or shows it.
+- `/fa` finds a module by its name, short alias, the person ("blacksmith", "enchanter", "tailor") or a clear start of the name ("black", "leather"). A module that's off says how to turn it on, and how to search vendors instead (`/fa search blacksmith`).
 - The `/fa` panel uses shorter rows so all 13 modules fit; hover a row for its description.
 
 ## 0.9.6 (2026-09-30)

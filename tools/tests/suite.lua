@@ -673,5 +673,29 @@ do
   assert(st:find("Druid trainers you've met, nearest first"), "nearest list status")
   assert(r1 and (r1.npc.n=="Turak Runetotem" or r1.npc.n=="Kym Wildmane") and r1.right:find("yd") or r1.right:find("other continent"), "rows show distance")
 end
+-- /fa <profession>: key, alias, the person's name or a clear start all reach the module
+do
+  local oldBS, oldSearch, hits, searched = SlashCmdList.FABS, SlashCmdList.FASEARCH, 0, 0
+  SlashCmdList.FABS=function() hits=hits+1 end
+  SlashCmdList.FASEARCH=function() searched=searched+1 end
+  for _,w in ipairs({"blacksmithing","bs","blacksmith","Blacksmith","black","smith"}) do SlashCmdList.FOREVERARTISAN(w) end
+  SlashCmdList.FOREVERARTISAN("copper rod")
+  SlashCmdList.FABS, SlashCmdList.FASEARCH = oldBS, oldSearch
+  print("FA ROUTE", hits, searched)
+  assert(hits==6 and searched==1, "all six reach Blacksmithing, copper rod searches contacts")
+end
+-- minimap: the anvil and the Trade Contacts book, both built (own buttons, no LibDBIcon in the test)
+do
+  local book=_G.ForeverArtisanContactsMinimapButton
+  print("MINIMAP", _G.ForeverArtisanMinimapButton~=nil, book~=nil)
+  assert(_G.ForeverArtisanMinimapButton and book, "both minimap buttons")
+  local opened
+  local oldOpen=ForeverArtisan.Vendors.open
+  ForeverArtisan.Vendors.open=function() opened=true end
+  book.scripts.OnClick(book,"LeftButton")
+  ForeverArtisan.Vendors.open=oldOpen
+  assert(opened, "book opens Trade Contacts")
+  ForeverArtisan.minimap("contacts"); ForeverArtisan.minimap("contacts")
+end
 print("CRAFTS OK")
 print("SUITE OK")

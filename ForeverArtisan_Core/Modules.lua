@@ -109,11 +109,36 @@ local function scan()
   return modules
 end
 
+-- what people type for a profession: the person ("blacksmith", "enchanter") or a short start of it
+local NOUNS = {
+  blacksmith = "blacksmithing", smith = "blacksmithing", armorsmith = "blacksmithing", weaponsmith = "blacksmithing",
+  tailor = "tailoring", engineer = "engineering", enchanter = "enchanting", alchemist = "alchemy",
+  leatherworker = "leatherworking", cook = "cooking", chef = "cooking", fisher = "fishing", fisherman = "fishing",
+  herbalist = "herbalism", herbs = "herbalism", miner = "mining", skinner = "skinning", firstaid = "firstaid",
+  medic = "firstaid", contacts = "contacts", vendors = "contacts",
+}
+
 local function find(word)
   word = (word or ""):lower()
   if word == "" then return end
-  for _, m in ipairs(scan()) do
+  local mods = scan()
+  for _, m in ipairs(mods) do
     if m.key == word or m.alias == word or m.title:lower() == word then return m end
+  end
+  local key = NOUNS[word] or NOUNS[(word:gsub("s$", ""))]
+  if key then
+    for _, m in ipairs(mods) do if m.key == key then return m end end
+  end
+  -- a clear start of one profession's name ("black", "leather", "engin"), never a shared one
+  if #word >= 4 then
+    local hit
+    for _, m in ipairs(mods) do
+      if m.isProf and (m.key:sub(1, #word) == word or m.title:lower():sub(1, #word) == word) then
+        if hit then return end
+        hit = m
+      end
+    end
+    return hit
   end
 end
 
@@ -406,7 +431,7 @@ local function help()
   print("  /fa  - module panel (turn modules on/off)")
   print("  /fa version  - suite version, and a check that every part matches")
   print("  /fa welcome  - what ForeverArtisan is for, and where to send bugs and ideas")
-  print("  /fa minimap [angle | reset]  - show/hide or move the minimap button")
+  print("  /fa minimap [angle | reset | contacts]  - show/hide or move the minimap buttons")
   if FA.Vendors then print("  /fa <item, vendor or town>  - search your Trade Contacts") end
   print("  /fa enable <module>  |  /fa disable <module>")
   scan()
@@ -449,7 +474,8 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     local m = find(lower)
     if m then
       if not m.loaded then
-        print(PREFIX .. m.title .. " is off. /fa enable " .. (m.alias ~= "" and m.alias or m.key) .. ", then /reload.")
+        print(PREFIX .. m.title .. " is off. Tick it in the /fa panel (or /fa enable " .. (m.alias ~= "" and m.alias or m.key)
+          .. "), then /reload. To search vendors and trainers instead: /fa search " .. word .. ".")
       elseif m.slash and SlashCmdList[m.slash] then
         SlashCmdList[m.slash](rest)
       else

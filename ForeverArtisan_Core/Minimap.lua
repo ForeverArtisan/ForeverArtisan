@@ -1,5 +1,5 @@
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
--- ForeverArtisan Core: one minimap button for the whole suite.
+-- ForeverArtisan Core: minimap buttons. The anvil opens the suite; the book opens Trade Contacts.
 -- Left-click opens the hub (/fa); from there each module has an Open button.
 -- If another addon ships LibDBIcon we register with it so the button lines up with
 -- the others and respects button bags. Otherwise we draw our own round button.
@@ -9,7 +9,9 @@ local PREFIX = ForeverArtisan.Prefix()
 local LDB_NAME = "ForeverArtisan"
 local ICON = "Interface\\Icons\\Trade_BlackSmithing"
 
-local mm, LDBIcon
+local mm, cm, LDBIcon -- cm: the Trade Contacts button
+local CONTACTS_LDB = "ForeverArtisanContacts"
+local CONTACTS_ICON = "Interface\\Icons\\INV_Misc_Book_09"
 
 local function S()
   ForeverArtisanSettings = ForeverArtisanSettings or {}
@@ -43,11 +45,11 @@ local function TakenAngles()
   if LDBIcon and LDBIcon.GetButtonList then
     for _, name in ipairs(LDBIcon:GetButtonList()) do
       local b = LDBIcon:GetMinimapButton(name)
-      if b and b.db and b.db.minimapPos and name ~= LDB_NAME then taken[#taken + 1] = b.db.minimapPos end
+      if b and b.db and b.db.minimapPos and name ~= LDB_NAME and name ~= CONTACTS_LDB then taken[#taken + 1] = b.db.minimapPos end
     end
   end
   for _, child in ipairs({ Minimap:GetChildren() }) do
-    if child ~= mm and child:IsShown() and child.GetCenter and child:GetCenter() then
+    if child ~= mm and child ~= cm and child:IsShown() and child.GetCenter and child:GetCenter() then
       local cx, cy = child:GetCenter(); local mx, my = Minimap:GetCenter()
       if cx and mx and child:GetWidth() < 40 then
         local d = math.sqrt((cx - mx) ^ 2 + (cy - my) ^ 2)
@@ -71,44 +73,49 @@ local function FreeAngle()
   return best
 end
 
-local function PlaceOwnButton()
-  local a = math.rad(S().minimapAngle or 200)
+-- Our own round minimap buttons (when no LibDBIcon): b.cfg says where its angle and hidden flag live.
+local function PlaceOwnButton(b)
+  b = b or mm
+  local cfg = b.cfg
+  local a = math.rad(S()[cfg.angleKey] or cfg.default or 200)
   local r = (Minimap:GetWidth() / 2) + 6
-  mm:ClearAllPoints()
-  mm:SetPoint("CENTER", Minimap, "CENTER", math.cos(a) * r, math.sin(a) * r)
+  b:ClearAllPoints()
+  b:SetPoint("CENTER", Minimap, "CENTER", math.cos(a) * r, math.sin(a) * r)
 end
 
-local function BuildOwnButton()
-  mm = CreateFrame("Button", "ForeverArtisanMinimapButton", Minimap)
-  mm:SetSize(31, 31)
-  mm:SetFrameStrata("MEDIUM"); mm:SetFrameLevel(Minimap:GetFrameLevel() + 12)
-  mm:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-  local bg = mm:CreateTexture(nil, "BACKGROUND")
+local function BuildOwnButton(cfg)
+  local b = CreateFrame("Button", cfg.frameName, Minimap)
+  b.cfg = cfg
+  b:SetSize(31, 31)
+  b:SetFrameStrata("MEDIUM"); b:SetFrameLevel(Minimap:GetFrameLevel() + 12)
+  b:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+  local bg = b:CreateTexture(nil, "BACKGROUND")
   bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background"); bg:SetSize(20, 20); bg:SetPoint("TOPLEFT", 7, -5)
-  local icon = mm:CreateTexture(nil, "ARTWORK")
-  icon:SetTexture(ICON); icon:SetSize(18, 18); icon:SetPoint("TOPLEFT", 7, -6)
+  local icon = b:CreateTexture(nil, "ARTWORK")
+  icon:SetTexture(cfg.icon); icon:SetSize(18, 18); icon:SetPoint("TOPLEFT", 7, -6)
   icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  local border = mm:CreateTexture(nil, "OVERLAY")
+  local border = b:CreateTexture(nil, "OVERLAY")
   border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder"); border:SetSize(53, 53); border:SetPoint("TOPLEFT")
-  mm:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-  mm:SetScript("OnClick", OnClick)
-  mm:RegisterForDrag("LeftButton")
-  mm:SetScript("OnDragStart", function(self)
+  b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  b:SetScript("OnClick", cfg.onClick)
+  b:RegisterForDrag("LeftButton")
+  b:SetScript("OnDragStart", function(self)
     self:SetScript("OnUpdate", function()
       local mx, my = Minimap:GetCenter()
       local px, py = GetCursorPosition()
       local sc = Minimap:GetEffectiveScale()
-      S().minimapAngle = math.deg(math.atan2(py / sc - my, px / sc - mx)) % 360
-      PlaceOwnButton()
+      S()[cfg.angleKey] = math.deg(math.atan2(py / sc - my, px / sc - mx)) % 360
+      PlaceOwnButton(self)
     end)
   end)
-  mm:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
-  mm:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_LEFT"); TooltipLines(GameTooltip); GameTooltip:Show()
+  b:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
+  b:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT"); cfg.tooltip(GameTooltip); GameTooltip:Show()
   end)
-  mm:SetScript("OnLeave", function() GameTooltip:Hide() end)
-  PlaceOwnButton()
-  mm:SetShown(not S().minimapHide)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  PlaceOwnButton(b)
+  b:SetShown(not S()[cfg.hideKey])
+  return b
 end
 
 -- The button used to belong to Fishing. Keep its spot so it doesn't jump.
@@ -124,6 +131,41 @@ local function CarryOverFishingSpot()
     s.ldbIcon.minimapPos = pos
   end
   if fs.minimapHide ~= nil then s.minimapHide = fs.minimapHide end
+end
+
+-- Trade Contacts: its own button, one click to the search (only while Trade Contacts is on)
+local function ContactsClick(_, button)
+  local V = ForeverArtisan and ForeverArtisan.Vendors
+  if V and V.open then V.open() end
+end
+local function ContactsTip(tt)
+  tt:AddLine("ForeverArtisan: Trade Contacts")
+  tt:AddLine("Every crafting vendor and trainer you've met. Search them, find the nearest trainer, get a waypoint.", 1, 1, 1, true)
+  tt:AddLine(" ")
+  tt:AddLine(GREEN .. "Click:|r open Trade Contacts", 1, 1, 1)
+  tt:AddLine(GREEN .. "Drag:|r move around the minimap", 1, 1, 1)
+  tt:AddLine(GREY .. "/fa minimap contacts hides it|r")
+end
+
+local function BuildContacts()
+  if cm or not (ForeverArtisan and ForeverArtisan.Vendors) then return end
+  local s = S()
+  if LDBIcon then
+    local LDB = LibStub("LibDataBroker-1.1", true)
+    local obj = LDB:NewDataObject(CONTACTS_LDB, {
+      type = "launcher", text = "Trade Contacts", icon = CONTACTS_ICON,
+      OnClick = ContactsClick, OnTooltipShow = ContactsTip,
+    })
+    s.contactsIcon = s.contactsIcon or {}
+    if s.contactsIcon.minimapPos == nil then s.contactsIcon.minimapPos = s.contactsAngle or FreeAngle() end
+    s.contactsIcon.hide = s.contactsHide and true or false
+    LDBIcon:Register(CONTACTS_LDB, obj, s.contactsIcon)
+    cm = LDBIcon:GetMinimapButton(CONTACTS_LDB)
+  else
+    if not s.contactsAngle then s.contactsAngle = FreeAngle() end
+    cm = BuildOwnButton({ frameName = "ForeverArtisanContactsMinimapButton", icon = CONTACTS_ICON, onClick = ContactsClick,
+      tooltip = ContactsTip, angleKey = "contactsAngle", hideKey = "contactsHide" })
+  end
 end
 
 local function Build()
@@ -146,16 +188,30 @@ local function Build()
   else
     LDBIcon = nil
     if not s.minimapAngle then s.minimapAngle = FreeAngle() end
-    BuildOwnButton()
+    mm = BuildOwnButton({ frameName = "ForeverArtisanMinimapButton", icon = ICON, onClick = OnClick,
+      tooltip = TooltipLines, angleKey = "minimapAngle", hideKey = "minimapHide" })
   end
 end
 
 -- /fa minimap          -> show / hide
 -- /fa minimap <0-359>  -> move to that angle (0 = right, 90 = top, 180 = left, 270 = bottom)
 -- /fa minimap reset    -> pick the emptiest spot again
+-- /fa minimap contacts -> show / hide the Trade Contacts button
 local function Command(arg)
   arg = (arg or ""):lower()
   local s = S()
+  if arg == "contacts" then
+    s.contactsHide = not s.contactsHide
+    if LDBIcon and s.contactsIcon then
+      s.contactsIcon.hide = s.contactsHide
+      if s.contactsHide then LDBIcon:Hide(CONTACTS_LDB) else LDBIcon:Show(CONTACTS_LDB) end
+    elseif cm then
+      cm:SetShown(not s.contactsHide)
+    end
+    print(PREFIX .. (s.contactsHide and "Trade Contacts minimap button hidden. /fa minimap contacts brings it back."
+      or "Trade Contacts minimap button shown. Drag it to move it."))
+    return
+  end
   local angle = tonumber(arg)
   if arg == "reset" then angle = FreeAngle() end
   if angle then
@@ -165,7 +221,7 @@ local function Command(arg)
       s.ldbIcon.minimapPos = angle; s.ldbIcon.hide = false
       LDBIcon:Show(LDB_NAME); LDBIcon:Refresh(LDB_NAME, s.ldbIcon)
     elseif mm then
-      s.minimapAngle = angle; PlaceOwnButton(); mm:Show()
+      s.minimapAngle = angle; PlaceOwnButton(mm); mm:Show()
     end
     print(PREFIX .. ("minimap button moved to %d degrees."):format(angle))
     return
@@ -186,4 +242,4 @@ ForeverArtisan.minimap = Command
 
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
-ev:SetScript("OnEvent", function() pcall(Build) end)
+ev:SetScript("OnEvent", function() pcall(Build); pcall(BuildContacts) end)
