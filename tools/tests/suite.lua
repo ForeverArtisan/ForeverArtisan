@@ -569,8 +569,14 @@ do
   print("WHERE drop", tag, lines[1])
   assert(tag=="drop" and lines[1]:find("Dropped by Goretusk") and lines[1]:find("Desolace"), "drop you looted")
   -- a crafting material off a mob you didn't target: named from the combat log, counted by quantity
-  CombatLogGetCurrentEventInfo=function() return 0,"UNIT_DIED",false,nil,nil,0,0,"Creature-0-1-2-3-1513-0001","Mangy Duskbat" end
-  fire("COMBAT_LOG_EVENT_UNFILTERED")
+  -- you moused over it while fighting, then looted it without it being your target
+  local oldExists,oldPlayer=UnitExists,UnitIsPlayer
+  UnitExists=function(u) return u=="mouseover" end UnitIsPlayer=function() return false end
+  UnitGUID=function(u) if u=="mouseover" then return "Creature-0-1-2-3-1513-0001" end end
+  UnitName=function(u) if u=="mouseover" then return "Mangy Duskbat" end return "Tester" end
+  fire("UPDATE_MOUSEOVER_UNIT")
+  UnitExists,UnitIsPlayer=oldExists,oldPlayer
+  UnitGUID=function() return nil end
   GetLootSlotLink=function() return "|cffffffff|Hitem:12223|h[Meaty Bat Wing]|h|r" end
   GetLootSourceInfo=function() return "Creature-0-1-2-3-1513-0001" end
   GetLootSlotInfo=function() return 0,"Meaty Bat Wing",2 end
@@ -585,7 +591,7 @@ do
   GetLootSlotLink=function() return "|cffffffff|Hitem:2589|h[Linen Cloth]|h|r" end
   fire("LOOT_OPENED")
   assert(FA.MaterialWhere(2589)==nil, "chest loot isn't a mob drop")
-  GetLootSlotInfo,CombatLogGetCurrentEventInfo=nil,nil
+  GetLootSlotInfo=nil
   GetNumLootItems,GetLootSlotLink,GetLootSourceInfo,UnitGUID,UnitName=saved[1],saved[2],saved[3],saved[4],saved[5]
   -- a quest that rewards a recipe
   GetTitleText=function() return "Kaldorei Spider Kabob" end

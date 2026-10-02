@@ -16,9 +16,17 @@ local function MatStore()
   return ForeverArtisanSettings.matFinds
 end
 
--- mobs that died near you, so a corpse you loot without targeting it still has a name
+-- mobs you've targeted, moused over or seen on a nameplate, so a corpse you loot still has a name
+-- (the combat log is off-limits to addons on Forever's client, so it's not used)
 local deadNames, deadOrder = {}, {}
-local function RememberDead(guid, name)
+local RememberDead
+local function RememberUnit(unit)
+  if not (UnitGUID and UnitName and UnitExists and UnitExists(unit)) then return end
+  if UnitIsPlayer and UnitIsPlayer(unit) then return end
+  local ok, guid, name = pcall(function() return UnitGUID(unit), UnitName(unit) end)
+  if ok then RememberDead(guid, name) end
+end
+RememberDead = function(guid, name)
   if type(guid) ~= "string" or type(name) ~= "string" or deadNames[guid] then return end
   deadNames[guid] = name
   deadOrder[#deadOrder + 1] = guid
@@ -127,13 +135,12 @@ local function OnQuest()
 end
 
 local ev = CreateFrame("Frame")
-for _, e in ipairs({ "LOOT_OPENED", "QUEST_DETAIL", "QUEST_COMPLETE", "COMBAT_LOG_EVENT_UNFILTERED" }) do pcall(ev.RegisterEvent, ev, e) end
-ev:SetScript("OnEvent", function(_, e)
-  if e == "COMBAT_LOG_EVENT_UNFILTERED" then
-    if CombatLogGetCurrentEventInfo then
-      local _, sub, _, _, _, _, _, dGUID, dName = CombatLogGetCurrentEventInfo()
-      if sub == "UNIT_DIED" or sub == "PARTY_KILL" then RememberDead(dGUID, dName) end
-    end
+for _, e in ipairs({ "LOOT_OPENED", "QUEST_DETAIL", "QUEST_COMPLETE", "PLAYER_TARGET_CHANGED",
+  "UPDATE_MOUSEOVER_UNIT", "NAME_PLATE_UNIT_ADDED" }) do pcall(ev.RegisterEvent, ev, e) end
+ev:SetScript("OnEvent", function(_, e, a1)
+  if e == "PLAYER_TARGET_CHANGED" then RememberUnit("target")
+  elseif e == "UPDATE_MOUSEOVER_UNIT" then RememberUnit("mouseover")
+  elseif e == "NAME_PLATE_UNIT_ADDED" then if a1 then RememberUnit(a1) end
   elseif e == "LOOT_OPENED" then pcall(OnLoot) else pcall(OnQuest) end
 end)
 
