@@ -617,6 +617,15 @@ do
       elseif d.recipe and seenUnknown and d.recipe.learned then order=false end
     end
     assert(order, "learned recipes come before unlearned ones")
+    local cns=loadedFrames["ForeverArtisan_Cooking"].ns
+    local function click(t) local n=0 for _,f in pairs(frames) do if type(f._text)=="string" and f._text:find(t) and f.scripts.OnClick then f.scripts.OnClick(f) n=n+1 end end return n>0 end
+    assert(click("Not learned"), "Not learned button")
+    _G.ForeverArtisanCookingFrame:Show(); cns.OnChange()
+    print("BOOK AFTER", cns.lastBook[1] and cns.lastBook[1].left, #cns.lastBook)
+    for _,d in ipairs(cns.lastBook) do assert(not (d.recipe and d.recipe.learned), "Not learned shows only unlearned") end
+    _G.ForeverArtisanCookingFrame:Hide(); _G.ForeverArtisanCookingFrame:Show()
+    local h=_G.ForeverArtisanCookingFrame.scripts.OnShow
+    print("BOOK FILTER ok")
   end
 end
 -- welcome notice: shown once, "Got it" remembers it, /fa welcome brings it back

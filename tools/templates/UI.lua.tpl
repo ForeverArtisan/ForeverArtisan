@@ -11,7 +11,7 @@ local GOLD, GRAY, GREEN, YELLOW, RED = FA.GOLD, FA.GRAY, FA.GREEN, FA.YELLOW, FA
 
 local f
 local pages, tabs = {}, {}
-local view = { tab = "main", logOff = 0, guideOff = 0 }
+local view = { tab = "main", logOff = 0, guideOff = 0, bookShow = "all" }
 
 ---------------------------------------------------------------- shared style kit (ForeverArtisan Core)
 local K = FA.UI.Kit(ns, view)
@@ -298,8 +298,9 @@ local function BookData()
   local c = ns.CharRec()
   local skill = ns.Skill()
   local list = {}
+  local show = view.bookShow or "all"
   for _, r in pairs(c.recipes) do
-    list[#list + 1] = r
+    if show == "all" or (show == "learned") == (r.learned and true or false) then list[#list + 1] = r end
   end
   -- one list: what you know first, then what's still out there, each by gray level
   table.sort(list, function(a, b)
@@ -310,8 +311,8 @@ local function BookData()
   end)
   local data = {}
   local learned, unknown, headed = 0, 0, false
-  for _, r in ipairs(list) do if r.learned then learned = learned + 1 else unknown = unknown + 1 end end
-  if learned > 0 then
+  for _, r in pairs(c.recipes) do if r.learned then learned = learned + 1 else unknown = unknown + 1 end end
+  if learned > 0 and show ~= "unlearned" then
     data[#data + 1] = { header = true, noIcon = true, left = GOLD .. ("Learned (%d)"):format(learned) .. "|r" }
   end
   for _, r in ipairs(list) do
@@ -348,7 +349,7 @@ local function BookData()
 end
 
 local function BuildGuidePage(p)
-  p.rows = MakeRows(p, BOOK_ROWS + 1, -4, false)
+  p.rows = MakeRows(p, BOOK_ROWS, -4, false)
   -- an unlearned recipe with a trainer or vendor you've met: click for a waypoint
   for _, r in ipairs(p.rows) do
     r:SetScript("OnClick", function(self)
@@ -359,17 +360,39 @@ local function BuildGuidePage(p)
   end
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -100, p, "TOP"); p.empty:SetJustifyH("CENTER")
   p.open = FA.UI.ProfessionButton(p, "@@NAME@@", 240); p.open:SetPoint("TOP", 0, -126)
-  local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
+  -- Show: All (default each time the window opens) / Learned / Not learned. The one showing stays lit.
+  local showLabel = Text(p, "GameFontNormal", "BOTTOMLEFT", 20, 46, p, "BOTTOMLEFT"); showLabel:SetText("Show:")
+  p.showBtns = {}
+  local prev
+  for _, o in ipairs({ { "all", "All", 70 }, { "learned", "Learned", 90 }, { "unlearned", "Not learned", 110 } }) do
+    local b = Button(p, o[2], o[3], function() view.bookShow, view.guideOff = o[1], 0; ns.OnChange() end)
+    if prev then b:SetPoint("LEFT", prev, "RIGHT", 6, 0) else b:SetPoint("LEFT", showLabel, "RIGHT", 8, 0) end
+    b.value = o[1]
+    p.showBtns[#p.showBtns + 1] = b
+    prev = b
+  end
+  local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 16, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("Click a recipe you know to open it. Hover one you don't know for where to get it.")
-  Wheel(p, "guideOff", function() return #BookData() - (BOOK_ROWS + 1) end)
+  Wheel(p, "guideOff", function() return #BookData() - BOOK_ROWS end)
 end
 
 local function RefreshGuidePage(p)
   local data = BookData()
   ns.lastBook = data -- for the test suite
-  view.guideOff = math.min(view.guideOff, math.max(0, #data - (BOOK_ROWS + 1)))
+  for _, b in ipairs(p.showBtns or {}) do
+    if b.value == (view.bookShow or "all") then
+      if b.LockHighlight then b:LockHighlight() end
+      b:SetText(GREEN .. (b.value == "all" and "All" or b.value == "learned" and "Learned" or "Not learned") .. "|r")
+    else
+      if b.UnlockHighlight then b:UnlockHighlight() end
+      b:SetText(b.value == "all" and "All" or b.value == "learned" and "Learned" or "Not learned")
+    end
+  end
+  view.guideOff = math.min(view.guideOff, math.max(0, #data - BOOK_ROWS))
   Fill(p.rows, data, view.guideOff)
-  p.empty:SetText(#data == 0 and "Open your @@NAME@@ window once so I can read your recipes." or "")
+  p.empty:SetText(#data > 0 and "" or (not ns.HasRecipes() and "Open your @@NAME@@ window once so I can read your recipes.")
+    or ((view.bookShow == "learned") and "You haven't learned any yet. Pick All to see every recipe.")
+    or "You know every recipe in the list. Pick All to see them.")
   p.open:ShowIf(ns.Knows() and not ns.HasRecipes())
 end
 
@@ -395,6 +418,7 @@ local function Build()
     self.t = (self.t or 0) + el
     if self.t > 1 then self.t = 0; if view.tab == "main" then RefreshMainPage(pages.main) end end
   end)
+  f:HookScript("OnShow", function() view.bookShow, view.guideOff = "all", 0 end)
   f:Hide()
   ShowTab("main")
 end
