@@ -127,7 +127,14 @@ local function Build()
   BuildKitsPage(pages.kits)
   f:SetScript("OnUpdate", function(self, el)
     self.t = (self.t or 0) + el
-    if self.t > 1 then self.t = 0; if view.tab == "main" then RefreshMainPage(pages.main) end end
+    if self.t > 1 then
+      self.t = 0
+      if view.tab == "main" then
+        local p = pages.main
+        p.cd:SetText(ns.Status())
+        p.fire:SetText(ns.AtFire() and (GREEN .. "You're at a campfire.|r") or (GRAY .. "Not at a campfire.|r"))
+      end
+    end
   end)
   f:Hide()
   ShowTab("main")

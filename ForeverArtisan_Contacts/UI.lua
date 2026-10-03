@@ -49,7 +49,7 @@ local function SearchData()
       data[#data + 1] = { id = it.id, icon = it.id and Icon(it.id) or (it.train and 136235 or 134400), npc = npc,
         left = it.n .. (it.sk and (GRAY .. "  " .. it.sk .. "|r") or ""),
         right = GRAY .. npc.n .. ", " .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "") .. "|r  " .. ns.Money(it),
-        tip = npc.n .. (npc.t and (" <" .. npc.t .. ">") or "") .. "\n" .. ns.DetailText(npc, it) }
+        tipFn = function() return npc.n .. (npc.t and (" <" .. npc.t .. ">") or "") .. "\n" .. ns.DetailText(npc, it) end }
     elseif npc.seenOnly then
       data[#data + 1] = { icon = 134400, npc = npc, tipTitle = npc.n,
         left = GOLD .. npc.n .. "|r" .. (npc.t and (GRAY .. " <" .. npc.t .. ">|r") or ""),
@@ -64,7 +64,7 @@ local function SearchData()
           .. (h.ranks and ("  ·  " .. table.concat((function()
                 local w = {} for _, r in ipairs(h.ranks) do w[#w + 1] = ns.RankWord(r) or r end return w end)(), ", ")) or "")
           .. (npc.k == "service" and "  ·  visited, no list yet" or "") .. "|r",
-        tip = ns.DetailText(npc) }
+        tipFn = function() return ns.DetailText(npc) end }
     end
   end
   return data
@@ -242,8 +242,8 @@ local function ListData()
       data[#data + 1] = { icon = npc.k == "trainer" and 136235 or 133784, npc = npc, tipTitle = npc.n,
         left = name .. (npc.t and (GRAY .. " <" .. npc.t .. ">|r") or ""),
         right = GRAY .. what .. "|r" .. status,
-        tip = ns.DetailText(npc) .. (npc.age > 0 and "\n|cffff9020Not seen since a game update.|r" or "")
-          .. "\n|cff9d9d9dRight-click twice to forget this contact.|r" }
+        tipFn = function() return ns.DetailText(npc) .. (npc.age > 0 and "\n|cffff9020Not seen since a game update.|r" or "")
+          .. "\n|cff9d9d9dRight-click twice to forget this contact.|r" end }
     end
   end
   return data, #list
@@ -465,11 +465,12 @@ local function BuildListPage(p)
   }
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("Click a town to fold it  ·  Click an NPC: waypoint  ·  Right-click twice: forget")
-  Wheel(p, "listOff", function() return #ListData() - LIST_ROWS end)
+  Wheel(p, "listOff", function() return (p.count or 0) - LIST_ROWS end)
 end
 
 local function RefreshListPage(p)
   local data, shown = ListData()
+  p.count = #data
   local total, old = #ns.Contacts(), 0
   for _, npc in ipairs(ns.Contacts()) do if npc.age > 0 then old = old + 1 end end
   p.zonePick.Sync(); p.tradePick.Sync()
@@ -492,7 +493,7 @@ local function StockData()
       if it.lim then
         data[#data + 1] = { id = it.id, icon = it.id and Icon(it.id) or 134400, npc = npc,
           left = it.n, right = GRAY .. npc.n .. ", " .. ns.Where(npc) .. "|r  " .. (it.lim > 0 and (GREEN .. it.lim .. " left|r") or (RED .. "sold out|r")),
-          tip = npc.n .. "\n" .. ns.DetailText(npc, it) }
+          tipFn = function() return npc.n .. "\n" .. ns.DetailText(npc, it) end }
       end
     end
   end
@@ -506,11 +507,12 @@ local function BuildStockPage(p)
   p.rows = MakeRows(p, STOCK_ROWS, -24, false)
   ClickToWaypoint(p.rows)
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -100, p, "TOP"); p.empty:SetJustifyH("CENTER")
-  Wheel(p, "stockOff", function() return #StockData() - STOCK_ROWS end)
+  Wheel(p, "stockOff", function() return (p.count or 0) - STOCK_ROWS end)
 end
 
 local function RefreshStockPage(p)
   local data = StockData()
+  p.count = #data
   view.stockOff = math.min(view.stockOff, math.max(0, #data - STOCK_ROWS))
   Fill(p.rows, data, view.stockOff)
   p.empty:SetText(#data == 0 and "No limited-stock items seen yet." or "")

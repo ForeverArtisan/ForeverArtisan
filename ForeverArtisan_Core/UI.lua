@@ -382,10 +382,12 @@ function UI.Kit(ns, view)
         r.edit = eb
       end
       r:SetScript("OnEnter", function(self)
-        if not (self.itemId or self.tip) then return end
+        if not (self.itemId or self.tip or self.tipFn) then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if self.itemId then GameTooltip:SetItemByID(self.itemId) else GameTooltip:AddLine(self.tipTitle or "") end
-        if self.tip then GameTooltip:AddLine(self.tip, 1, 1, 1, true) end
+        -- tipFn: hover text built only when someone hovers (long lists stay cheap to fill)
+        local tip = self.tip or (self.tipFn and self.tipFn())
+        if tip then GameTooltip:AddLine(tip, 1, 1, 1, true) end
         GameTooltip:Show()
       end)
       r:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -417,6 +419,7 @@ function UI.Kit(ns, view)
         if d.noIcon then r.icon:SetTexture(nil) else r.icon:SetTexture(d.icon or 134400) end
         r.left:SetText(d.left or ""); r.right:SetText(d.right or "")
         r.itemId, r.tip, r.tipTitle, r.data, r.goalIndex = d.id, d.tip, d.tipTitle, d, d.goalIndex
+        r.tipFn = d.tipFn
         if r.act then
           if d.act then
             r.act:SetText(d.act); r.act:SetScript("OnClick", d.onAct); r.act:Show()

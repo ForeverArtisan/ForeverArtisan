@@ -56,57 +56,47 @@ local function SkillFor(skills, prof, line) return skills[line] or skills[prof] 
 
 ---------------------------------------------------------------- bags
 -- camp items and kits in your bags: lower name -> { id, n, name }
-function ns.BagItems()
-  local found = {}
+-- One pass over the bags gives both: camp items and kits (lower name -> { id, n, name, item }) and a count of
+-- every item by lower name (for materials). Cached until the bags change (BAG_UPDATE_DELAYED).
+local cache
+local function Scan()
+  if cache then return cache end
+  local found, counts = {}, {}
   local num = (C_Container and C_Container.GetContainerNumSlots) or GetContainerNumSlots
   local link = (C_Container and C_Container.GetContainerItemLink) or GetContainerItemLink
   local info = (C_Container and C_Container.GetContainerItemInfo) or GetContainerItemInfo
-  if not (num and link) then return found end
-  for bag = 0, 4 do
-    for slot = 1, (num(bag) or 0) do
-      local l = link(bag, slot)
-      local name = l and l:match("%[(.-)%]")
-      local hit = name and (ns.CampItem(name) or ns.kitByName[name:lower()])
-      if hit then
-        local id = tonumber(l:match("item:(%d+)"))
-        local n = 1
-        local i = info and info(bag, slot)
-        if type(i) == "table" then n = i.stackCount or 1 elseif type(i) == "number" then n = select(2, info(bag, slot)) or 1 end
-        local key = name:lower()
-        found[key] = found[key] or { id = id, n = 0, name = name, item = hit }
-        found[key].n = found[key].n + n
+  if num and link then
+    for bag = 0, 4 do
+      for slot = 1, (num(bag) or 0) do
+        local l = link(bag, slot)
+        local name = l and l:match("%[(.-)%]")
+        if name then
+          local n = 1
+          local i = info and info(bag, slot)
+          if type(i) == "table" then n = i.stackCount or 1 elseif type(i) == "number" then n = select(2, info(bag, slot)) or 1 end
+          local key = name:lower()
+          counts[key] = (counts[key] or 0) + n
+          local hit = ns.CampItem(name) or ns.kitByName[key]
+          if hit then
+            local f = found[key]
+            if not f then f = { id = tonumber(l:match("item:(%d+)")), n = 0, name = name, item = hit }; found[key] = f end
+            f.n = f.n + n
+          end
+        end
       end
     end
   end
-  return found
+  cache = { items = found, counts = counts }
+  return cache
 end
+function ns.InvalidateBags() cache = nil end
+function ns.BagItems() return Scan().items end
+local function BagCounts() return Scan().counts end
 
 ---------------------------------------------------------------- reagents
 -- what a camp item takes: learned from the profession window when it's open, else what we saw in the beta
 function ns.Reagents(itemName)
   return (db.reagents and db.reagents[itemName]) or ns.SEED_REAGENTS[itemName]
-end
-
--- every item in your bags by lower name -> count
-local function BagCounts()
-  local out = {}
-  local num = (C_Container and C_Container.GetContainerNumSlots) or GetContainerNumSlots
-  local link = (C_Container and C_Container.GetContainerItemLink) or GetContainerItemLink
-  local info = (C_Container and C_Container.GetContainerItemInfo) or GetContainerItemInfo
-  if not (num and link) then return out end
-  for bag = 0, 4 do
-    for slot = 1, (num(bag) or 0) do
-      local l = link(bag, slot)
-      local name = l and l:match("%[(.-)%]")
-      if name then
-        local n = 1
-        local i = info and info(bag, slot)
-        if type(i) == "table" then n = i.stackCount or 1 end
-        out[name:lower()] = (out[name:lower()] or 0) + n
-      end
-    end
-  end
-  return out
 end
 
 -- how many you can make from your bags (nil = reagents unknown), plus one line per reagent for the tooltip
@@ -390,6 +380,7 @@ end
 ns.BagsChanged = BagsChanged
 
 ---------------------------------------------------------------- events
+local learnPending = false
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "UNIT_SPELLCAST_SUCCEEDED", "UNIT_AURA",
   "BAG_UPDATE_DELAYED", "SKILL_LINES_CHANGED", "TRADE_SKILL_SHOW", "TRADE_SKILL_LIST_UPDATE" }) do
@@ -409,6 +400,7 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
   end
   if not db then return end
   if e == "PLAYER_ENTERING_WORLD" then
+    cache = nil
     counts = CampCounts()
     ScheduleReady()
     CheckFire()
@@ -419,13 +411,20 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     -- a cast name we've seen place a camp item before, or one named like the item
     ns.Placed((db.castNames and name and db.castNames[name]) or name)
   elseif e == "UNIT_AURA" and a1 == "player" then
+    -- newer clients say what changed: skip pure refreshes (stacks, durations), which are most of them in combat
+    if type(a2) == "table" and not a2.isFullUpdate and not a2.addedAuras and not a2.removedAuraInstanceIDs then return end
     CheckFire()
   elseif e == "BAG_UPDATE_DELAYED" then
+    cache = nil
     BagsChanged()
     if ns.OnChange then ns.OnChange() end
   elseif e == "TRADE_SKILL_SHOW" or e == "TRADE_SKILL_LIST_UPDATE" then
-    ns.LearnReagents()
-    if ns.OnChange then ns.OnChange() end
+    -- the list event fires on every craft; read the window once per burst
+    if not learnPending then
+      learnPending = true
+      local function run() learnPending = false; ns.LearnReagents(); if ns.OnChange then ns.OnChange() end end
+      if C_Timer then C_Timer.After(0.5, run) else run() end
+    end
   elseif e == "SKILL_LINES_CHANGED" then
     if ns.OnChange then ns.OnChange() end
   end

@@ -53,7 +53,6 @@ function ns.CampItem(name)
   if not name then return end
   local low = name:lower()
   if ns.itemByName[low] then return ns.itemByName[low] end
-  for key, it in pairs(ns.itemByName) do
-    if low:sub(-#key - 1) == " " .. key then return it end
-  end
+  -- only the Workbench has a longer in-game name; skip the loop for every other item in your bags
+  if low:sub(-10) == " workbench" then return ns.itemByName.workbench end
 end

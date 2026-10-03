@@ -298,6 +298,14 @@ local function rankWord(name)
   if w and RANK_WORD[w:lower()] then return w end
 end
 
+-- names, titles and towns lowercased once, not on every keystroke of a search
+local lowerOf = {}
+local function Lower(text)
+  local v = lowerOf[text]
+  if not v then v = text:lower(); lowerOf[text] = v end
+  return v
+end
+
 -- NPCs you've passed (scout mode) but never talked to; has(text) filters, nil = all
 local function seenHits(known, has)
   local out = {}
@@ -336,7 +344,7 @@ local function search(q)
   local st = stem(q)
   local function has(text)
     if not text then return false end
-    text = text:lower()
+    text = Lower(text)
     return text:find(q, 1, true) ~= nil or (st ~= nil and text:find(st, 1, true) ~= nil)
   end
   local known = knownSet()

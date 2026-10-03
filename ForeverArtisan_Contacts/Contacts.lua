@@ -725,13 +725,21 @@ isIgnored = function(title)
   return false
 end
 
+-- titles are a small fixed set, so remember each answer (search and scouting ask the same ones over and over)
+local relCache = {}
 isRelevant = function(title)
   if not title then return false end
-  if classTrainer(title) then return true end
+  local hit = relCache[title]
+  if hit ~= nil then return hit end
   local t = title:lower()
-  for _, w in ipairs(IGNORE) do if t:find(w, 1, true) then return false end end
-  for _, w in ipairs(RELEVANT) do if t:find(w, 1, true) then return true end end
-  return false
+  hit = false
+  if classTrainer(title) then hit = true
+  else
+    for _, w in ipairs(IGNORE) do if t:find(w, 1, true) then relCache[title] = false; return false end end
+    for _, w in ipairs(RELEVANT) do if t:find(w, 1, true) then hit = true; break end end
+  end
+  relCache[title] = hit
+  return hit
 end
 
 -- An NPC counts as done if the logger opened it (any kind: vendor, trainer, or a
@@ -764,11 +772,16 @@ end
 -- Passing by a saved contact (nameplate, mouseover, target) proves they still exist: refresh the
 -- "last seen" stamp and, when you're standing next to them, their location. Stock and prices
 -- only change when you open their window.
+local TOUCH_KINDS = { "vendor", "trainer" }
+local lastTouch = {} -- npc id -> GetTime(): nameplates repeat twice a second, a stamp every 30s is plenty
 function ns.TouchContact(id, unit)
   local entries = ForeverArtisanContactsDB and ForeverArtisanContactsDB.entries
   if not entries then return end
+  local now = GetTime()
+  if lastTouch[id] and now - lastTouch[id] < 30 then return end
+  lastTouch[id] = now
   local changed = false
-  for _, kind in ipairs({ "vendor", "trainer" }) do
+  for _, kind in ipairs(TOUCH_KINDS) do
     local e = entries[kind .. ":" .. id]
     if e then
       e.seenAt = time()
@@ -802,12 +815,18 @@ local function scoutUnit(unit)
   if UnitPlayerControlled and UnitPlayerControlled(unit) then return end
   local reaction = UnitReaction(unit, "player")
   if not reaction or reaction < 4 then return end
+  if UnitCreatureType and UnitCreatureType(unit) == "Critter" then return end
   local guid = UnitGUID(unit)
   local id = npcIdFromGUID(guid)
   if not id then return end
   ns.TouchContact(id, unit)
   ForeverArtisanContactsDB.scouted = ForeverArtisanContactsDB.scouted or {}
   local s = ForeverArtisanContactsDB.scouted[id]
+  -- already pinned down within ~10 yards in this zone: nothing to sharpen, skip the distance checks
+  if s and s.acc and s.acc >= 3 and s.zone == (GetRealZoneText() or GetZoneText()) then
+    s.lastSeen = time()
+    return
+  end
   local acc = closeness(unit)
   if s and s.acc and s.acc >= acc and s.zone == (GetRealZoneText() or GetZoneText()) then
     s.lastSeen = time()
@@ -839,7 +858,7 @@ local function startScoutTicker()
       local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
       if unit then
         pcall(scoutUnit, unit)
-        if plateTitle and not (plate.mlTitle and plate.mlTitle:IsShown()) then pcall(plateTitle, unit) end
+        if plateTitle and not plate.mlDone then pcall(plateTitle, unit) end
       end
     end
   end)
@@ -848,6 +867,7 @@ end
 -- Nameplates only show names, so while scouting we add the NPC's <Title> under
 -- friendly nameplates (open world only; Blizzard locks nameplates in instances).
 local labeled = {}
+local titleOf = {} -- npc id -> title, or false for NPCs without one (most of a town): read the tooltip once
 plateTitle = function(unit)
   if ForeverArtisanContactsDB.scoutOff or not (C_NamePlate and C_NamePlate.GetNamePlateForUnit) then return end
   if not UnitExists(unit) or UnitIsPlayer(unit) then return end
@@ -858,7 +878,13 @@ plateTitle = function(unit)
   local id = npcIdFromGUID(UnitGUID(unit))
   local s = id and ForeverArtisanContactsDB.scouted and ForeverArtisanContactsDB.scouted[id]
   local title = s and s.title
-  if not title then local n = npcInfo(unit); title = n and n.title end
+  if not title and id then
+    if titleOf[id] == nil then local n = npcInfo(unit); titleOf[id] = (n and n.title) or false end
+    title = titleOf[id] or nil
+  elseif not title then
+    local n = npcInfo(unit); title = n and n.title
+  end
+  plate.mlDone = true
   if not plate.mlTitle then
     -- our own small frame above the nameplate's art, so the health bar can't cover the text
     local holder = CreateFrame("Frame", nil, plate)
@@ -885,6 +911,7 @@ end
 
 local function hidePlateTitle(unit)
   local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
+  if plate then plate.mlDone = nil end
   if plate and plate.mlTitle then plate.mlTitle:Hide() end
 end
 
@@ -1023,7 +1050,7 @@ f:SetScript("OnEvent", function(_, event, arg1)
     if ForeverArtisanContactsDB.scoutOff then return end
     local unit = (event == "NAME_PLATE_UNIT_ADDED" and arg1) or (event == "UPDATE_MOUSEOVER_UNIT" and "mouseover") or "target"
     if not InCombatLockdown() then pcall(scoutUnit, unit) end
-    if event == "NAME_PLATE_UNIT_ADDED" then pcall(plateTitle, unit) end
+    if event == "NAME_PLATE_UNIT_ADDED" and not InCombatLockdown() then pcall(plateTitle, unit) end
     return
   end
   if event:find("TRADE_SKILL") or event == "CRAFT_SHOW" then

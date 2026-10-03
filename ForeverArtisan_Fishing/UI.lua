@@ -643,10 +643,11 @@ local function Build()
 
   f:SetScript("OnUpdate", function(self, el)
     self.t = (self.t or 0) + el
-    if self.t > 0.5 then
+    -- clocks tick once a second; the Fishing tab's other lines refresh on change, so redraw it every 2s
+    if self.t > 1 then
       self.t = 0; self.n = (self.n or 0) + 1
-      if view.tab == "derby" then RefreshDerbyPage(pages.derby) end
-      if view.tab == "fish" then RefreshFishingPage(pages.fish)
+      if view.tab == "derby" then RefreshDerbyPage(pages.derby)
+      elseif view.tab == "fish" and self.n % 2 == 0 then RefreshFishingPage(pages.fish)
       elseif view.tab == "progress" and self.n % 4 == 0 then RefreshProgressPage(pages.progress) end
     end
   end)
@@ -713,12 +714,16 @@ local function BuildHUD()
       self.icon:SetDesaturated(true)
     end
     self.icon:SetTexture(id and Icon(id) or 134400)
-    local i = ns.SkillInfo()
-    local dst, dsec = ns.DerbyStatus and ns.DerbyStatus()
-    if dst == "live" then self.cap:SetText(GREEN .. "Derby live: " .. ns.DerbyClock(dsec) .. " left|r")
-    elseif i.capped then self.cap:SetText(RED .. "Fishing capped at " .. i.max .. ". Train!|r")
-    elseif i.rank and i.max then self.cap:SetText(GRAY .. "Fishing " .. i.rank .. " / " .. i.max .. "|r")
-    else self.cap:SetText("") end
+    -- skill and derby lines change slowly: every 5 seconds (the derby clock counts in minutes)
+    self.n = (self.n or 0) + 1
+    if self.n % 10 == 1 then
+      local i = ns.SkillInfo()
+      local dst, dsec = ns.DerbyStatus and ns.DerbyStatus()
+      if dst == "live" then self.cap:SetText(GREEN .. "Derby live: " .. ns.DerbyClock(dsec) .. " left|r")
+      elseif i.capped then self.cap:SetText(RED .. "Fishing capped at " .. i.max .. ". Train!|r")
+      elseif i.rank and i.max then self.cap:SetText(GRAY .. "Fishing " .. i.rank .. " / " .. i.max .. "|r")
+      else self.cap:SetText("") end
+    end
     local sw = ns.swapButton
     if sw and sw.icon then
       local mh, _, poleId = ns.GearSet()
@@ -764,9 +769,10 @@ end
 
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "PLAYER_LOGIN", "PLAYER_EQUIPMENT_CHANGED", "BAG_UPDATE_DELAYED", "ZONE_CHANGED",
-  "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "PLAYER_REGEN_ENABLED", "CHAT_MSG_SKILL", "BAG_UPDATE", "LOOT_CLOSED" }) do pcall(ev.RegisterEvent, ev, e) end
+  "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "PLAYER_REGEN_ENABLED", "CHAT_MSG_SKILL", "LOOT_CLOSED" }) do pcall(ev.RegisterEvent, ev, e) end
 ev:SetScript("OnEvent", function(_, e)
   if e == "PLAYER_LOGIN" then BuildHUD() end
+  if e == "BAG_UPDATE_DELAYED" and ns.InvalidateLure then ns.InvalidateLure() end
   if e == "ZONE_CHANGED" or e == "ZONE_CHANGED_INDOORS" or e == "ZONE_CHANGED_NEW_AREA" then
     if view.mode == "spot" then view.key = nil end
   end

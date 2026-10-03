@@ -792,7 +792,9 @@ do
   -- a Fish Bowl in the bags, placed at a fire
   local oldNum,oldLink=GetContainerNumSlots,GetContainerItemLink
   GetContainerNumSlots=function(b) return b==0 and 1 or 0 end
+  cp.InvalidateBags()
   GetContainerItemLink=function() return "|cffffffff|Hitem:990001::|h[Fish Bowl]|h|r" end
+  cp.InvalidateBags()
   local AURA=false
   UnitBuff=function(_,i) if AURA and i==1 then return "Campfire Nearby" end end
   local before=#chat
@@ -806,19 +808,23 @@ do
   fire("UNIT_SPELLCAST_SUCCEEDED","player","g",77001)
   assert(cp.Left()==0, "cast name alone doesn't match")
   GetContainerItemLink=function() return nil end
+  cp.InvalidateBags()
   fire("BAG_UPDATE_DELAYED")
   print("CAMP CASTNAMES", ForeverArtisanCampingDB.castNames and ForeverArtisanCampingDB.castNames["Set Up Camp Feature"])
   assert(ForeverArtisanCampingDB.castNames["Set Up Camp Feature"]=="Fish Bowl", "learned the cast name")
   GetContainerItemLink=function() return "|cffffffff|Hitem:990001::|h[Fish Bowl]|h|r" end
+  cp.InvalidateBags()
   print("CAMP STATUS", cp.Status())
   assert(cp.Left()>3500 and cp.Status():find("placed Fish Bowl"), "cooldown after placing")
   assert(cp.KitLeft()==nil, "no kit in bags")
   GetContainerItemLink=function() return "|cffffffff|Hitem:990002::|h[Basic Campfire Kit]|h|r" end
+  cp.InvalidateBags()
   GetItemCooldown=function() return 900, 300 end
   print("CAMP KIT", cp.KitLeft())
   assert(cp.KitLeft()>150, "campfire kit's own 5-minute cooldown")
   GetItemCooldown=nil
   GetContainerItemLink=function() return "|cffffffff|Hitem:990001::|h[Fish Bowl]|h|r" end
+  cp.InvalidateBags()
   AURA=false; fire("UNIT_AURA","player"); AURA=true
   before=#chat; fire("UNIT_AURA","player")
   for i=before+1,#chat do assert(not chat[i]:find("is ready"), "no reminder while on cooldown") end
@@ -852,13 +858,16 @@ do
     assert(can==2, "camp chair: 7 leather / 3, 5 wood / 2 -> 2")
     assert(cp.CanMake("Seed Hybridizer")==nil, "unknown reagents")
     GetContainerItemLink=function(_,s) return "|cffffffff|Hitem:1::|h[Raw Brilliant Smallfish]|h|r" end
+    cp.InvalidateBags()
     local fish for _,r in ipairs(cp.Rows()) do if r.prof=="Fishing" then fish=r end end
     print("CAMP MATS", fish.can, fish.mats and fish.mats[1])
     assert(fish.can==0, "fish but no vial")
     GetContainerItemLink=oldLink
+    cp.InvalidateBags()
   end
   run("FACAMP","status"); run("FACAMP","debug"); run("FACAMP","reminder"); run("FACAMP","reminder")
   GetContainerNumSlots,GetContainerItemLink=oldNum,oldLink
+  cp.InvalidateBags()
   UnitBuff=nil GetSpellInfo=nil
 end
 print("CRAFTS OK")

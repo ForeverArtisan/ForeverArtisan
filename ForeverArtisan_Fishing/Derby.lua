@@ -365,5 +365,5 @@ end)
 local t = 0
 ev:SetScript("OnUpdate", function(_, el)
   t = t + el
-  if t > 0.5 then t = 0; if marker then ns.UpdateMarker() end end
+  if t > 1 then t = 0; if marker and marker:IsShown() then ns.UpdateMarker() end end
 end)

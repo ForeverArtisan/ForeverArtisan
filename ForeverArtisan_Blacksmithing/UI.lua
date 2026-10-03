@@ -91,6 +91,18 @@ local function BuildMainPage(p)
   help:SetText("/fa bs next  ·  /fa bs plan 225  ·  open your Blacksmithing window to refresh recipes")
 end
 
+-- the only part of the first tab that changes with time (crafts/hour); the rest refreshes on change
+function ns.RefreshSession(p)
+  local s = ns.SessionInfo()
+  if s.crafts > 0 then
+    p.sess:SetText(("%d made  ·  %d skill-up%s%s"):format(s.crafts, s.ups, s.ups == 1 and "" or "s",
+      s.perHour and ("  ·  " .. GOLD .. s.perHour .. " crafts/hour|r") or ""))
+    p.last:SetText(s.last and (GRAY .. "Last craft: |r" .. s.last) or "")
+  else
+    p.sess:SetText(GRAY .. "Nothing made yet this session.|r"); p.last:SetText("")
+  end
+end
+
 local function RefreshMainPage(p)
   local i = ns.SkillInfo()
   local knows = ns.Knows()
@@ -131,14 +143,7 @@ local function RefreshMainPage(p)
   end
   Fill(p.rows, list, 0)
 
-  local s = ns.SessionInfo()
-  if s.crafts > 0 then
-    p.sess:SetText(("%d made  ·  %d skill-up%s%s"):format(s.crafts, s.ups, s.ups == 1 and "" or "s",
-      s.perHour and ("  ·  " .. GOLD .. s.perHour .. " crafts/hour|r") or ""))
-    p.last:SetText(s.last and (GRAY .. "Last craft: |r" .. s.last) or "")
-  else
-    p.sess:SetText(GRAY .. "Nothing made yet this session.|r"); p.last:SetText("")
-  end
+  ns.RefreshSession(p)
   p.open:ShowIf(knows and not ns.HasRecipes())
   p.openTop:ShowIf(knows and ns.HasRecipes())
   -- not learned: say where to learn it
@@ -282,11 +287,12 @@ local function BuildLogPage(p)
     end
   end)
   reset:SetPoint("BOTTOMRIGHT", -16, 12)
-  Wheel(p, "logOff", function() return #LogData() - LOG_ROWS end)
+  Wheel(p, "logOff", function() return (p.count or 0) - LOG_ROWS end)
 end
 
 local function RefreshLogPage(p)
   local data = LogData()
+  p.count = #data
   view.logOff = math.min(view.logOff, math.max(0, #data - LOG_ROWS))
   Fill(p.rows, data, view.logOff)
   p.empty:SetText(#data == 0 and "Nothing made yet. Grab some bars and stone!" or "")
@@ -387,11 +393,12 @@ local function BuildGuidePage(p)
   end
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 16, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("Click a recipe you know to open it. Hover one you don't know for where to get it.")
-  Wheel(p, "guideOff", function() return #BookData() - BOOK_ROWS end)
+  Wheel(p, "guideOff", function() return (p.count or 0) - BOOK_ROWS end)
 end
 
 local function RefreshGuidePage(p)
   local data = BookData()
+  p.count = #data
   ns.lastBook = data -- for the test suite
   for _, b in ipairs(p.showBtns or {}) do
     if b.value == (view.bookShow or "all") then
@@ -430,7 +437,7 @@ local function Build()
 
   f:SetScript("OnUpdate", function(self, el)
     self.t = (self.t or 0) + el
-    if self.t > 1 then self.t = 0; if view.tab == "main" then RefreshMainPage(pages.main) end end
+    if self.t > 5 then self.t = 0; if view.tab == "main" then ns.RefreshSession(pages.main) end end
   end)
   f:HookScript("OnShow", function() view.bookShow, view.guideOff = "all", 0 end)
   f:Hide()

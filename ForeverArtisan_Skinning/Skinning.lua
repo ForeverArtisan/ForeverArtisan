@@ -370,7 +370,12 @@ local function LogSkin()
   end
   z.lastSeen = Today()
   db.raw[#db.raw + 1] = entry
-  if #db.raw > RAW_CAP then table.remove(db.raw, 1) end
+  -- trim the oldest 10% at once instead of shifting the whole log on every pick
+  if #db.raw > RAW_CAP then
+    local n, drop = #db.raw, math.floor(RAW_CAP / 10)
+    for i = 1, n - drop do db.raw[i] = db.raw[i + drop] end
+    for i = n - drop + 1, n do db.raw[i] = nil end
+  end
   db.sinceUp = (db.sinceUp or 0) + 1
   session.nodes = session.nodes + 1
   session.start = session.start or GetTime()

@@ -220,8 +220,8 @@ end
 
 local DIFF = { [0] = "orange", [1] = "yellow", [2] = "green", [3] = "gray" }
 
--- Is the open profession window ours? Ask the game first, then look at the recipes.
-local function WindowIsOurs(ids, infos)
+-- Is the open profession window ours? Ask the game first (cheap); nil = it can't say.
+local function QuickOurs(ids)
   local T = C_TradeSkillUI
   if T.GetTradeSkillLineForRecipe and ids[1] then
     local a, b, c = Try(T.GetTradeSkillLineForRecipe, ids[1])
@@ -233,6 +233,12 @@ local function WindowIsOurs(ids, infos)
       return info.professionID == SKILL_LINE or IsProfName(info.professionName)
     end
   end
+end
+
+-- otherwise look at the recipes' groups
+local function WindowIsOurs(ids, infos)
+  local quick = QuickOurs(ids)
+  if quick ~= nil then return quick end
   local ours = 0
   for _, ri in ipairs(infos) do if IsProfGroup(ri.group) then ours = ours + 1 end end
   return ours >= 3
@@ -243,6 +249,9 @@ local function ScanModern()
   if not (T and T.GetAllRecipeIDs) then return end
   local ids = Try(T.GetAllRecipeIDs)
   if type(ids) ~= "table" or #ids == 0 then return end
+  -- another profession's window: stop before reading every recipe (all eight modules hear the same event)
+  if QuickOurs(ids) == false then return end
+  ns.lastIdCount = #ids
   local infos = {}
   for _, id in ipairs(ids) do
     local ri = Try(T.GetRecipeInfo, id)
@@ -257,6 +266,7 @@ local function ScanModern()
   end
   if not WindowIsOurs(ids, infos) then return end
   local rank = Skill()
+  local known = CharRec().recipes
   local out = {}
   for _, e in ipairs(infos) do
     local ri = e.ri
@@ -264,6 +274,11 @@ local function ScanModern()
                 grayAt = (ri.maxTrivialLevel and ri.maxTrivialLevel > 0) and ri.maxTrivialLevel or nil,
                 ups = (ri.numSkillUps and ri.numSkillUps > 1) and ri.numSkillUps or nil,
                 color = ri.learned and DIFF[ri.relativeDifficulty] or nil, scanSkill = rank, reagents = {} }
+    -- reagents, tools and the made item don't change between scans: keep them instead of asking again
+    local old = known[ri.name]
+    if old and old.id == e.id and old.reagents and #old.reagents > 0 then
+      r.reagents, r.itemId, r.makes, r.tools = old.reagents, old.itemId, old.makes, old.tools
+    else
     if T.GetRecipeTools then r.tools = ToolsFromString((Try(T.GetRecipeTools, e.id))) end
     -- newer windows list tools as requirements ("Requires: Runed Copper Rod")
     if not r.tools and T.GetRecipeRequirements then
@@ -287,6 +302,7 @@ local function ScanModern()
           r.reagents[#r.reagents + 1] = { id = first.itemID, n = slot.quantityRequired or 1, name = ItemName(first.itemID) }
         end
       end
+    end
     end
     out[r.name] = r
   end
@@ -373,6 +389,7 @@ local function Scan()
   IndexRecipes()
   if first then say(("Read your %s window: %d recipes, %d learned."):format(PROF, n, learned)) end
   if ns.OnChange then ns.OnChange() end
+  return true
 end
 
 function ns.HasRecipes() return db and next(CharRec().recipes) ~= nil end
@@ -553,6 +570,10 @@ function ns.Plan(target)
     return n
   end
 
+  -- what you can make from your bags doesn't change while planning: count once, not on every pass
+  local canMake = {}
+  for _, r in ipairs(learned) do canMake[r] = ns.Makeable(r) > 0 end
+
   local steps, stuck = {}, nil
   while math.floor(s) < target and total < PLAN_LIMIT do
     local at = math.floor(s)
@@ -562,7 +583,7 @@ function ns.Plan(target)
       if ch > 0 then
         -- prefer the best skill-up chance, but favor recipes you can already make from your bags;
         -- on a tie, the one that uses fewer materials (Handstitched Cloak over the Vest)
-        local score = ch + (ns.Makeable(r) > 0 and 0.15 or 0)
+        local score = ch + (canMake[r] and 0.15 or 0)
         local cost = Cost(r)
         if not best or score > bestScore + 0.001
           or (math.abs(score - bestScore) <= 0.001 and cost < bestCost) then
@@ -740,6 +761,13 @@ local function IndexUses()
       if g.id then usedBy[g.id] = usedBy[g.id] or {}; table.insert(usedBy[g.id], r) end
     end
   end
+  -- learned first, sorted once here instead of on every tooltip
+  for _, list in pairs(usedBy) do
+    table.sort(list, function(a, b)
+      if (a.learned and 1 or 0) ~= (b.learned and 1 or 0) then return a.learned and true or false end
+      return (a.name or "") < (b.name or "")
+    end)
+  end
 end
 
 local function RecipeNameFromItem(name)
@@ -750,13 +778,17 @@ local function RecipeNameFromItem(name)
 end
 
 local function ItemTip(tt)
-  if not db or db.settings.tooltips == false or not tt or tt.faEnchDone or not ns.Knows() then return end
+  if not db or db.settings.tooltips == false or not tt or tt.faEnchDone then return end
   local name, link = tt:GetItem()
   local id = link and tonumber(link:match("item:(%d+)"))
   if not id then return end
+  -- most items are nothing to us: check the cheap lookups before reading the skill
   local recipes = CharRec().recipes
-  local skill = Skill()
   local rname = RecipeNameFromItem(name)
+  local uses = usedBy[id]
+  if not (rname and recipes[rname]) and not (uses and #uses > 0) then return end
+  if not ns.Knows() then return end
+  local skill = Skill()
   if rname and recipes[rname] then
     tt.faEnchDone = true
     local r = recipes[rname]
@@ -766,13 +798,10 @@ local function ItemTip(tt)
     tt:Show()
     return
   end
-  local uses = usedBy[id]
-  if not uses or #uses == 0 then return end
   tt.faEnchDone = true
   tt:AddLine(" ")
   tt:AddLine(GOLD .. PROF .. ":|r used in")
   local shown = 0
-  table.sort(uses, function(a, b) return (a.learned and 1 or 0) > (b.learned and 1 or 0) end)
   for _, r in ipairs(uses) do
     if shown >= 3 then break end
     local c = ns.ColorFor(r, skill)
@@ -812,6 +841,14 @@ function ns.SafeScan()
   local ok, err = pcall(Scan)
   ns.lastScan = { t = time(), ok = ok, err = (not ok) and tostring(err) or nil }
   if not ok and ForeverArtisan.IsDev and ForeverArtisan.IsDev() then say("|cffff5555scan error:|r " .. tostring(err)) end
+  return ok and err == true
+end
+
+-- did the window's list grow since the last read? (it can fill a moment after it opens)
+local function ListGrew()
+  local T = C_TradeSkillUI
+  local ids = T and T.GetAllRecipeIDs and Try(T.GetAllRecipeIDs)
+  return type(ids) == "table" and #ids ~= (ns.lastIdCount or 0)
 end
 
 local function ScanSoon()
@@ -819,8 +856,11 @@ local function ScanSoon()
   local tok = scanToken
   if C_Timer then
     -- read twice: some windows fill their list a moment after they open
-    C_Timer.After(0.5, function() if tok == scanToken then ns.SafeScan(); IndexUses() end end)
-    C_Timer.After(2.0, function() if tok == scanToken then ns.SafeScan(); IndexUses() end end)
+    local got = false
+    C_Timer.After(0.5, function() if tok == scanToken then got = ns.SafeScan(); IndexUses() end end)
+    C_Timer.After(2.0, function()
+      if tok == scanToken and (not got or ListGrew()) then ns.SafeScan(); IndexUses() end
+    end)
   else
     ns.SafeScan(); IndexUses()
   end

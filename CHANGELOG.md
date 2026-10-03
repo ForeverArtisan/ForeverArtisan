@@ -1,6 +1,7 @@
 # ForeverArtisan changelog
 
 ## 0.9.8 (unreleased)
+- Smoother play: profession windows are read once per change instead of by all eight crafting modules on every craft; open windows only redraw what changes with time; item tooltips skip anything that isn't a material of yours before doing any work; the fishing lure bar, nameplate titles and Trade Contacts search do much less work per second. Nothing you see changes.
 - Fishing: "No fishing key set" waits until you equip a fishing pole instead of showing on every login.
 - Trade Contacts: a map pin in another zone now says which zone ("It's in Desolace, so open the Desolace map to see it") and switches an open world map there.
 - Camping: each camp item has a Craft button that opens its profession window on the recipe. It grays out when you're missing materials; hover it to see what's missing.

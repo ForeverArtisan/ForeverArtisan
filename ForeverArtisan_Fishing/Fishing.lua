@@ -625,7 +625,12 @@ local function LogCatch()
   z.lastSeen = Today()
   local raw = db.raw
   raw[#raw + 1] = entry
-  if #raw > RAW_CAP then table.remove(raw, 1) end
+  -- trim the oldest 10% at once instead of shifting the whole log on every catch
+  if #raw > RAW_CAP then
+    local n, drop = #raw, math.floor(RAW_CAP / 10)
+    for i = 1, n - drop do raw[i] = raw[i + drop] end
+    for i = n - drop + 1, n do raw[i] = nil end
+  end
   if db.settings.verbose then say("Caught " .. table.concat(got, ", ")) end
   if ns.OnCatch then ns.OnCatch(entry) end
   if ns.OnDerbyCatch then ns.OnDerbyCatch(entry) end
@@ -660,11 +665,17 @@ ns.CheckPole = CheckPole
 ---------------------------------------------------------------- events
 local ev = CreateFrame("Frame")
 local function Reg(e) pcall(ev.RegisterEvent, ev, e) end
+-- spell events for the player only, not for every party member and target
+local function RegPlayer(e)
+  if ev.RegisterUnitEvent and pcall(ev.RegisterUnitEvent, ev, e, "player") then return end
+  Reg(e)
+end
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "PLAYER_EQUIPMENT_CHANGED",
-  "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "LOOT_OPENED", "UNIT_SPELLCAST_SUCCEEDED",
+  "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "LOOT_OPENED",
   "UI_ERROR_MESSAGE", "UI_INFO_MESSAGE", "CHAT_MSG_SKILL", "GET_ITEM_INFO_RECEIVED",
-  "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_CHANNEL_STOP", "PLAYER_LOGOUT",
+  "PLAYER_LOGOUT", "BAG_UPDATE_DELAYED",
   "PLAYER_SOFT_INTERACT_CHANGED", "LOOT_CLOSED", "UPDATE_INVENTORY_DURABILITY", "UPDATE_BINDINGS" }) do Reg(e) end
+for _, e in ipairs({ "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_CHANNEL_STOP" }) do RegPlayer(e) end
 
 local ESCAPED = { [ERR_FISH_ESCAPED or "Fish escaped!"] = true, [ERR_FISH_NOT_HOOKED or "No fish are hooked."] = true }
 
@@ -698,6 +709,11 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     db.raw = db.raw or {}
   elseif not db then
     return
+  elseif e == "BAG_UPDATE_DELAYED" then
+    ns.InvalidateLure()
+  elseif e == "PLAYER_EQUIPMENT_CHANGED" and a1 and a1 ~= 16 and a1 ~= 17 and a1 ~= 18 then
+    -- fires once per slot on a gear swap; only the weapon slots matter here
+    return
   elseif e == "PLAYER_ENTERING_WORLD" or e == "PLAYER_EQUIPMENT_CHANGED" or e == "PLAYER_REGEN_ENABLED" then
     if e == "PLAYER_EQUIPMENT_CHANGED" then ns.TrackGear(); CheckPole() end
     if e == "PLAYER_ENTERING_WORLD" then
@@ -717,8 +733,9 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     end
     if ns.OnChange then ns.OnChange() end
   elseif e == "UPDATE_BINDINGS" then
-    -- the game reloaded key bindings; put the fishing key back if the pole is on
-    if not InCombatLockdown() and not channeling then UpdateModeSoon() end
+    -- the game reloaded key bindings; put the fishing key back if the pole is on and it was lost
+    -- (our own rebind fires this too, so only act when the key is actually gone)
+    if not InCombatLockdown() and not channeling and PoleEquipped() and not KeyActive() then UpdateModeSoon() end
   elseif e == "PLAYER_REGEN_DISABLED" then
     -- still allowed to rebind here: make sure the fishing key isn't stuck on "reel in"
     channeling = false
@@ -742,7 +759,9 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
   elseif e == "LOOT_CLOSED" then
     StopChannel()
   elseif e == "GET_ITEM_INFO_RECEIVED" then
-    ns.UpdateGear()
+    -- fires for every item the game loads (Auction House, vendors): only our gear matters
+    local mh, oh, pole = ns.GearSet()
+    if a1 and (a1 == mh or a1 == oh or a1 == pole) then ns.UpdateGear() end
   elseif e == "LOOT_OPENED" then
     if IsFishingLoot and IsFishingLoot() then LogCatch() end
   elseif e == "UNIT_SPELLCAST_SUCCEEDED" and a1 == "player" then
@@ -876,7 +895,14 @@ local function BagLures()
 end
 
 ns.DB = function() return db end
-ns.say, ns.PickLure, ns.BagLures, ns.LureLeft = say, PickLure, BagLures, LureLeft
+-- the lure bar and window ask often; the bags only change on BAG_UPDATE_DELAYED, so remember the pick until then
+local lurePick, lurePicked
+function ns.InvalidateLure() lurePicked = false end
+local function CachedPickLure()
+  if not lurePicked then lurePick = { PickLure() }; lurePicked = true end
+  return lurePick[1], lurePick[2]
+end
+ns.say, ns.PickLure, ns.BagLures, ns.LureLeft = say, CachedPickLure, BagLures, LureLeft
 ns.PoleEquipped, ns.FishingSkill, ns.Where, ns.ItemName = PoleEquipped, FishingSkill, Where, ItemName
 ns.UpdateMode, ns.ZoneRec, ns.Today = UpdateMode, ZoneRec, Today
 ns.SkillSource = function() return skillSource end

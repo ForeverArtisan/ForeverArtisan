@@ -47,6 +47,19 @@ local function BuildMainPage(p)
   help:SetText("/fa skin next  ·  /fa skin goal 20 Light Leather  ·  /fa skin zones")
 end
 
+-- the parts of the first tab that change with time; everything else refreshes on change or zone change
+function ns.RefreshSession(p)
+  local s = ns.SessionInfo()
+  if s.nodes > 0 then
+    p.sess:SetText(("%d skinned  ·  %d items  ·  %d skill-up%s%s"):format(s.nodes, s.items, s.ups, s.ups == 1 and "" or "s",
+      s.perHour and ("  ·  " .. GOLD .. s.perHour .. " items/hour|r") or ""))
+    p.last:SetText(s.last and (GRAY .. "Last skin: |r" .. s.last) or "")
+  else
+    p.sess:SetText(GRAY .. "Nothing skinned yet this session.|r")
+    p.last:SetText("")
+  end
+end
+
 local function RefreshMainPage(p)
   local i = ns.SkillInfo()
   if i.rank then
@@ -69,15 +82,7 @@ local function RefreshMainPage(p)
   if not ns.Knows() then knife = nil end
   p.find:SetText((knife == true and (GREEN .. "Skinning Knife: yes|r")) or (knife == false and (RED .. "Skinning Knife: missing|r")) or "")
 
-  local s = ns.SessionInfo()
-  if s.nodes > 0 then
-    p.sess:SetText(("%d skinned  ·  %d items  ·  %d skill-up%s%s"):format(s.nodes, s.items, s.ups, s.ups == 1 and "" or "s",
-      s.perHour and ("  ·  " .. GOLD .. s.perHour .. " items/hour|r") or ""))
-    p.last:SetText(s.last and (GRAY .. "Last skin: |r" .. s.last) or "")
-  else
-    p.sess:SetText(GRAY .. "Nothing skinned yet this session.|r")
-    p.last:SetText("")
-  end
+  ns.RefreshSession(p)
 
   local z = ns.ZoneRec()
   p.zoneHead:SetText(("Logged here: %s  %s(%d skinned)|r"):format(ns.Place(z), GRAY, z.nodes))
@@ -320,7 +325,15 @@ local function Build()
 
   f:SetScript("OnUpdate", function(self, el)
     self.t = (self.t or 0) + el
-    if self.t > 1 then self.t = 0; if view.tab == "main" then RefreshMainPage(pages.main) end end
+    if self.t > 1 then
+      self.t = 0
+      if view.tab == "main" then
+        -- a new spot redraws the whole tab; otherwise only the lines that change with time
+        local spot = (GetRealZoneText() or "") .. "/" .. (GetSubZoneText() or "")
+        if spot ~= view.spot then view.spot = spot; RefreshMainPage(pages.main)
+        else ns.RefreshSession(pages.main) end
+      end
+    end
   end)
   f:Hide()
   ShowTab("main")
