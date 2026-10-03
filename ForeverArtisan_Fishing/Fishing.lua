@@ -4,6 +4,8 @@
 -- Every catch is logged by zone/subzone with skill, lure and game time.
 
 local ADDON, ns = ...
+-- backpack + 4 bags, plus the reagent bag slot (5) on newer clients: herbs and leather often sit there
+local LAST_BAG = NUM_TOTAL_EQUIPPED_BAG_SLOTS or 5
 ADDON = ADDON or "ForeverArtisan_Fishing"
 ns = ns or {}
 local LURE_GUARD = 8          -- seconds after applying a lure before we'd try again
@@ -75,7 +77,7 @@ local function ItemCount(id, includeBank)
     if ok and type(n) == "number" then return n end
   end
   local n = 0
-  for bag = 0, 4 do
+  for bag = 0, LAST_BAG do
     for slot = 1, (NumSlots(bag) or 0) do
       if SlotItemID(bag, slot) == id then n = n + SlotCount(bag, slot) end
     end
@@ -120,7 +122,7 @@ end
 local function PickLure()
   local best, bestBonus, pinned
   local want = db.settings.lure and db.settings.lure:lower()
-  for bag = 0, 4 do
+  for bag = 0, LAST_BAG do
     for slot = 1, (NumSlots(bag) or 0) do
       local id = SlotItemID(bag, slot)
       if id then
@@ -878,7 +880,7 @@ end
 -- every lure in your bags: { {id=, bonus=, count=}, ... } sorted by bonus
 local function BagLures()
   local seen, list = {}, {}
-  for bag = 0, 4 do
+  for bag = 0, LAST_BAG do
     for slot = 1, (NumSlots(bag) or 0) do
       local id = SlotItemID(bag, slot)
       if id and not seen[id] then

@@ -4,6 +4,8 @@
 -- cooldown after you place one, the Cooking campfire kits, and a reminder when you're at a fire and yours is ready.
 -- It never maps other players' fires, and it never places anything for you.
 local ADDON, ns = ...
+-- backpack + 4 bags, plus the reagent bag slot (5) on newer clients: herbs and leather often sit there
+local LAST_BAG = NUM_TOTAL_EQUIPPED_BAG_SLOTS or 5
 ADDON = ADDON or "ForeverArtisan_Camping"
 ns = ns or {}
 
@@ -66,7 +68,7 @@ local function Scan()
   local link = (C_Container and C_Container.GetContainerItemLink) or GetContainerItemLink
   local info = (C_Container and C_Container.GetContainerItemInfo) or GetContainerItemInfo
   if num and link then
-    for bag = 0, 4 do
+    for bag = 0, LAST_BAG do
       for slot = 1, (num(bag) or 0) do
         local l = link(bag, slot)
         local name = l and l:match("%[(.-)%]")
@@ -327,15 +329,24 @@ local atFire, lastNudge = false, -10000
 local function CheckFire()
   local now = NearFire()
   if now and not atFire and db.settings.reminder and ns.Left() <= 0 and GetTime() - lastNudge > 600 then
-    local mine
+    -- every camp item you're carrying, best tier per profession, in profession order, with what it gives
+    local best = {}
     for _, b in pairs(ns.BagItems()) do
-      if b.item and b.item.prof then
-        if not mine or b.item.tier > mine.item.tier then mine = b end
-      end
+      local it = b.item
+      if it and it.prof and (not best[it.prof] or it.tier > best[it.prof].item.tier) then best[it.prof] = b end
     end
-    if mine then
+    local names = {}
+    for _, p in ipairs(ns.CAMP) do
+      local b = best[p[1]]
+      if b then names[#names + 1] = b.name .. (ns.BUFF[b.name] and (" (" .. ns.BUFF[b.name] .. ")") or "") end
+    end
+    if #names > 0 then
       lastNudge = GetTime()
-      say(YELLOW .. ("Your %s is ready. Place it at this fire."):format(mine.name) .. "|r")
+      if #names == 1 then
+        say(YELLOW .. ("Your %s is ready. Place it at this fire."):format(names[1]) .. "|r")
+      else
+        say(YELLOW .. "Camp items ready (place one per fire):|r " .. table.concat(names, ", "))
+      end
     end
   end
   if now ~= atFire then
@@ -451,6 +462,12 @@ SlashCmdList.FACAMP = function(msg)
     for key, b in pairs(ns.BagItems()) do any = true; say(("  in bags: %s x%d (item %s)"):format(b.name, b.n, tostring(b.id))) end
     if not any then say("  no camp items or kits in your bags") end
     for cast, item in pairs(db.castNames or {}) do say(("  cast \"%s\" places %s"):format(cast, item)) end
+    -- what each camp item takes and what the addon counts in your bags
+    for _, r in ipairs(ns.Rows()) do
+      if r.now and r.mats then
+        say(("  %s (%s): %s"):format(r.now, (db.reagents and db.reagents[r.now]) and "from window" or "from beta notes", table.concat(r.mats, ", ")))
+      end
+    end
   elseif cmd == "reminder" then
     db.settings.reminder = not db.settings.reminder
     say("Campfire reminder " .. (db.settings.reminder and "on." or "off."))

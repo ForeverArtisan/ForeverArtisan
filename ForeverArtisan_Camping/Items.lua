@@ -32,6 +32,14 @@ ns.SEED_REAGENTS = {
   ["Basic Campfire Kit"] = { { name = "Simple Wood", n = 1 } },
 }
 
+-- What each camp item gives, short, from the item tooltips (Oct 3). Tier 2 and 3 get theirs once we've seen them.
+ns.BUFF = {
+  ["Fish Bowl"]      = "+stats",
+  ["Incense Candle"] = "+Intellect",
+  ["Camp Chair"]     = "+crit",
+  ["First Aid Kit"]  = "+Stamina",
+}
+
 -- Cooking makes the fire. Each kit needs more skill to use than to learn.
 ns.KITS = {
   { name = "Basic Campfire Kit",      learn = 1,   use = 1,   slots = 3 },

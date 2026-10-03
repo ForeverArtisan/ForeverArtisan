@@ -46,7 +46,7 @@ local function RefreshMainPage(p)
       left = GRAY .. r.prof .. ": none yet|r"
     end
     local right = r.next and ((r.skillOK and YELLOW or GRAY) .. "next: " .. ns.NextText(r) .. "|r") or (GOLD .. "top tier|r")
-    local tip = ("%s %d."):format(r.prof, r.skill)
+    local tip = ("%s %d."):format(r.prof, r.skill) .. ((r.now and ns.BUFF[r.now]) and ("\nGives: " .. ns.BUFF[r.now] .. " to everyone sitting at the fire.") or "")
     if r.have then
       tip = tip .. ("\nIn your bags: %s%s."):format(r.have, (r.haveN or 1) > 1 and (" x" .. r.haveN) or "")
     elseif r.now then

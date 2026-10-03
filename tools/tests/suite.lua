@@ -799,7 +799,7 @@ do
   UnitBuff=function(_,i) if AURA and i==1 then return "Campfire Nearby" end end
   local before=#chat
   AURA=true; fire("UNIT_AURA","player")
-  local nudged=false for i=before+1,#chat do if chat[i]:find("Your Fish Bowl is ready") then nudged=true end end
+  local nudged=false for i=before+1,#chat do if chat[i]:find("Your Fish Bowl %(%+stats%) is ready") then nudged=true end end
   print("CAMP NUDGE", nudged, cp.AtFire())
   assert(nudged and cp.AtFire(), "reminder at the fire")
   -- placed by a cast with a different name: seen when the Fish Bowl leaves the bags at the fire
