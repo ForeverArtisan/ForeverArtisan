@@ -1,6 +1,8 @@
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
 -- ForeverArtisan: Camping: camp item and campfire kit names.
 -- Names and skill tiers come from the Forever beta (Oct 2026) and may change before launch.
+-- Seen in game (Oct 3): Fish Bowl, Incense Candle, Camp Chair, First Aid Kit (all "Requires <profession> (20)",
+-- crafted under "Camping" in the profession window) and Basic Campfire Kit (Cooking 1, its own 5-minute cooldown).
 -- Only names and tiers: buff values, costs and Blueprint sources are still moving, so they aren't here.
 local _, ns = ...
 
@@ -19,6 +21,15 @@ ns.CAMP = {
   { "Mining",         186, "Interface\\Icons\\Trade_Mining",               { "Lodestone", "Rock Garden", "Molten Foundry" } },
   { "Skinning",       393, "Interface\\Icons\\INV_Misc_Pelt_Wolf_01",      { "Camp Chair", "Field Guide", "Trapper's Workbench" } },
   { "Tailoring",      197, "Interface\\Icons\\Trade_Tailoring",            { "Faction Banner", "Spinning Wheel", "Loom" } },
+}
+
+-- Reagents seen in the profession windows (Oct 3). Opening a window replaces these with what the game says.
+ns.SEED_REAGENTS = {
+  ["Fish Bowl"]          = { { name = "Raw Brilliant Smallfish", n = 1 }, { name = "Empty Vial", n = 1 } },
+  ["Incense Candle"]     = { { name = "Peacebloom", n = 1 }, { name = "Silverleaf", n = 1 } },
+  ["Camp Chair"]         = { { name = "Light Leather", n = 3 }, { name = "Simple Wood", n = 2 } },
+  ["First Aid Kit"]      = { { name = "Linen Bandage", n = 3 }, { name = "Refreshing Spring Water", n = 1 } },
+  ["Basic Campfire Kit"] = { { name = "Simple Wood", n = 1 } },
 }
 
 -- Cooking makes the fire. Each kit needs more skill to use than to learn.

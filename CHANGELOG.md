@@ -1,6 +1,9 @@
 # ForeverArtisan changelog
 
 ## 0.9.8 (unreleased)
+- Fishing: "No fishing key set" waits until you equip a fishing pole instead of showing on every login.
+- Trade Contacts: a map pin in another zone now says which zone ("It's in Desolace, so open the Desolace map to see it") and switches an open world map there.
+- Camping: each camp item has a Craft button that opens its profession window on the recipe. It grays out when you're missing materials; hover it to see what's missing.
 - Camping (new module, `/fa camp`): the camp item each of your professions can place now and the skill for the next tier, the one-hour cooldown after you place one (with "Camp items are ready again" in chat), and the Cooking campfire kits with the skill to learn and to use each. At a campfire with your cooldown ready and a camp item in your bags, chat reminds you to place it. It never places anything for you and doesn't map other players' fires. Turn it off in the `/fa` panel like any module.
 - Herbalism: Cultivation reminders for Tauren. Hover a herb out in the world and the tooltip says "Cultivation ready: cast it first to grow a duplicate" while the spell is off cooldown. Start picking a herb while it's ready and chat reminds you once. When the hour is up, chat says "Cultivation is ready again." The Herbalism window shows "Cultivation: ready" or the minutes left. Works without Herbalism, and stays hidden on characters who don't know the spell.
 - Cultivation has a level requirement for each herb. ForeverArtisan doesn't guess it: when a cast fails because your level is too low, it remembers that herb, and its tooltip says "Cultivation: needs level 25 for this herb". `/fa herb cultivation` lists what it has learned; `/fa herb cultivation off` turns the reminders off (or untick the box in the Herbalism window).

@@ -21,7 +21,7 @@ local function BuildMainPage(p)
   p.fire = Text(p, "GameFontHighlightSmall", "TOPLEFT", 18, -32); p.fire:SetWidth(430)
 
   Header(p, -58, "Your camp items")
-  p.rows = MakeRows(p, 11, -78, false)
+  p.rows = MakeRows(p, 11, -78, true)
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 20, -82); p.empty:SetWidth(420)
 
   p.checks = {
@@ -50,12 +50,32 @@ local function RefreshMainPage(p)
     if r.have then
       tip = tip .. ("\nIn your bags: %s%s."):format(r.have, (r.haveN or 1) > 1 and (" x" .. r.haveN) or "")
     elseif r.now then
-      tip = tip .. "\nNot in your bags. Check your Recipe book for it."
+      tip = tip .. ("\nNot in your bags. Craft it in your %s window, under Camping."):format(r.prof)
     else
       tip = tip .. ("\nYour first camp item comes at skill %d."):format(ns.TIERS[1])
     end
     if r.next and r.blueprint then tip = tip .. "\nTiers 2 and 3 need a Blueprint as well as the skill." end
-    data[#data + 1] = { icon = r.icon, left = left, right = right, tipTitle = r.now or r.prof, tip = tip }
+    local craft, label, off, actTip, actTipTitle
+    if r.now then
+      craft = function() ns.OpenCraft(r.prof, r.line, r.now) end
+      if r.mats then
+        tip = tip .. "\n\nTo make one:\n" .. table.concat(r.mats, "\n")
+        if (r.can or 0) > 0 then
+          label = r.can > 1 and ("Craft " .. math.min(r.can, 99)) or "Craft"
+          tip = tip .. ("\n\nCraft: opens your %s window on it. You can make %d."):format(r.prof, r.can)
+        else
+          label, off = "Craft", true
+          tip = tip .. "\n\nMissing materials (red above)."
+          actTipTitle = "Can't craft " .. r.now .. " yet"
+          actTip = "You're missing materials:\n" .. table.concat(r.mats, "\n")
+        end
+      else
+        label = "Craft"
+        tip = tip .. "\nCraft: opens your " .. r.prof .. " window on it."
+      end
+    end
+    data[#data + 1] = { icon = r.icon, left = left, right = right, tipTitle = r.now or r.prof, tip = tip,
+      act = label, onAct = craft, actOff = off, actTip = actTip, actTipTitle = actTipTitle }
   end
   Fill(p.rows, data, 0)
   p.empty:SetText(#data == 0 and "Learn a profession to get a camp item. Every profession but Cooking has one." or "")
@@ -72,7 +92,9 @@ end
 
 local function RefreshKitsPage(p)
   local rows, cook = ns.KitRows()
-  p.head:SetText(cook and ("Cooking %d"):format(cook) or (GRAY .. "You haven't learned Cooking on this character.|r"))
+  local kl = ns.KitLeft()
+  local fire = (kl == nil) and "" or ("  " .. GRAY .. "·|r  " .. ((kl <= 0) and (GREEN .. "Campfire: ready|r") or (YELLOW .. "Next campfire in " .. ns.Mins(kl) .. "|r")))
+  p.head:SetText((cook and ("Cooking %d"):format(cook) or (GRAY .. "You haven't learned Cooking on this character.|r")) .. fire)
   local data = {}
   for _, r in ipairs(rows) do
     local k, color, word = r.kit, GRAY, "need Cooking " .. r.kit.learn
@@ -81,8 +103,9 @@ local function RefreshKitsPage(p)
     data[#data + 1] = { icon = "Interface\\Icons\\Spell_Fire_Fire", left = color .. k.name .. "|r",
       right = ("%d items  ·  %s"):format(k.slots, word),
       tipTitle = k.name,
-      tip = ("Learn at Cooking %d, use at %d. Holds %d camp items.%s"):format(k.learn, k.use, k.slots,
-        r.have > 0 and ("\nIn your bags: %d."):format(r.have) or "") }
+      tip = ("Learn at Cooking %d, use at %d. Holds %d camp items.%s%s"):format(k.learn, k.use, k.slots,
+        r.have > 0 and ("\nIn your bags: %d."):format(r.have) or "",
+        (function() local _, m = ns.CanMake(k.name); return m and ("\n\nTo make one:\n" .. table.concat(m, "\n")) or "" end)()) }
   end
   Fill(p.rows, data, 0)
 end

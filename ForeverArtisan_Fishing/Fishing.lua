@@ -709,12 +709,11 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     if e ~= "PLAYER_REGEN_ENABLED" or pendingMode then UpdateMode() end
     if e ~= "PLAYER_REGEN_ENABLED" then UpdateModeSoon() end
     if e ~= "PLAYER_REGEN_ENABLED" or ns.gearPending then ns.UpdateGear() end
-    if e == "PLAYER_ENTERING_WORLD" then
-      ns.UpdateSwapKey()
-      if (db.settings.key or "") == "" and not ns.warnedNoKey then
-        ns.warnedNoKey = true
-        say("No fishing key set. Type /fa fish and click Fishing key, or /fa fish key SPACE.")
-      end
+    if e == "PLAYER_ENTERING_WORLD" then ns.UpdateSwapKey() end
+    -- only nag about the key once you're actually holding a pole (once per session)
+    if e ~= "PLAYER_REGEN_ENABLED" and (db.settings.key or "") == "" and not ns.warnedNoKey and PoleEquipped() then
+      ns.warnedNoKey = true
+      say("No fishing key set. Type /fa fish and click Fishing key, or /fa fish key SPACE.")
     end
     if ns.OnChange then ns.OnChange() end
   elseif e == "UPDATE_BINDINGS" then

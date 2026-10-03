@@ -183,7 +183,18 @@ function ns.SetWaypoint(npc)
     local ok = pcall(C_Map.SetUserWaypoint, UiMapPoint.CreateFromCoordinates(npc.m, npc.x / 100, npc.y / 100))
     if ok then
       if C_SuperTrack and C_SuperTrack.SetSuperTrackedUserWaypoint then pcall(C_SuperTrack.SetSuperTrackedUserWaypoint, true) end
-      print(PREFIX .. "map pin set: " .. title)
+      -- the game only draws the pin on that zone's map: say which zone, and show it there if the map is open
+      local here = C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+      local zone = npc.z or "?"
+      if here ~= npc.m then
+        print(PREFIX .. ("map pin set: %s. It's in %s, so open the %s map to see it."):format(title, zone, zone))
+        if WorldMapFrame and WorldMapFrame.IsShown and WorldMapFrame:IsShown() and WorldMapFrame.SetMapID
+          and not (InCombatLockdown and InCombatLockdown()) then
+          pcall(WorldMapFrame.SetMapID, WorldMapFrame, npc.m)
+        end
+      else
+        print(PREFIX .. "map pin set: " .. title .. ". Open your map to see it.")
+      end
       return
     end
   end

@@ -800,14 +800,64 @@ do
   local nudged=false for i=before+1,#chat do if chat[i]:find("Your Fish Bowl is ready") then nudged=true end end
   print("CAMP NUDGE", nudged, cp.AtFire())
   assert(nudged and cp.AtFire(), "reminder at the fire")
-  GetSpellInfo=function(id) if id==77001 then return "Fish Bowl" end end
+  -- placed by a cast with a different name: seen when the Fish Bowl leaves the bags at the fire
+  fire("BAG_UPDATE_DELAYED") -- the bowl is in the bags
+  GetSpellInfo=function(id) if id==77001 then return "Set Up Camp Feature" end end
   fire("UNIT_SPELLCAST_SUCCEEDED","player","g",77001)
+  assert(cp.Left()==0, "cast name alone doesn't match")
+  GetContainerItemLink=function() return nil end
+  fire("BAG_UPDATE_DELAYED")
+  print("CAMP CASTNAMES", ForeverArtisanCampingDB.castNames and ForeverArtisanCampingDB.castNames["Set Up Camp Feature"])
+  assert(ForeverArtisanCampingDB.castNames["Set Up Camp Feature"]=="Fish Bowl", "learned the cast name")
+  GetContainerItemLink=function() return "|cffffffff|Hitem:990001::|h[Fish Bowl]|h|r" end
   print("CAMP STATUS", cp.Status())
   assert(cp.Left()>3500 and cp.Status():find("placed Fish Bowl"), "cooldown after placing")
+  assert(cp.KitLeft()==nil, "no kit in bags")
+  GetContainerItemLink=function() return "|cffffffff|Hitem:990002::|h[Basic Campfire Kit]|h|r" end
+  GetItemCooldown=function() return 900, 300 end
+  print("CAMP KIT", cp.KitLeft())
+  assert(cp.KitLeft()>150, "campfire kit's own 5-minute cooldown")
+  GetItemCooldown=nil
+  GetContainerItemLink=function() return "|cffffffff|Hitem:990001::|h[Fish Bowl]|h|r" end
   AURA=false; fire("UNIT_AURA","player"); AURA=true
   before=#chat; fire("UNIT_AURA","player")
   for i=before+1,#chat do assert(not chat[i]:find("is ready"), "no reminder while on cooldown") end
-  run("FACAMP","status"); run("FACAMP","reminder"); run("FACAMP","reminder")
+  -- Craft: opens the profession window on the camp item's recipe
+  do
+    local oldT, oldAfter = C_TradeSkillUI, C_Timer.After
+    local opened, picked
+    C_Timer.After=function(_,fn) fn() end
+    C_TradeSkillUI={OpenTradeSkill=function(line) opened=line; _G.ProfessionsFrame=_G.ProfessionsFrame or CreateFrame("Frame"); ProfessionsFrame:Show() end,
+      GetAllRecipeIDs=function() return {501,502} end,
+      GetRecipeInfo=function(id) return {name=(id==502) and "Fish Bowl" or "Raw Fish"} end,
+      OpenRecipe=function(id) picked=id end}
+    cp.OpenCraft("Fishing",356,"Fish Bowl")
+    print("CAMP CRAFT", opened, picked)
+    assert(opened==356 and picked==502, "craft opens the window on the recipe")
+    -- another profession's window already open: still switches
+    opened=nil; cp.OpenCraft("Skinning",393,"Camp Chair"); assert(opened==393, "switches to Skinning")
+    ProfessionsFrame:Hide()
+    C_TradeSkillUI={}
+    local before=#chat
+    cp.OpenCraft("Fishing",356,"Fish Bowl")
+    assert(chat[#chat]:find("Open your Fishing window"), "hint when the window won't open")
+    C_TradeSkillUI, C_Timer.After = oldT, oldAfter
+  end
+  -- materials: seed reagents counted from the bags; Craft is gray without them
+  do
+    local oldLink=GetContainerItemLink
+    local can, lines = cp.CanMake("Fish Bowl", {})
+    assert(can==0 and lines[1]:find("0/1") and lines[1]:find("Raw Brilliant Smallfish"), "no mats")
+    can = cp.CanMake("Camp Chair", {["light leather"]=7, ["simple wood"]=5})
+    assert(can==2, "camp chair: 7 leather / 3, 5 wood / 2 -> 2")
+    assert(cp.CanMake("Seed Hybridizer")==nil, "unknown reagents")
+    GetContainerItemLink=function(_,s) return "|cffffffff|Hitem:1::|h[Raw Brilliant Smallfish]|h|r" end
+    local fish for _,r in ipairs(cp.Rows()) do if r.prof=="Fishing" then fish=r end end
+    print("CAMP MATS", fish.can, fish.mats and fish.mats[1])
+    assert(fish.can==0, "fish but no vial")
+    GetContainerItemLink=oldLink
+  end
+  run("FACAMP","status"); run("FACAMP","debug"); run("FACAMP","reminder"); run("FACAMP","reminder")
   GetContainerNumSlots,GetContainerItemLink=oldNum,oldLink
   UnitBuff=nil GetSpellInfo=nil
 end

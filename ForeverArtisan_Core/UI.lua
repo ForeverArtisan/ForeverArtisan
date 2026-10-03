@@ -351,6 +351,16 @@ function UI.Kit(ns, view)
       end
       if withAct then
         r.act = UI.Button(r, "", 64, nil); r.act:SetHeight(20); r.act:SetPoint("RIGHT", -2, 0)
+        -- the button's own tooltip (d.actTip), shown even while it's grayed out
+        if r.act.SetMotionScriptsWhileDisabled then r.act:SetMotionScriptsWhileDisabled(true) end
+        r.act:SetScript("OnEnter", function(self)
+          if not self.tipText then return end
+          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+          if self.tipTitle then GameTooltip:AddLine(self.tipTitle) end
+          GameTooltip:AddLine(self.tipText, 1, 1, 1, true)
+          GameTooltip:Show()
+        end)
+        r.act:SetScript("OnLeave", function() GameTooltip:Hide() end)
         r.right = UI.Text(r, "GameFontHighlightSmall", "RIGHT", -8, 0, r.act, "LEFT")
       else
         r.act = false
@@ -408,7 +418,11 @@ function UI.Kit(ns, view)
         r.left:SetText(d.left or ""); r.right:SetText(d.right or "")
         r.itemId, r.tip, r.tipTitle, r.data, r.goalIndex = d.id, d.tip, d.tipTitle, d, d.goalIndex
         if r.act then
-          if d.act then r.act:SetText(d.act); r.act:SetScript("OnClick", d.onAct); r.act:Show() else r.act:Hide() end
+          if d.act then
+            r.act:SetText(d.act); r.act:SetScript("OnClick", d.onAct); r.act:Show()
+            if r.act.SetEnabled then r.act:SetEnabled(not d.actOff) end
+            r.act.tipTitle, r.act.tipText = d.actTipTitle, d.actTip
+          else r.act:Hide() end
         end
         if r.edit then
           r.right:ClearAllPoints()
