@@ -116,6 +116,7 @@ local NOUNS = {
   leatherworker = "leatherworking", cook = "cooking", chef = "cooking", fisher = "fishing", fisherman = "fishing",
   herbalist = "herbalism", herbs = "herbalism", miner = "mining", skinner = "skinning", firstaid = "firstaid",
   medic = "firstaid", contacts = "contacts", vendors = "contacts",
+  campfire = "camping", camps = "camping", campsite = "camping",
 }
 
 local function find(word)

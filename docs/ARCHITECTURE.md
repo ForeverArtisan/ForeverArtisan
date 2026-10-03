@@ -54,6 +54,7 @@ ONE app, ONE download, ONE version, built as a SUITE: **ForeverArtisan_Core** is
 | First Aid | aid | /faaid (FAAID) | ForeverArtisanFirstAidDB |
 | Alchemy | alch | /faalch (FAALCH) | ForeverArtisanAlchemyDB |
 | Leatherworking | lw | /falw (FALW) | ForeverArtisanLeatherworkingDB |
+| Camping | camp | /facamp (FACAMP) | ForeverArtisanCampingDB (cooldown per character) |
 | Trade Contacts | contacts | /facontacts (FACONTACTS), /fasearch | ForeverArtisanContactsDB (account-wide) |
 Old names (MatsledgerSettings, MatsFishDB, ForeverArtisanLoggerDB, ForeverArtisanHerbDB) are still listed in the TOCs for this release only so FA.Migrate can carry data over; drop them in the next release. Old slash commands (/mfish, /mlog, /mats, /falog) are gone. Trade Contacts (files Contacts.lua = recording, Finder.lua = tooltips/search/`FA.Vendors`, UI.lua = Search / Contacts / Limited stock tabs) replaced the old Logger module. The Contacts tab groups by town (click a header to fold); its Zone and Trade pickers are saved in settings (`listZone`, `listTrade`), and the trade of an NPC comes from its title (`TRADES` in UI.lua). `ns.IsIgnored` hides innkeepers, class/riding trainers etc. unless Trade = Everyone.
 

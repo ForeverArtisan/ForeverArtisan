@@ -64,7 +64,7 @@ GetGameTime=function() return 12,0 end
 GetBuildInfo=function() return "1.16.0","16001","Sep 1 2026",11601 end
 GetLocale=function() return "enUS" end GetRealmName=function() return "Beta" end UnitClass=function() return "Druid","DRUID" end UnitRace=function() return "Tauren","Tauren" end GetMoney=function() return 0 end
 -- addon list
-local ADDONS={"ForeverArtisan_Core","ForeverArtisan_Contacts","ForeverArtisan_Fishing","ForeverArtisan_Cooking","ForeverArtisan_Herbalism","ForeverArtisan_Mining","ForeverArtisan_Skinning","ForeverArtisan_FirstAid","ForeverArtisan_Alchemy","ForeverArtisan_Leatherworking","ForeverArtisan_Blacksmithing","ForeverArtisan_Tailoring","ForeverArtisan_Engineering","ForeverArtisan_Enchanting"}
+local ADDONS={"ForeverArtisan_Core","ForeverArtisan_Contacts","ForeverArtisan_Fishing","ForeverArtisan_Cooking","ForeverArtisan_Herbalism","ForeverArtisan_Mining","ForeverArtisan_Skinning","ForeverArtisan_FirstAid","ForeverArtisan_Alchemy","ForeverArtisan_Leatherworking","ForeverArtisan_Blacksmithing","ForeverArtisan_Tailoring","ForeverArtisan_Engineering","ForeverArtisan_Enchanting","ForeverArtisan_Camping"}
 local META={}
 C_AddOns={GetNumAddOns=function() return #ADDONS end,
   GetAddOnInfo=function(i) local n=type(i)=="number" and ADDONS[i] or i; return n, "ForeverArtisan: "..n:gsub("ForeverArtisan_",""), "notes", true, nil end,
@@ -129,9 +129,9 @@ C_Map.GetPlayerMapPosition=function() return {GetXY=function() return .5,.5 end}
 cns.TouchContact(2394,"target")
 for _,n in ipairs(cns.Contacts()) do print("AFTER TOUCH", n.n, n.age, n.x, n.y, n.s) end
 cns.Forget("trainer:3363"); print("AFTER FORGET", #cns.Contacts())
-for _,alias in ipairs({"fish","cook","herb","mine","skin","aid","contacts","alch","lw","bs","tailor","eng","ench"}) do run("FOREVERARTISAN", alias.." help") end
+for _,alias in ipairs({"fish","cook","herb","mine","skin","aid","contacts","alch","lw","bs","tailor","eng","ench","camp"}) do run("FOREVERARTISAN", alias.." help") end
 -- open every module window and click every tab
-local wins={ForeverArtisanFishingFrame="FAFISH",ForeverArtisanCookingFrame="FACOOK",ForeverArtisanHerbalismFrame="FAHERB",ForeverArtisanMiningFrame="FAMINING",ForeverArtisanSkinningFrame="FASKIN",ForeverArtisanFirstAidFrame="FAAID",ForeverArtisanContactsFrame="FACONTACTS",ForeverArtisanAlchemyFrame="FAALCH",ForeverArtisanLeatherworkingFrame="FALW",ForeverArtisanBlacksmithingFrame="FABS",ForeverArtisanTailoringFrame="FATAILOR",ForeverArtisanEngineeringFrame="FAENG",ForeverArtisanEnchantingFrame="FAENCH"}
+local wins={ForeverArtisanFishingFrame="FAFISH",ForeverArtisanCookingFrame="FACOOK",ForeverArtisanHerbalismFrame="FAHERB",ForeverArtisanMiningFrame="FAMINING",ForeverArtisanSkinningFrame="FASKIN",ForeverArtisanFirstAidFrame="FAAID",ForeverArtisanContactsFrame="FACONTACTS",ForeverArtisanAlchemyFrame="FAALCH",ForeverArtisanLeatherworkingFrame="FALW",ForeverArtisanBlacksmithingFrame="FABS",ForeverArtisanTailoringFrame="FATAILOR",ForeverArtisanEngineeringFrame="FAENG",ForeverArtisanEnchantingFrame="FAENCH",ForeverArtisanCampingFrame="FACAMP"}
 for wname,cmd in pairs(wins) do
   local before=#frames
   run(cmd,"")
@@ -139,7 +139,7 @@ for wname,cmd in pairs(wins) do
   if not w then print("NO WINDOW",wname) os.exit(1) end
   print("WINDOW",wname,"title:",(w.title._text or ""):gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r",""), "shown", w._shown)
   for i=before+1,#frames do local b=frames[i]
-    if b._text and b.scripts.OnClick and ({Progress=1,Fishing=1,["Catch log"]=1,["Cast marker"]=1,Herbalism=1,Mining=1,Skinning=1,Cooking=1,["Gather log"]=1,["Herb guide"]=1,["Mining log"]=1,["Node guide"]=1,["Skinning log"]=1,["Level guide"]=1,["Cook log"]=1,["Recipe book"]=1,["First Aid"]=1,["Craft log"]=1,Search=1,Contacts=1,["Limited stock"]=1,Alchemy=1,Leatherworking=1,Blacksmithing=1,Tailoring=1,Engineering=1,Enchanting=1})[b._text] then
+    if b._text and b.scripts.OnClick and ({Progress=1,Fishing=1,["Catch log"]=1,["Cast marker"]=1,Herbalism=1,Mining=1,Skinning=1,Cooking=1,["Gather log"]=1,["Herb guide"]=1,["Mining log"]=1,["Node guide"]=1,["Skinning log"]=1,["Level guide"]=1,["Cook log"]=1,["Recipe book"]=1,["First Aid"]=1,["Craft log"]=1,Search=1,Contacts=1,["Limited stock"]=1,Alchemy=1,Leatherworking=1,Blacksmithing=1,Tailoring=1,Engineering=1,Enchanting=1,Camp=1,["Campfire kits"]=1})[b._text] then
       local ok,err=pcall(b.scripts.OnClick,b) if not ok then print("TAB ERROR",wname,b._text,err) os.exit(1) end
     end
   end
@@ -777,6 +777,39 @@ do
   IsPlayerSpell=function() return false end
   assert(not hns.KnowsCultivation() and tip("Peacebloom")=="" and hns.CultivationStatus()==nil, "not known: silent")
   GetSpellInfo=nil IsPlayerSpell=nil GetSpellCooldown=nil
+end
+-- Camping: your camp item per profession, kits by Cooking, cooldown after placing, reminder at a fire
+do
+  local cp=loadedFrames["ForeverArtisan_Camping"].ns
+  local rows=cp.Rows()
+  local fish for _,r in ipairs(rows) do if r.prof=="Fishing" then fish=r end end
+  print("CAMP ROWS", #rows, fish and fish.now, fish and fish.next, fish and fish.nextAt)
+  assert(fish and fish.now=="Fish Bowl" and fish.next=="Fishing Rack" and cp.NextText(fish)=="Fishing Rack: needs a Blueprint", "skill 150, no Blueprint item: tier 1")
+  local kits,cook=cp.KitRows()
+  assert(cook==150 and kits[1].state=="use" and kits[2].state=="use" and kits[3].state=="low", "kits by cooking 150")
+  assert(cp.CampItem("Anarchist's Workbench").prof=="Engineering" and cp.CampItem("Trapper's Workbench").prof=="Skinning", "workbench names")
+  assert(cp.Left()==0 and cp.Status():find("ready"), "ready at start")
+  -- a Fish Bowl in the bags, placed at a fire
+  local oldNum,oldLink=GetContainerNumSlots,GetContainerItemLink
+  GetContainerNumSlots=function(b) return b==0 and 1 or 0 end
+  GetContainerItemLink=function() return "|cffffffff|Hitem:990001::|h[Fish Bowl]|h|r" end
+  local AURA=false
+  UnitBuff=function(_,i) if AURA and i==1 then return "Campfire Nearby" end end
+  local before=#chat
+  AURA=true; fire("UNIT_AURA","player")
+  local nudged=false for i=before+1,#chat do if chat[i]:find("Your Fish Bowl is ready") then nudged=true end end
+  print("CAMP NUDGE", nudged, cp.AtFire())
+  assert(nudged and cp.AtFire(), "reminder at the fire")
+  GetSpellInfo=function(id) if id==77001 then return "Fish Bowl" end end
+  fire("UNIT_SPELLCAST_SUCCEEDED","player","g",77001)
+  print("CAMP STATUS", cp.Status())
+  assert(cp.Left()>3500 and cp.Status():find("placed Fish Bowl"), "cooldown after placing")
+  AURA=false; fire("UNIT_AURA","player"); AURA=true
+  before=#chat; fire("UNIT_AURA","player")
+  for i=before+1,#chat do assert(not chat[i]:find("is ready"), "no reminder while on cooldown") end
+  run("FACAMP","status"); run("FACAMP","reminder"); run("FACAMP","reminder")
+  GetContainerNumSlots,GetContainerItemLink=oldNum,oldLink
+  UnitBuff=nil GetSpellInfo=nil
 end
 print("CRAFTS OK")
 print("SUITE OK")

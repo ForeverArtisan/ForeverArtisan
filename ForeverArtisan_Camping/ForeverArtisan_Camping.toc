@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: ForeverArtisan: Camping
+## IconTexture: Interface\Icons\Spell_Fire_Fire
+## Notes: Your camp items per profession, the camp cooldown, campfire kits, and a reminder when yours is ready at a fire.
+## Author: ForeverArtisan
+## Version: 0.9.8-dev
+## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
+## X-Website: https://foreverartisan.app
+## Dependencies: ForeverArtisan_Core
+## SavedVariables: ForeverArtisanCampingDB
+## X-FA-Slash: FACAMP
+## X-FA-Alias: camp
+
+Items.lua
+Camping.lua
+UI.lua
