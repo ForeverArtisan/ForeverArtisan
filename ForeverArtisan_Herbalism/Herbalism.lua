@@ -31,6 +31,7 @@ local FIND_HERBS = SpellName(FIND_HERBS_ID) or "Find Herbs"
 local function IsHerbSpell(id)
   return (id and HERB_SPELLS[id]) or (id and SpellName(id) == HERB_GATHERING) or false
 end
+ns.IsHerbSpell = IsHerbSpell
 
 local function ItemName(id)
   local f = (C_Item and C_Item.GetItemInfo) or GetItemInfo
@@ -461,6 +462,7 @@ local function ObjectTip(tt)
   local skill = EffSkill()
   local c = ns.HerbColor(h.req, skill)
   if skill then tt:AddLine(ns.COLOR_CODE[c] .. ns.COLOR_WORD[c] .. "|r  " .. GRAY .. "(you: " .. skill .. ")|r") end
+  if ns.CultivationTip then ns.CultivationTip(tt, h.name) end -- works without Herbalism
   tt:Show()
 end
 
@@ -613,6 +615,8 @@ SlashCmdList.FAHERB = function(msg)
     say("Pick messages " .. (db.settings.verbose and "on." or "off."))
   elseif cmd == "reset" and rest:lower() == "confirm" then
     ns.ResetLog()
+  elseif cmd == "cultivation" or cmd == "cult" then
+    if ns.CultivationReport then ns.CultivationReport(rest) end
   elseif not ns.Knows() then
     say("You haven't learned Herbalism on this character. Its reminders stay quiet until you do.")
   else
@@ -620,6 +624,6 @@ SlashCmdList.FAHERB = function(msg)
     say(("Skill: %s%s  ·  Find Herbs: %s"):format(i.rank and (i.rank .. (i.max and ("/" .. i.max) or "")) or "?",
       (i.mod and i.mod > 0) and (" (+" .. i.mod .. ")") or "",
       ({ [true] = "on", [false] = "off" })[ns.FindHerbsOn()] or "n/a"))
-    say("Commands: /fa herb (window), next, zone, zones, goal <amount> <herb>, goals reset, session, reminder, tooltips, verbose, reset confirm")
+    say("Commands: /fa herb (window), next, zone, zones, goal <amount> <herb>, goals reset, session, reminder, tooltips, verbose, cultivation, reset confirm")
   end
 end

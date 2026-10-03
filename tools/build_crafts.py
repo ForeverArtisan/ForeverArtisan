@@ -173,8 +173,12 @@ CRAFTS = [
     },
 ]
 
+# icon in the game's AddOns list
+ICONS = {'Alchemy': 'Trade_Alchemy', 'Blacksmithing': 'Trade_BlackSmithing', 'Enchanting': 'Trade_Engraving', 'Engineering': 'Trade_Engineering', 'Leatherworking': 'INV_Misc_ArmorKit_17', 'Tailoring': 'Trade_Tailoring'}
+
 TOC = """## Interface: 16001
 ## Title: ForeverArtisan: {NAME}
+## IconTexture: Interface\\Icons\\{ICON}
 ## Notes: {NOTES}
 ## Author: ForeverArtisan
 ## Version: {VERSION}
@@ -211,7 +215,7 @@ def advice_block(adv):
 
 def render(tpl, c):
     subs = {
-        "ID": c["ID"], "NAME": c["NAME"], "LINE": str(c["LINE"]), "SLASH": c["SLASH"],
+        "ID": c["ID"], "NAME": c["NAME"], "ICON": ICONS[c["ID"]], "LINE": str(c["LINE"]), "SLASH": c["SLASH"],
         "SLASHCMD": c["SLASHCMD"], "ALIAS": c["ALIAS"], "DB": c["DB"], "FLAG": c["FLAG"],
         "GROUPS": lua_list(c["GROUPS"]), "PREFIXES": lua_list(c["PREFIXES"]),
         "SKIP": lua_str(c["SKIP"]) if c["SKIP"] else "nil",
@@ -238,7 +242,7 @@ def main():
         files = {
             c["ID"] + ".lua": render(engine, c),
             "UI.lua": render(ui, c),
-            "ForeverArtisan_%s.toc" % c["ID"]: TOC.format(VERSION=version, **c),
+            "ForeverArtisan_%s.toc" % c["ID"]: TOC.format(VERSION=version, ICON=ICONS[c["ID"]], **c),
         }
         for name, text in files.items():
             with open(os.path.join(folder, name), "w", encoding="utf-8", newline="\n") as f:

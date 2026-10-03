@@ -41,6 +41,10 @@ local function BuildMainPage(p)
     Check(p, "Chat message for every pick", 16, -412,
       function() return S().verbose end, function(v) S().verbose = v end),
   }
+  -- Tauren only: shown when this character knows the spell
+  p.cult = Check(p, "Cultivation reminders (ready, and on herb tooltips)", 16, -438,
+    function() return S().cultivation ~= false end, function(v) S().cultivation = v end)
+  p.checks[#p.checks + 1] = p.cult
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("/fa herb next  ·  /fa herb goal 20 Peacebloom  ·  /fa herb zones")
 end
@@ -65,10 +69,13 @@ local function RefreshMainPage(p)
 
   local fh = ns.FindHerbsOn()
   if not ns.Knows() then fh = "skip" end
-  if fh == true then p.find:SetText(GREEN .. "Find Herbs: on|r")
-  elseif fh == false then p.find:SetText(RED .. "Find Herbs: off|r  " .. GRAY .. "Turn it on from the tracking button on your minimap.|r")
-  elseif fh == "skip" then p.find:SetText("")
-  else p.find:SetText(GRAY .. "Find Herbs: not learned|r") end
+  local cult = ns.CultivationStatus and ns.CultivationStatus()
+  local sep = cult and ("  " .. GRAY .. "·|r  " .. cult) or ""
+  if fh == true then p.find:SetText(GREEN .. "Find Herbs: on|r" .. sep)
+  elseif fh == false then p.find:SetText(RED .. "Find Herbs: off|r  " .. GRAY .. (cult and "(minimap tracking button)|r" or "Turn it on from the tracking button on your minimap.|r") .. sep)
+  elseif fh == "skip" then p.find:SetText(cult or "")
+  else p.find:SetText(GRAY .. "Find Herbs: not learned|r" .. sep) end
+  p.cult:SetShown(ns.KnowsCultivation and ns.KnowsCultivation() or false)
 
   local s = ns.SessionInfo()
   if s.nodes > 0 then

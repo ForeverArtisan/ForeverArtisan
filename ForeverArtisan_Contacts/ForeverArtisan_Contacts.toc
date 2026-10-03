@@ -1,8 +1,9 @@
 ## Interface: 16001
 ## Title: ForeverArtisan: Trade Contacts
+## IconTexture: Interface\Icons\INV_Misc_Book_09
 ## Notes: Your crafting address book. Crafting vendors and profession trainers you talk to are saved with what they sell, prices, limited stock and location. Searchable, on item tooltips, shared by all your characters. Only NPCs you've met.
 ## Author: ForeverArtisan
-## Version: 0.9.7
+## Version: 0.9.8-dev
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

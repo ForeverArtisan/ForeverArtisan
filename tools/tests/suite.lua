@@ -732,5 +732,51 @@ do
   assert(opened, "book opens Trade Contacts")
   ForeverArtisan.minimap("contacts"); ForeverArtisan.minimap("contacts")
 end
+-- Tauren Cultivation: ready line on herb tooltips, one nudge, per-herb level learned from your own casts
+do
+  local hns=loadedFrames["ForeverArtisan_Herbalism"].ns
+  local CULT=99001
+  local cdStart, cdDur = 0, 0
+  GetSpellInfo=function(x) if x=="Cultivation" or x==CULT then return "Cultivation",nil,1,0,0,0,CULT end if x==2366 then return "Herb Gathering",nil,1,0,0,0,2366 end end
+  IsPlayerSpell=function(id) return id==CULT end
+  GetSpellCooldown=function() return cdStart, cdDur end
+  local function tip(name) local lines={} local tt={AddLine=function(_,l) lines[#lines+1]=l end} hns.CultivationTip(tt,name) return table.concat(lines,"\n") end
+  assert(hns.KnowsCultivation(), "knows cultivation")
+  assert(hns.CultivationStatus():find("ready"), "status ready")
+  assert(tip("Peacebloom"):find("Cultivation ready"), "ready line on tooltip")
+  local before=#chat
+  fire("UNIT_SPELLCAST_SENT","player","Peacebloom","g1",2366)
+  fire("UNIT_SPELLCAST_SENT","player","Silverleaf","g2",2366)
+  local nudges=0 for i=before+1,#chat do if chat[i]:find("Cultivation is ready") then nudges=nudges+1 end end
+  print("CULT NUDGES", nudges)
+  assert(nudges==1, "one nudge per ready period")
+  -- too low for Kingsblood: the game's error names the level
+  fire("UNIT_SPELLCAST_SENT","player","Kingsblood","g3",CULT)
+  fire("UI_ERROR_MESSAGE",0,"Requires level 25")
+  local ok,need=hns.CultivationLevelOK("Kingsblood")
+  print("CULT KINGSBLOOD", ok, need, tip("Kingsblood"))
+  assert(ok==false and need==25 and tip("Kingsblood"):find("needs level 25"), "learned level from the error")
+  -- an error with no number: too low at your level
+  fire("UNIT_SPELLCAST_SENT","player","Liferoot","g4",CULT)
+  fire("UI_ERROR_MESSAGE",0,"Your level is too low")
+  ok,need=hns.CultivationLevelOK("Liferoot")
+  assert(ok==false and need==21, "too low at 20 -> needs 21+")
+  -- a success: works at 20, cooldown starts, no ready line
+  fire("UNIT_SPELLCAST_SENT","player","Mageroyal","g5",CULT)
+  cdStart, cdDur = 990, 3600
+  fire("UNIT_SPELLCAST_SUCCEEDED","player","g5",CULT)
+  assert(hns.CultivationLevelOK("Mageroyal")==true, "worked at 20")
+  assert(ForeverArtisanHerbalismDB.cultivate.casts==1, "cast counted")
+  print("CULT STATUS", hns.CultivationStatus())
+  assert(hns.CultivationStatus():find("60 min") and tip("Peacebloom")=="", "on cooldown")
+  run("FAHERB","cultivation")
+  run("FAHERB","cultivation off")
+  cdStart, cdDur = 0, 0
+  assert(tip("Peacebloom")=="", "off: no line"); run("FAHERB","cultivation on")
+  -- a character without the spell hears nothing
+  IsPlayerSpell=function() return false end
+  assert(not hns.KnowsCultivation() and tip("Peacebloom")=="" and hns.CultivationStatus()==nil, "not known: silent")
+  GetSpellInfo=nil IsPlayerSpell=nil GetSpellCooldown=nil
+end
 print("CRAFTS OK")
 print("SUITE OK")

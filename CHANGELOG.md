@@ -1,5 +1,9 @@
 # ForeverArtisan changelog
 
+## 0.9.8 (unreleased)
+- Herbalism: Cultivation reminders for Tauren. Hover a herb out in the world and the tooltip says "Cultivation ready: cast it first to grow a duplicate" while the spell is off cooldown. Start picking a herb while it's ready and chat reminds you once. When the hour is up, chat says "Cultivation is ready again." The Herbalism window shows "Cultivation: ready" or the minutes left. Works without Herbalism, and stays hidden on characters who don't know the spell.
+- Cultivation has a level requirement for each herb. ForeverArtisan doesn't guess it: when a cast fails because your level is too low, it remembers that herb, and its tooltip says "Cultivation: needs level 25 for this herb". `/fa herb cultivation` lists what it has learned; `/fa herb cultivation off` turns the reminders off (or untick the box in the Herbalism window).
+
 ## 0.9.7 (2026-10-02)
 - Blacksmithing, Tailoring, Engineering and Enchanting (new modules): the same window as Alchemy and Leatherworking, with what to make now, a plan to your target skill with a shopping list, a craft log, a recipe book and where to train next. Every one of the 12 professions now has a module. `/fa bs`, `/fa tailor`, `/fa eng`, `/fa ench`
 - Tailoring counts bolts of cloth as crafts. Blacksmithing and Engineering point ore to your Mining log and say where bars come from. Enchanting points dust and essences to disenchanting.
