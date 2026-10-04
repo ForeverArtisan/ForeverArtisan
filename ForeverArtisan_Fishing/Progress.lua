@@ -14,17 +14,20 @@ ns.session = session
 local ADVICE = {
   Horde = {
     [75]  = "Journeyman: any Horde Fishing trainer, needs 50. Classic: Lumak (Orgrimmar), Kah Mistrunner (Thunder Bluff), Armand Cromwell (Undercity). Not logged in Forever yet.",
-    [150] = "Expert: Expert Fishing book from Old Man Heming, Booty Bay (1g, needs 125). Neutral, both factions. Confirmed in Forever.",
-    [225] = "Artisan: Classic has Nat Pagle's quest in Dustwallow Marsh (needs 225). Neutral, both factions. Not confirmed in Forever yet.",
+    [150] = "Expert: Expert Fishing book from Old Man Heming, Booty Bay (1g, needs 125 and level 20). Neutral, both factions. Confirmed in Forever.",
+    [225] = "Artisan: Classic has Nat Pagle's quest in Dustwallow Marsh (needs 225 and level 35). Neutral, both factions. Not confirmed in Forever yet.",
     [300] = "Top rank. Nothing left to train.",
   },
   Alliance = {
     [75]  = "Journeyman: any Alliance Fishing trainer, needs 50. Classic: Arnold Leland (Stormwind), Grimnur Stonebrand (Ironforge), Androl Oakhand (Rut'theran Village). No Alliance data in Forever yet.",
-    [150] = "Expert: Expert Fishing book from Old Man Heming, Booty Bay (1g, needs 125). Neutral, both factions. Confirmed in Forever.",
-    [225] = "Artisan: Classic has Nat Pagle's quest in Dustwallow Marsh (needs 225). Neutral, both factions. Not confirmed in Forever yet.",
+    [150] = "Expert: Expert Fishing book from Old Man Heming, Booty Bay (1g, needs 125 and level 20). Neutral, both factions. Confirmed in Forever.",
+    [225] = "Artisan: Classic has Nat Pagle's quest in Dustwallow Marsh (needs 225 and level 35). Neutral, both factions. Not confirmed in Forever yet.",
     [300] = "Top rank. Nothing left to train.",
   },
 }
+-- character level each rank needs (Classic: the Expert book and Nat Pagle's quest)
+local RANK_LEVEL = { [150] = 20, [225] = 35 }
+
 local function Faction()
   local f = UnitFactionGroup and UnitFactionGroup("player")
   return (f == "Alliance" or f == "Horde") and f or "Horde"
@@ -59,6 +62,13 @@ function ns.SkillInfo()
   info.capped = max and rank >= max and max < 300
   info.faction = Faction()
   info.advice = max and ADVICE[info.faction][max]
+  -- too low to train the next rank yet? say so, and when you can
+  local need = max and RANK_LEVEL[max]
+  local lvl = UnitLevel and UnitLevel("player")
+  if need and lvl and lvl < need and info.advice then
+    info.needLevel = need
+    info.advice = info.advice .. (" You're level %d, so that's %d more level%s first."):format(lvl, need - lvl, need - lvl == 1 and "" or "s")
+  end
   info.sinceUp = ns.DB().sinceUp or 0
   return info
 end

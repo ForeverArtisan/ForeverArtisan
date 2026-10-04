@@ -22,6 +22,20 @@ FA.BAR_DONE = { 0.25, 1, 0.25, 0.85 }
 FA.BAR_CAPPED = { 1, 0.25, 0.25, 0.85 }
 FA.WEBSITE = "foreverartisan.app"
 
+-- Tooltip lines we add to the game's tooltips (herbs, ores, mobs, items) get a small "FA" on the
+-- right of the first one, so players know the line comes from ForeverArtisan and not the game.
+-- Once per tooltip, even when several of our modules add lines to it.
+FA.TIP_TAG = FA.GOLD .. "FA|r"
+function FA.TipLine(tt, text)
+  if not tt.faTagHooked and tt.HookScript then
+    tt.faTagHooked = true
+    tt:HookScript("OnTooltipCleared", function(self) self.faTagged = nil end)
+  end
+  if tt.faTagged or not tt.AddDoubleLine then return tt:AddLine(text) end
+  tt.faTagged = true
+  tt:AddDoubleLine(text, FA.TIP_TAG, 1, 1, 1, 1, 1, 1)
+end
+
 -- ONE version for the whole suite. It lives in every TOC (## Version) and is set for all of
 -- them at once by tools/release.py. Core's copy is the reference; modules must match it.
 function FA.Version(addon)

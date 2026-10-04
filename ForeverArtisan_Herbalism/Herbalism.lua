@@ -437,10 +437,10 @@ local function HerbLines(tt, id)
   if h then
     local skill = EffSkill()
     local c = ns.HerbColor(h.req, skill)
-    tt:AddLine(("|cffd4a94eHerbalism %d|r%s"):format(h.req,
+    ForeverArtisan.TipLine(tt, ("|cffd4a94eHerbalism %d|r%s"):format(h.req,
       skill and ("  " .. ns.COLOR_CODE[c] .. ns.COLOR_WORD[c] .. "|r") or ""))
   else
-    tt:AddLine("|cffd4a94eHerbalism bonus herb|r")
+    ForeverArtisan.TipLine(tt, "|cffd4a94eHerbalism bonus herb|r")
   end
   local where = ns.ZoneText(id)
   tt:AddLine(where and ("Picked in: " .. where) or (GRAY .. "Not in your gather log yet.|r"), 0.9, 0.9, 0.9, true)
@@ -466,7 +466,7 @@ local function ObjectTip(tt)
   tt.faHerbDone = true
   local skill = EffSkill()
   local c = ns.HerbColor(h.req, skill)
-  if skill then tt:AddLine(ns.COLOR_CODE[c] .. ns.COLOR_WORD[c] .. "|r  " .. GRAY .. "(you: " .. skill .. ")|r") end
+  if skill then ForeverArtisan.TipLine(tt, ns.COLOR_CODE[c] .. ns.COLOR_WORD[c] .. "|r  " .. GRAY .. "(you: " .. skill .. ")|r") end
   if ns.CultivationTip then ns.CultivationTip(tt, h.name) end -- works without Herbalism
   tt:Show()
 end

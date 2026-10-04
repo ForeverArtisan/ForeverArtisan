@@ -541,14 +541,14 @@ local function ItemTip(tt)
     tt.faCookDone = true
     local r = recipes[rname]
     tt:AddLine(" ")
-    tt:AddLine(("|cffd4a94eCooking|r  %s%s|r%s"):format(r.learned and GREEN or YELLOW, r.learned and "You know this recipe" or "Not learned yet",
+    ForeverArtisan.TipLine(tt, ("|cffd4a94eCooking|r  %s%s|r%s"):format(r.learned and GREEN or YELLOW, r.learned and "You know this recipe" or "Not learned yet",
       r.grayAt and (GRAY .. "  ·  gray at " .. r.grayAt .. "|r") or ""))
     tt:Show()
     return
   end
   tt.faCookDone = true
   tt:AddLine(" ")
-  tt:AddLine("|cffd4a94eCooking:|r used in")
+  ForeverArtisan.TipLine(tt, "|cffd4a94eCooking:|r used in")
   local shown = 0
   for _, r in ipairs(uses) do
     if shown >= 3 then break end

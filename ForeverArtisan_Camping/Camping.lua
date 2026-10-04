@@ -306,20 +306,29 @@ end
 
 ---------------------------------------------------------------- at a fire
 -- the buff the game gives near a campfire ("Campfire Nearby" in the beta)
+local atFireCached = false -- last answer, used in combat when buffs can't be read
+-- Forever can mark buffs "secret" even out of combat (reading one errors), so every read is guarded:
+-- if the game won't tell us, keep the last answer.
+local function ReadAura(i)
+  if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+    local a = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+    if not a then return nil, true end
+    return a.name
+  elseif UnitBuff then
+    local name = UnitBuff("player", i)
+    return name, name == nil
+  end
+  return nil, true
+end
+
 local function NearFire()
+  if InCombatLockdown() then return atFireCached end
   for i = 1, 40 do
-    local name
-    if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
-      local a = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
-      if not a then break end
-      name = a.name
-    elseif UnitBuff then
-      name = UnitBuff("player", i)
-      if not name then break end
-    else
-      break
-    end
-    if name and name:lower():find("campfire", 1, true) then return true end
+    local ok, name, done = pcall(ReadAura, i)
+    if not ok then return atFireCached end
+    if done then break end
+    if issecretvalue and issecretvalue(name) then return atFireCached end
+    if type(name) == "string" and name:lower():find("campfire", 1, true) then return true end
   end
   return false
 end
@@ -349,6 +358,7 @@ local function CheckFire()
       end
     end
   end
+  atFireCached = now
   if now ~= atFire then
     atFire = now
     if ns.OnChange then ns.OnChange() end
@@ -392,10 +402,16 @@ ns.BagsChanged = BagsChanged
 
 ---------------------------------------------------------------- events
 local learnPending = false
+local bagsDirty = false
+local auraPending = false
 local ev = CreateFrame("Frame")
-for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "UNIT_SPELLCAST_SUCCEEDED", "UNIT_AURA",
-  "BAG_UPDATE_DELAYED", "SKILL_LINES_CHANGED", "TRADE_SKILL_SHOW", "TRADE_SKILL_LIST_UPDATE" }) do
+for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD",
+  "BAG_UPDATE_DELAYED", "SKILL_LINES_CHANGED", "PLAYER_REGEN_ENABLED", "TRADE_SKILL_SHOW", "TRADE_SKILL_LIST_UPDATE" }) do
   pcall(ev.RegisterEvent, ev, e)
+end
+-- the player's own casts and buffs only
+for _, e in ipairs({ "UNIT_SPELLCAST_SUCCEEDED", "UNIT_AURA" }) do
+  if not (ev.RegisterUnitEvent and pcall(ev.RegisterUnitEvent, ev, e, "player")) then pcall(ev.RegisterEvent, ev, e) end
 end
 
 ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
@@ -410,21 +426,36 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     return
   end
   if not db then return end
+  -- In combat Forever hides cast and buff details from addons ("secret" values that error when read),
+  -- and nothing about camping happens mid-fight: note that the bags changed and wait for combat to end.
+  if InCombatLockdown() and e ~= "PLAYER_REGEN_ENABLED" then
+    if e == "BAG_UPDATE_DELAYED" then cache = nil; bagsDirty = true end
+    return
+  end
   if e == "PLAYER_ENTERING_WORLD" then
     cache = nil
     counts = CampCounts()
     ScheduleReady()
-    CheckFire()
+    pcall(CheckFire)
   elseif e == "UNIT_SPELLCAST_SUCCEEDED" and a1 == "player" then
     -- (unit, castGUID, spellID): placing a camp item is a cast named after the item
     local name = SpellName(a3)
     if name then lastCast = { name = name, t = GetTime() } end
     -- a cast name we've seen place a camp item before, or one named like the item
     ns.Placed((db.castNames and name and db.castNames[name]) or name)
+  elseif e == "PLAYER_REGEN_ENABLED" then
+    -- out of combat: catch up on bags that changed and a fire you walked up to mid-fight
+    if bagsDirty then bagsDirty = false; counts = CampCounts() end
+    pcall(CheckFire)
+    if ns.OnChange then ns.OnChange() end
   elseif e == "UNIT_AURA" and a1 == "player" then
-    -- newer clients say what changed: skip pure refreshes (stacks, durations), which are most of them in combat
-    if type(a2) == "table" and not a2.isFullUpdate and not a2.addedAuras and not a2.removedAuraInstanceIDs then return end
-    CheckFire()
+    -- Forever hides aura details from addons in combat ("secret" values that error if read), and you
+    -- don't camp mid-fight anyway: skip combat, and otherwise look once, 5 seconds after the first change
+    -- (later changes in that window ride along, so a fire is never missed)
+    if InCombatLockdown() or auraPending then return end
+    auraPending = true
+    local function run() auraPending = false; if not InCombatLockdown() then pcall(CheckFire) end end
+    if C_Timer then C_Timer.After(5, run) else run() end
   elseif e == "BAG_UPDATE_DELAYED" then
     cache = nil
     BagsChanged()

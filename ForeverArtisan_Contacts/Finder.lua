@@ -399,14 +399,14 @@ local function addToTooltip(tt)
     local hint = FA and FA.VendorHint and FA.VendorHint(name or link)
     if not hint then return end
     tt.faContactsDone = true
-    tt:AddLine(GOLD .. "Sold by|r")
+    ForeverArtisan.TipLine(tt, GOLD .. "Sold by|r")
     tt:AddLine(GREY .. "  " .. hint .. " - none in your Trade Contacts yet|r")
     tt:Show()
     return
   end
   tt.faContactsDone = true
   sortHits(list)
-  tt:AddLine(GOLD .. "Sold by|r")
+  ForeverArtisan.TipLine(tt, GOLD .. "Sold by|r")
   for i = 1, math.min(#list, MAX_TIP_LINES) do
     local h = list[i]
     local old = h.npc.age > 0

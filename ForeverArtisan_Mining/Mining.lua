@@ -453,10 +453,10 @@ local function OreLines(tt, id)
   if o then
     local skill = EffSkill()
     local c = ns.NodeColor(o.req, skill)
-    tt:AddLine(("|cffd4a94eMining %d|r  %s%s"):format(o.req, GRAY .. o.node .. "|r",
+    ForeverArtisan.TipLine(tt, ("|cffd4a94eMining %d|r  %s%s"):format(o.req, GRAY .. o.node .. "|r",
       skill and ("  " .. ns.COLOR_CODE[c] .. ns.COLOR_WORD[c] .. "|r") or ""))
   else
-    tt:AddLine("|cffd4a94eMining: comes from ore nodes|r")
+    ForeverArtisan.TipLine(tt, "|cffd4a94eMining: comes from ore nodes|r")
   end
   local where = ns.ZoneText(id)
   tt:AddLine(where and ("Mined in: " .. where) or (GRAY .. "Not in your mining log yet.|r"), 0.9, 0.9, 0.9, true)
@@ -483,7 +483,7 @@ local function ObjectTip(tt)
   tt.faMineDone = true
   local skill = EffSkill()
   local c = ns.NodeColor(n.req, skill)
-  if skill then tt:AddLine(ns.COLOR_CODE[c] .. ns.COLOR_WORD[c] .. "|r  " .. GRAY .. "(you: " .. skill .. ")|r") end
+  if skill then ForeverArtisan.TipLine(tt, ns.COLOR_CODE[c] .. ns.COLOR_WORD[c] .. "|r  " .. GRAY .. "(you: " .. skill .. ")|r") end
   tt:Show()
 end
 

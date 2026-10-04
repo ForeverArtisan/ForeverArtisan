@@ -130,12 +130,12 @@ function ns.CultivationTip(tt, name)
   if name then ns.NoteHerbHover(name) end
   local ok, need = ns.CultivationLevelOK(name)
   if ok == false then
-    tt:AddLine(GRAY .. ("Cultivation: needs level %d for this herb"):format(need) .. "|r")
+    ForeverArtisan.TipLine(tt, GRAY .. ("Cultivation: needs level %d for this herb"):format(need) .. "|r")
     return
   end
   local left = Left()
   if left == 0 then
-    tt:AddLine(GREEN .. "Cultivation ready:|r cast it first to grow a duplicate")
+    ForeverArtisan.TipLine(tt, GREEN .. "Cultivation ready:|r cast it first to grow a duplicate")
   end
 end
 
@@ -179,13 +179,17 @@ end
 
 ---------------------------------------------------------------- events
 local ev = CreateFrame("Frame")
-for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED",
-  "UI_ERROR_MESSAGE" }) do
+for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "UI_ERROR_MESSAGE" }) do
   pcall(ev.RegisterEvent, ev, e)
+end
+for _, e in ipairs({ "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED" }) do
+  if not (ev.RegisterUnitEvent and pcall(ev.RegisterUnitEvent, ev, e, "player")) then pcall(ev.RegisterEvent, ev, e) end
 end
 
 ev:SetScript("OnEvent", function(_, e, a1, a2, a3, a4)
   if not ns.DB() then return end
+  -- casts in combat carry hidden ("secret") details on Forever; nobody cultivates mid-fight
+  if InCombatLockdown() then return end
   if e == "PLAYER_ENTERING_WORLD" or e == "SPELLS_CHANGED" then
     if e == "SPELLS_CHANGED" and not spellID then FindSpell() end
     if e == "PLAYER_ENTERING_WORLD" and On() then ScheduleReady() end

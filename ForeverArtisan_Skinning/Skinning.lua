@@ -412,9 +412,9 @@ local function LeatherLines(tt, id)
   if not l and not extra then return end
   tt:AddLine(" ")
   if l then
-    tt:AddLine(("|cffd4a94eSkinning|r  %susually from mobs level %d-%d|r"):format(GRAY, l.lo, l.hi))
+    ForeverArtisan.TipLine(tt, ("|cffd4a94eSkinning|r  %susually from mobs level %d-%d|r"):format(GRAY, l.lo, l.hi))
   else
-    tt:AddLine("|cffd4a94eSkinning: from certain mobs|r")
+    ForeverArtisan.TipLine(tt, "|cffd4a94eSkinning: from certain mobs|r")
   end
   local where = ns.ZoneText(id)
   tt:AddLine(where and ("Skinned in: " .. where) or (GRAY .. "Not in your skinning log yet.|r"), 0.9, 0.9, 0.9, true)
@@ -444,7 +444,7 @@ local function UnitTip(tt)
   local req = ns.ReqForLevel(lvl)
   local skill = EffSkill()
   local c = ns.SkinColor(req, skill)
-  tt:AddLine(("|cffd4a94eSkinning %d|r%s"):format(req,
+  ForeverArtisan.TipLine(tt, ("|cffd4a94eSkinning %d|r%s"):format(req,
     skill and ("  " .. ns.COLOR_CODE[c] .. ns.COLOR_WORD[c] .. "|r") or ""))
   tt:Show()
 end
