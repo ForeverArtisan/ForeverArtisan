@@ -400,6 +400,58 @@ local function showWelcome()
 end
 FA.ShowWelcome = showWelcome
 
+---------------------------------------------------------------- what's new (chat, once per update)
+-- After an update, the first login prints the headline features of every release since the one you last
+-- ran (up to three). A fresh install gets the welcome notice instead. /fa new prints it again.
+-- Add one line per release, newest last; players only see releases newer than the one they had.
+local NEWS = {
+  { "0.9.8", "Camping: your camp items, the camp cooldown and campfire kits, with a reminder at a fire (/fa camp). "
+    .. "Tauren: herb tooltips say when Cultivation is ready." },
+}
+
+local function verNum(v)
+  local a, b, c = tostring(v or ""):match("^(%d+)%.(%d+)%.(%d+)")
+  if not a then return nil end
+  return tonumber(a) * 1000000 + tonumber(b) * 1000 + tonumber(c)
+end
+
+-- the releases after `since`, up to the running version
+local function newsSince(since)
+  local from, to = verNum(since) or 0, verNum(FA.Version()) or math.huge
+  local out = {}
+  for _, n in ipairs(NEWS) do
+    local v = verNum(n[1])
+    if v and v > from and v <= to then out[#out + 1] = n end
+  end
+  while #out > 3 do table.remove(out, 1) end
+  return out
+end
+
+local function showNews(list, all)
+  if all then list = NEWS end
+  if #list == 0 then print(PREFIX .. "nothing new to show for " .. FA.Version() .. ".") return end
+  print(PREFIX .. GOLD .. "What's new" .. (all and "" or (" in " .. FA.Version())) .. ":|r")
+  for i = math.max(1, #list - 2), #list do
+    print("  " .. GOLD .. list[i][1] .. "|r  " .. list[i][2])
+  end
+  if not all then print("  " .. GREY .. "/fa new shows this again. Full changelog: " .. FA.WEBSITE .. "|r") end
+end
+
+local function checkNews()
+  local s = ForeverArtisanSettings
+  local cur = FA.Version()
+  if not verNum(cur) then return end
+  local last = s.lastVersion
+  -- before 0.9.9 nothing recorded the version: someone who already saw the welcome is updating from 0.9.7 or 0.9.8
+  if not last and s.welcomeSeen then last = "0.9.7" end
+  s.lastVersion = cur
+  if not last or last == cur then return end -- fresh install (the welcome covers it) or same version
+  local list = newsSince(last)
+  if #list > 0 then
+    if C_Timer then C_Timer.After(6, function() showNews(list) end) else showNews(list) end
+  end
+end
+
 -- warn once per login if any module is from a different release than Core
 local function checkVersions()
   local bad = {}
@@ -423,6 +475,7 @@ ev:SetScript("OnEvent", function()
   if ForeverArtisanSettings.welcomeSeen ~= WELCOME_REV then
     if C_Timer then C_Timer.After(4, showWelcome) else showWelcome() end
   end
+  pcall(checkNews)
 end)
 
 ---------------------------------------------------------------- /fa
@@ -432,6 +485,7 @@ local function help()
   print("  /fa  - module panel (turn modules on/off)")
   print("  /fa version  - suite version, and a check that every part matches")
   print("  /fa welcome  - what ForeverArtisan is for, and where to send bugs and ideas")
+  print("  /fa new  - what's new in recent releases")
   print("  /fa minimap [angle | reset | contacts]  - show/hide or move the minimap buttons")
   if FA.Vendors then print("  /fa <item, vendor or town>  - search your Trade Contacts") end
   print("  /fa enable <module>  |  /fa disable <module>")
@@ -457,6 +511,8 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     if ForeverArtisan and ForeverArtisan.minimap then ForeverArtisan.minimap(rest) end
   elseif lower == "beta" or lower == "feedback" or lower == "welcome" or lower == "about" then
     showWelcome()
+  elseif lower == "new" or lower == "news" or lower == "whatsnew" then
+    showNews({}, true)
   elseif lower == "version" or lower == "ver" then
     print(PREFIX .. "ForeverArtisan " .. FA.Version())
     checkVersions()

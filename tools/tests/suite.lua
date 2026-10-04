@@ -870,5 +870,26 @@ do
   cp.InvalidateBags()
   UnitBuff=nil GetSpellInfo=nil
 end
+-- what's new: fresh install stays quiet and records the version; an update prints the releases since
+do
+  assert(ForeverArtisanSettings.lastVersion==ForeverArtisan.Version(), "fresh install records the version")
+  local out={} local P=print
+  print=function(...) local t={} for i=1,select("#",...) do t[#t+1]=tostring(select(i,...)) end out[#out+1]=table.concat(t," ") end
+  ForeverArtisanSettings.lastVersion="0.9.7"
+  fire("PLAYER_LOGIN")
+  local txt=table.concat(out,"\n")
+  print=P
+  assert(txt:find("What's new") and txt:find("Camping"), "update prints the news: "..txt)
+  assert(ForeverArtisanSettings.lastVersion==ForeverArtisan.Version(), "remembers the new version")
+  out={} print=function(...) out[#out+1]=table.concat({...}," ") end
+  fire("PLAYER_LOGIN")
+  print=P
+  assert(not table.concat(out,"\n"):find("What's new"), "same version stays quiet")
+  out={} print=function(...) out[#out+1]=table.concat({...}," ") end
+  run("FOREVERARTISAN","new")
+  print=P
+  assert(table.concat(out,"\n"):find("Camping"), "/fa new prints it")
+  print("NEWS ok")
+end
 print("CRAFTS OK")
 print("SUITE OK")

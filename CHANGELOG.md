@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.9 (unreleased)
+- What's new: after an update, your first login prints the headline features of each release since the one you had (up to three) in chat. New installs get the welcome notice instead. `/fa new` shows it again.
+
 ## 0.9.8 (2026-10-03)
 - Smoother play: profession windows are read once per change instead of by all eight crafting modules on every craft; open windows only redraw what changes with time; item tooltips skip anything that isn't a material of yours before doing any work; the fishing lure bar, nameplate titles and Trade Contacts search do much less work per second. Nothing you see changes.
 - Tooltips: the first line ForeverArtisan adds to a herb, ore, mob or item tooltip has a small gold "FA" on the right, so you can tell our lines from the game's.
