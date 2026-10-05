@@ -852,77 +852,17 @@ local function scoutUnit(unit)
   if isNew then scoutNew = scoutNew + 1 end
 end
 
--- Re-check visible nameplates twice a second so positions sharpen as you get closer.
-local scoutTicker
-local plateTitle -- defined below; the ticker uses it to label plates already on screen
-local function startScoutTicker()
-  if scoutTicker or not (C_NamePlate and C_NamePlate.GetNamePlates) then return end
-  scoutTicker = C_Timer.NewTicker(0.5, function()
-    if ForeverArtisanContactsDB.scoutOff or InCombatLockdown() then return end
-    for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
-      local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
-      if unit then
-        pcall(scoutUnit, unit)
-        if plateTitle and not plate.mlDone then pcall(plateTitle, unit) end
-      end
-    end
-  end)
+-- Names in town (nameplate titles) live in Core, so they work without this module. Core's ticker hands
+-- us every friendly plate on screen twice a second; we note crafting NPCs as you pass and sharpen where they stand.
+local FA = ForeverArtisan
+local function townOn() return FA.TownNamesOn and FA.TownNamesOn() end
+FA.OnTownUnit = function(unit) if ForeverArtisanContactsDB then scoutUnit(unit) end end
+-- titles we already saved, and which ones count as crafting (Core colors those gold)
+FA.KnownTitle = function(id)
+  local s = ForeverArtisanContactsDB and ForeverArtisanContactsDB.scouted and ForeverArtisanContactsDB.scouted[id]
+  return s and s.title or nil
 end
-
--- Nameplates only show names, so while scouting we add the NPC's <Title> under
--- friendly nameplates (open world only; Blizzard locks nameplates in instances).
-local labeled = {}
-local titleOf = {} -- npc id -> title, or false for NPCs without one (most of a town): read the tooltip once
-plateTitle = function(unit)
-  if ForeverArtisanContactsDB.scoutOff or not (C_NamePlate and C_NamePlate.GetNamePlateForUnit) then return end
-  if not UnitExists(unit) or UnitIsPlayer(unit) then return end
-  local reaction = UnitReaction(unit, "player")
-  if not reaction or Secret(reaction) or reaction < 4 then return end
-  local plate = C_NamePlate.GetNamePlateForUnit(unit)
-  if not plate or (plate.IsForbidden and plate:IsForbidden()) then return end
-  local id = npcIdFromGUID(UnitGUID(unit))
-  local s = id and ForeverArtisanContactsDB.scouted and ForeverArtisanContactsDB.scouted[id]
-  local title = s and s.title
-  if not title and id then
-    if titleOf[id] == nil then local n = npcInfo(unit); titleOf[id] = (n and n.title) or false end
-    title = titleOf[id] or nil
-  elseif not title then
-    local n = npcInfo(unit); title = n and n.title
-  end
-  plate.mlDone = true
-  if not plate.mlTitle then
-    -- our own small frame above the nameplate's art, so the health bar can't cover the text
-    local holder = CreateFrame("Frame", nil, plate)
-    holder:SetAllPoints(plate)
-    if plate.GetFrameStrata then holder:SetFrameStrata(plate:GetFrameStrata()) end
-    local base = (plate.UnitFrame and plate.UnitFrame.GetFrameLevel and plate.UnitFrame:GetFrameLevel())
-      or (plate.GetFrameLevel and plate:GetFrameLevel()) or 1
-    holder:SetFrameLevel(base + 10)
-    plate.mlTitle = holder:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    plate.mlTitle:SetShadowOffset(1, -1)
-    labeled[#labeled + 1] = plate.mlTitle
-  end
-  local fs = plate.mlTitle
-  if not title then fs:Hide(); return end
-  -- sit under the health bar (or under the name when the plate has no bar)
-  local uf = plate.UnitFrame
-  local anchor = uf and (uf.healthBar or uf.HealthBar or uf.name) or plate
-  fs:ClearAllPoints()
-  fs:SetPoint("TOP", anchor, "BOTTOM", 0, -3)
-  fs:SetText("<" .. title .. ">")
-  if isRelevant(title) then fs:SetTextColor(1, 0.82, 0.3) else fs:SetTextColor(0.75, 0.75, 0.75) end
-  fs:Show()
-end
-
-local function hidePlateTitle(unit)
-  local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
-  if plate then plate.mlDone = nil end
-  if plate and plate.mlTitle then plate.mlTitle:Hide() end
-end
-
-local function hideAllPlateTitles()
-  for _, fs in ipairs(labeled) do fs:Hide() end
-end
+FA.TitleRelevant = function(title) return isRelevant(title) end
 
 local function distanceTo(s)
   local w = where()
@@ -943,60 +883,28 @@ local function todoList(all)
   return list
 end
 
-local SCOUT_CVARS = { "nameplateShowFriends", "nameplateShowFriendlyNPCs" }
-local function setScoutPlates(on)
-  ForeverArtisanContactsDB.savedCVars = ForeverArtisanContactsDB.savedCVars or {}
-  for _, cv in ipairs(SCOUT_CVARS) do
-    local ok, cur = pcall(GetCVar, cv)
-    if ok and cur ~= nil then
-      if on then
-        if ForeverArtisanContactsDB.savedCVars[cv] == nil then ForeverArtisanContactsDB.savedCVars[cv] = cur end
-        pcall(SetCVar, cv, "1")
-      elseif ForeverArtisanContactsDB.savedCVars[cv] ~= nil then
-        pcall(SetCVar, cv, ForeverArtisanContactsDB.savedCVars[cv])
-        ForeverArtisanContactsDB.savedCVars[cv] = nil
-      end
-    end
-  end
-end
-
--- Scout mode (NPC names and titles in town) for the slash command and the window checkbox.
-function ns.ScoutOn() return ForeverArtisanContactsDB and not ForeverArtisanContactsDB.scoutOff end
-function ns.SetScout(on)
-  if not ForeverArtisanContactsDB then return end
-  if on then
-    ForeverArtisanContactsDB.scoutOff = nil
-    setScoutPlates(true)
-    startScoutTicker()
-  else
-    setScoutPlates(false)
-    ForeverArtisanContactsDB.scoutOff = true
-    pcall(hideAllPlateTitles)
-  end
-end
+-- Scout mode = Core's "Show NPC names in town" switch (the slash command and this window's checkbox use it).
+function ns.ScoutOn() return ForeverArtisanContactsDB and townOn() end
+function ns.SetScout(on) if FA.SetTownNames then FA.SetTownNames(on, true) end end
 function ns.IsRelevant(title) return isRelevant(title) end
 function ns.IsIgnored(title) return isIgnored(title) end
 function ns.ClassTrainer(title) return classTrainer(title) end
 function ns.WantedHere(title) return wantedHere(title) end
 
--- What the "Show NPC names in town" checkbox does, for its hover tooltip (both checkboxes use this).
-function ns.ScoutTip(tt)
+-- What the "Show NPC names in town" switch adds when Trade Contacts runs (Core shows the rest).
+FA.TownNamesExtraTip = function(tt)
   local total, rel = 0, 0
   for _, s in pairs((ForeverArtisanContactsDB and ForeverArtisanContactsDB.scouted) or {}) do
     total = total + 1; if isRelevant(s.title) then rel = rel + 1 end
   end
-  tt:AddLine("Show NPC names in town")
-  tt:AddLine("Shows friendly NPC names with their job under them, like <Leatherworking Trainer>.", 1, 1, 1, true)
   tt:AddLine(" ")
   tt:AddLine("Walk or ride through a town and every crafting vendor and trainer you pass is noted, " ..
     "even before you talk to them. Search shows them as \"seen, talk to save\" with a waypoint.", 1, 1, 1, true)
   tt:AddLine("Talk to one to save its full list and prices.", 1, 1, 1, true)
   tt:AddLine(" ")
-  tt:AddLine("Turn it off and your own nameplate settings come back.", 0.6, 0.6, 0.6, true)
-  tt:AddLine("Open world only: the game hides nameplates in dungeons.", 0.6, 0.6, 0.6, true)
-  tt:AddLine(" ")
   tt:AddLine(total .. " NPCs seen so far, " .. rel .. " of them crafting-related.", 1, 0.82, 0)
 end
+function ns.ScoutTip(tt) if FA.TownNamesTip then FA.TownNamesTip(tt) end end
 
 -- Checkbox version of /fa contacts scout: same switch, plus one line in chat so people see it worked.
 function ns.SetScoutFromUI(on)
@@ -1049,13 +957,11 @@ f:SetScript("OnEvent", function(_, event, arg1)
   end
   if not ForeverArtisanContactsDB then return end
   -- scout mode: quiet, cheap, never errors out loud
-  if event == "PLAYER_LOGIN" then startScoutTicker(); return end
-  if event == "NAME_PLATE_UNIT_REMOVED" then pcall(hidePlateTitle, arg1); return end
+  if event == "PLAYER_LOGIN" or event == "NAME_PLATE_UNIT_REMOVED" then return end
   if event == "NAME_PLATE_UNIT_ADDED" or event == "UPDATE_MOUSEOVER_UNIT" or event == "PLAYER_TARGET_CHANGED" then
-    if ForeverArtisanContactsDB.scoutOff then return end
+    if not townOn() then return end
     local unit = (event == "NAME_PLATE_UNIT_ADDED" and arg1) or (event == "UPDATE_MOUSEOVER_UNIT" and "mouseover") or "target"
     if not InCombatLockdown() then pcall(scoutUnit, unit) end
-    if event == "NAME_PLATE_UNIT_ADDED" and not InCombatLockdown() then pcall(plateTitle, unit) end
     return
   end
   if event:find("TRADE_SKILL") or event == "CRAFT_SHOW" then

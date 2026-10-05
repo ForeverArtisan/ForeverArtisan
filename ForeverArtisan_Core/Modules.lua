@@ -188,8 +188,12 @@ local function refreshPanel()
   panel.empty:SetShown(#modules == 0)
   panel.reload:SetShown(pending)
   panel.searchBtn:SetShown(FA.Vendors ~= nil)
-  panel.scout:SetShown(FA.Vendors ~= nil and FA.Vendors.setScout ~= nil)
-  if FA.Vendors and FA.Vendors.scoutOn then panel.scout:SetChecked(FA.Vendors.scoutOn() and true or false) end
+  -- names in town is Core's own switch, so it shows whether or not Trade Contacts runs
+  panel.scout:SetChecked(FA.TownNamesOn and FA.TownNamesOn() or false)
+  if panel.scoutLabel then
+    panel.scoutLabel:SetText("Show NPC names in town " .. GREY .. (FA.Vendors and "(finds crafting NPCs as you pass)"
+      or "(their job under the name)") .. "|r")
+  end
 
   -- "Coming soon" grid under the installed modules
   local shown = math.min(#modules, #panel.rows)
@@ -283,13 +287,16 @@ local function buildPanel()
   local sl = panel.scout:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   sl:SetPoint("LEFT", panel.scout, "RIGHT", 2, 0)
   sl:SetText("Show NPC names in town " .. GREY .. "(finds crafting NPCs as you pass)|r")
+  panel.scoutLabel = sl
   panel.scout:SetScript("OnClick", function(self)
-    if FA.Vendors and FA.Vendors.setScout then FA.Vendors.setScout(self:GetChecked() and true or false) end
+    local on = self:GetChecked() and true or false
+    -- Trade Contacts adds its own line about noting NPCs; without it, Core says it
+    if FA.Vendors and FA.Vendors.setScout then FA.Vendors.setScout(on) elseif FA.SetTownNames then FA.SetTownNames(on) end
   end)
   -- the label is part of the button, so hovering or clicking the words works too
   panel.scout:SetHitRectInsets(0, -((sl:GetStringWidth() or 0) + 4), 0, 0)
   FA.UI.Tip(panel.scout, function()
-    if FA.Vendors and FA.Vendors.scoutTip then FA.Vendors.scoutTip(GameTooltip) end
+    if FA.TownNamesTip then FA.TownNamesTip(GameTooltip) end
   end)
 
   panel.reload = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")

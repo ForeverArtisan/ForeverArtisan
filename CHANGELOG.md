@@ -1,6 +1,7 @@
 # ForeverArtisan changelog
 
 ## 0.9.10 (unreleased)
+- NPC names in town now work for everyone: the job titles under friendly NPC names (like <Leatherworking Trainer>) are part of Core, so they show even with Trade Contacts turned off. The "Show NPC names in town" switch is always in the `/fa` panel. With Trade Contacts on, it still notes the crafting NPCs you pass.
 - Sturdier in combat and crowded towns: Forever hides some values from addons (unit names on some nameplates, buffs, casts and cooldowns in combat). Every part of ForeverArtisan now skips those quietly instead of showing a Lua error, and keeps working once the values are readable again. `/fa version` shows how many it skipped this session.
 - Reporting errors: the What's new note, the welcome notice and `/fa feedback` (or `/fa bug`) now end with "Seeing an error? Tell us at foreverartisan.app/bug". Type that address in your browser; it opens the bug form.
 

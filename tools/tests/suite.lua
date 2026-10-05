@@ -913,5 +913,26 @@ do
   issecretvalue=old
   print("SECRET GUARD ok")
 end
+-- names in town: Core owns the switch and titles; Trade Contacts only adds known titles and relevance
+do
+  local FA=ForeverArtisan
+  assert(type(FA.TownNamesOn)=="function" and type(FA.SetTownNames)=="function" and type(FA.NpcTitle)=="function", "Core has names in town")
+  local was=FA.TownNamesOn()
+  FA.SetTownNames(false,true)
+  assert(FA.TownNamesOn()==false and ForeverArtisanContactsDB.scoutOff==true, "off, and Trade Contacts sees it")
+  FA.SetTownNames(true,true)
+  assert(FA.TownNamesOn()==true and not ForeverArtisanContactsDB.scoutOff, "back on")
+  -- an older install that had turned it off in Trade Contacts keeps it off
+  ForeverArtisanSettings.townNames=nil; ForeverArtisanContactsDB.scoutOff=true
+  assert(FA.TownNamesOn()==false, "migrates the old Trade Contacts switch")
+  FA.SetTownNames(was,true)
+  assert(FA.KnownTitle and FA.KnownTitle(888)=="Journeyman Alchemist", "Trade Contacts supplies saved titles")
+  assert(FA.TitleRelevant and FA.TitleRelevant("Journeyman Alchemist") and not FA.TitleRelevant("Innkeeper"), "crafting titles are gold")
+  local lines={} local tt={AddLine=function(_,l) lines[#lines+1]=l end}
+  FA.TownNamesTip(tt)
+  local txt=table.concat(lines,"\n")
+  assert(txt:find("Leatherworking Trainer") and txt:find("NPCs seen so far"), "switch tooltip, with the Trade Contacts part")
+  print("TOWN NAMES ok")
+end
 print("CRAFTS OK")
 print("SUITE OK")
