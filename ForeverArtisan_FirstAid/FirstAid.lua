@@ -713,3 +713,6 @@ SlashCmdList.FAAID = function(msg)
     say("Commands: /fa aid (window), next, plan [skill], tooltips, reset confirm")
   end
 end
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)

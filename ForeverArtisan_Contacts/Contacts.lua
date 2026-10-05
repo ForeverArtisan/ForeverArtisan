@@ -1233,3 +1233,6 @@ SlashCmdList.FACONTACTS = function(msg)
     say("unknown command. Type /fa contacts help.")
   end
 end
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(f)

@@ -260,8 +260,10 @@ local function Diag() db.diag = db.diag or {}; return db.diag end
 -- Fishing pools (schools) are game objects too, and the game may soft-target the pool
 -- instead of your bobber. Only a named bobber counts; any other named object doesn't.
 local function SoftIsBobber(guid)
+  if ForeverArtisan.IsSecret(guid) then return false end -- hidden: can't tell, so don't switch the key
   if guid and not tostring(guid):find("^GameObject") then return false end
   local name = UnitName and UnitName("softinteract")
+  if ForeverArtisan.IsSecret(name) then return false end
   if db then db.diag = db.diag or {}; db.diag.softName = name or "(none)" end
   if not name or name == "" then return true end
   return name:lower():find("bobber") ~= nil
@@ -280,7 +282,8 @@ local function StartChannel()
       if tok == castToken and channeling and UnitExists and UnitExists("softinteract")
          and SoftIsBobber(UnitGUID and UnitGUID("softinteract")) then
         softSeen = true; d.softHits = (d.softHits or 0) + 1
-        d.lastSoft = UnitName and UnitName("softinteract") or "?"
+        local sn = UnitName and UnitName("softinteract")
+        d.lastSoft = (sn and not ForeverArtisan.IsSecret(sn)) and sn or "?"
         UpdateMode()
       end
     end)
@@ -909,3 +912,6 @@ ns.PoleEquipped, ns.FishingSkill, ns.Where, ns.ItemName = PoleEquipped, FishingS
 ns.UpdateMode, ns.ZoneRec, ns.Today = UpdateMode, ZoneRec, Today
 ns.SkillSource = function() return skillSource end
 ns.ResetLog = function() db.zones, db.raw = {}, {}; if ns.OnChange then ns.OnChange() end end
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)

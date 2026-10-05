@@ -778,3 +778,6 @@ ev:SetScript("OnEvent", function(_, e)
   end
   ns.OnChange()
 end)
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)

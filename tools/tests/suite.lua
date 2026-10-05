@@ -880,6 +880,7 @@ do
   local txt=table.concat(out,"\n")
   print=P
   assert(txt:find("What's new") and txt:find("Camping"), "update prints the news: "..txt)
+  assert(txt:find("foreverartisan.app/bug", 1, true), "news ends with the bug line")
   assert(ForeverArtisanSettings.lastVersion==ForeverArtisan.Version(), "remembers the new version")
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
   fire("PLAYER_LOGIN")
@@ -890,6 +891,27 @@ do
   print=P
   assert(table.concat(out,"\n"):find("Camping"), "/fa new prints it")
   print("NEWS ok")
+end
+-- hidden ("secret") values: events carrying them are skipped, their errors dropped, other errors still raised
+do
+  local FA=ForeverArtisan
+  local SECRET=setmetatable({},{__tostring=function() return "<secret>" end})
+  local old=issecretvalue
+  issecretvalue=function(v) return v==SECRET end
+  local calls=0
+  local fr={scripts={},GetScript=function(s,n) return s.scripts[n] end,SetScript=function(s,n,fn) s.scripts[n]=fn end}
+  fr.scripts.OnEvent=function(_,e,a) calls=calls+1; if e=="BOOM" then error("attempt to compare a secret value") end; if e=="BUG" then error("real bug") end end
+  FA.GuardEvents(fr)
+  local before=FA.secretSkips
+  fr.scripts.OnEvent(fr,"UNIT_SPELLCAST_SENT",SECRET)
+  assert(calls==0 and FA.secretSkips==before+1, "event with a hidden argument is skipped")
+  fr.scripts.OnEvent(fr,"BOOM","x")
+  assert(calls==1 and FA.secretSkips==before+2, "hidden-value error dropped")
+  local ok=pcall(fr.scripts.OnEvent,fr,"BUG","x")
+  assert(not ok, "other errors still surface")
+  assert(FA.IsSecret(SECRET) and not FA.IsSecret("a") and FA.AnySecret(1,SECRET) and not FA.AnySecret(1,2), "helpers")
+  issecretvalue=old
+  print("SECRET GUARD ok")
 end
 print("CRAFTS OK")
 print("SUITE OK")

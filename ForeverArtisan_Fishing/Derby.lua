@@ -367,3 +367,6 @@ ev:SetScript("OnUpdate", function(_, el)
   t = t + el
   if t > 1 then t = 0; if marker and marker:IsShown() then ns.UpdateMarker() end end
 end)
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)

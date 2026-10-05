@@ -354,7 +354,7 @@ local WELCOME_TEXT =
 
 local function showWelcome()
   if not welcomeFrame then
-    local b = FA.UI.Frame({ name = "ForeverArtisanWelcome", title = "Welcome", width = 440, height = 340, strata = "DIALOG",
+    local b = FA.UI.Frame({ name = "ForeverArtisanWelcome", title = "Welcome", width = 440, height = 362, strata = "DIALOG",
       defaultPos = { "CENTER", 0, 80 } })
     local head = b:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     head:SetPoint("TOP", 0, -34)
@@ -373,8 +373,11 @@ local function showWelcome()
     local hint = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     hint:SetPoint("LEFT", link, "RIGHT", 8, 0); hint:SetText("click, then Ctrl+C")
 
+    local bug = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    bug:SetPoint("TOPLEFT", link, "BOTTOMLEFT", -6, -8); bug:SetText(FA.BUG_LINE)
+
     local enjoy = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    enjoy:SetPoint("TOPLEFT", link, "BOTTOMLEFT", -6, -12); enjoy:SetText("Enjoy the journey!")
+    enjoy:SetPoint("TOPLEFT", bug, "BOTTOMLEFT", 0, -12); enjoy:SetText("Enjoy the journey!")
 
     local beta = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     beta:SetPoint("TOPLEFT", enjoy, "BOTTOMLEFT", 0, -8); beta:SetWidth(396); beta:SetJustifyH("LEFT")
@@ -437,6 +440,7 @@ local function showNews(list, all)
     print("  " .. GOLD .. list[i][1] .. "|r  " .. list[i][2])
   end
   if not all then print("  " .. GREY .. "/fa new shows this again. Full changelog: " .. FA.WEBSITE .. "|r") end
+  print("  " .. GREY .. FA.BUG_LINE .. "|r")
 end
 
 local function checkNews()
@@ -487,6 +491,7 @@ local function help()
   print("  /fa  - module panel (turn modules on/off)")
   print("  /fa version  - suite version, and a check that every part matches")
   print("  /fa welcome  - what ForeverArtisan is for, and where to send bugs and ideas")
+  print("  /fa bug  - where to report an error (" .. FA.BUG_URL .. ")")
   print("  /fa new  - what's new in recent releases")
   print("  /fa minimap [angle | reset | contacts]  - show/hide or move the minimap buttons")
   if FA.Vendors then print("  /fa <item, vendor or town>  - search your Trade Contacts") end
@@ -511,13 +516,19 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     togglePanel()
   elseif lower == "minimap" then
     if ForeverArtisan and ForeverArtisan.minimap then ForeverArtisan.minimap(rest) end
-  elseif lower == "beta" or lower == "feedback" or lower == "welcome" or lower == "about" then
+  elseif lower == "feedback" or lower == "bug" or lower == "bugs" then
+    print(PREFIX .. FA.BUG_LINE .. "  " .. GREY .. "(ideas: " .. FA.WEBSITE .. ")|r")
+    showWelcome()
+  elseif lower == "beta" or lower == "welcome" or lower == "about" then
     showWelcome()
   elseif lower == "new" or lower == "news" or lower == "whatsnew" then
     showNews({}, true)
   elseif lower == "version" or lower == "ver" then
     print(PREFIX .. "ForeverArtisan " .. FA.Version())
     checkVersions()
+    if (FA.secretSkips or 0) > 0 then
+      print(GREY .. ("  Hidden game values skipped this session: %d (harmless)"):format(FA.secretSkips) .. "|r")
+    end
   elseif lower == "help" then
     help()
   elseif lower == "modules" then
@@ -554,3 +565,6 @@ end
 ---------------------------------------------------------------- public
 
 FA.modules, FA.open, FA.isEnabled = scan, togglePanel, isEnabled
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)

@@ -246,3 +246,6 @@ ForeverArtisan.minimap = Command
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
 ev:SetScript("OnEvent", function() pcall(Build); pcall(BuildContacts) end)
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)

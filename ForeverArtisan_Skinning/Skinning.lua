@@ -509,13 +509,17 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3, a4)
     -- (unit, target, castGUID, spellID); the corpse is usually your target
     if IsSkinSpell(a4) then
       local lvl
+      local Hidden = ForeverArtisan.AnySecret -- Forever can hide unit names and levels from addons
       for _, u in ipairs({ "target", "mouseover" }) do
-        if not lvl and UnitExists(u) and UnitIsDead(u) and (not a2 or a2 == "" or UnitName(u) == a2) then
+        local un = UnitExists(u) and UnitIsDead(u) and UnitName(u)
+        if not lvl and un and not Hidden(un) and (not a2 or a2 == "" or un == a2) then
           lvl = UnitLevel(u)
-          if lvl and lvl < 1 then lvl = nil end
+          if Hidden(lvl) or (lvl and lvl < 1) then lvl = nil end
         end
       end
-      pending = { mob = (a2 ~= "" and a2) or (UnitExists("target") and UnitName("target")) or nil, level = lvl, t = GetTime(), ok = false }
+      local tn = UnitExists("target") and UnitName("target")
+      if Hidden(tn) then tn = nil end
+      pending = { mob = (a2 ~= "" and a2) or tn or nil, level = lvl, t = GetTime(), ok = false }
     end
   elseif e == "UNIT_SPELLCAST_SUCCEEDED" and a1 == "player" then
     if IsSkinSpell(a3) then
@@ -616,3 +620,6 @@ SlashCmdList.FASKIN = function(msg)
     say("Commands: /fa skin (window), next, zone, zones, goal <amount> <item>, goals reset, session, reminder, tooltips, verbose, reset confirm")
   end
 end
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)

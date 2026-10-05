@@ -201,6 +201,7 @@ function ns.KitLeft()
     if b.item and b.item.slots and b.id then
       if not getcd then return 0 end
       local start, dur = getcd(b.id)
+      if ForeverArtisan.AnySecret(start, dur) then return nil end -- hidden in combat: show nothing for now
       if start and start > 0 and dur and dur > 1.5 then return math.max(0, start + dur - GetTime()) end
       return 0
     end
@@ -216,6 +217,7 @@ function ns.Left()
     for _, b in pairs(ns.BagItems()) do
       if b.item and b.item.prof and b.id then
         local start, dur = getcd(b.id)
+        if ForeverArtisan.AnySecret(start, dur) then break end -- hidden in combat: use the saved time below
         if start and start > 0 and dur and dur > 1.5 then return math.max(0, start + dur - GetTime()) end
         if start == 0 then return 0 end
       end
@@ -509,3 +511,6 @@ SlashCmdList.FACAMP = function(msg)
     say("Commands: /fa camp (window), status, reminder, ready, debug")
   end
 end
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)

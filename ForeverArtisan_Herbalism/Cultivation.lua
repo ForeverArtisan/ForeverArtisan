@@ -69,6 +69,7 @@ local function Left()
   elseif GetSpellCooldown then
     start, dur = GetSpellCooldown(id)
   end
+  if ForeverArtisan.AnySecret(start, dur) then return nil end -- hidden in combat: unknown for now
   if not start or start == 0 or not dur or dur <= 1.5 then return 0 end
   return math.max(0, start + dur - GetTime())
 end
@@ -143,6 +144,7 @@ end
 function ns.CultivationStatus()
   if not On() then return end
   local left = Left()
+  if not left then return end -- hidden in combat
   if left == 0 then return GREEN .. "Cultivation: ready|r" end
   return GRAY .. "Cultivation: " .. Mins(left) .. "|r"
 end
@@ -240,7 +242,7 @@ function ns.CultivationReport(rest)
     return
   end
   local left = Left()
-  say(("Cultivation: %s  ·  reminders %s  ·  cast %d times"):format(left == 0 and "ready" or ("ready in " .. Mins(left)),
+  say(("Cultivation: %s  ·  reminders %s  ·  cast %d times"):format(left == 0 and "ready" or (left and ("ready in " .. Mins(left))) or "unknown in combat",
     db.settings.cultivation and "on" or "off", db.cultivate.casts or 0))
   local names = {}
   for name in pairs(db.cultivate.herbs) do names[#names + 1] = name end
@@ -258,3 +260,6 @@ function ns.CultivationReport(rest)
     say(("  %s: %s"):format(name, table.concat(bits, ", ")))
   end
 end
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)

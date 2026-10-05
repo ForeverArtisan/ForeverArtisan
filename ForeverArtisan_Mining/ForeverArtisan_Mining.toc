@@ -3,7 +3,7 @@
 ## IconTexture: Interface\Icons\Trade_Mining
 ## Notes: Mining log by zone, skill-up tracker, what to mine next, goals, and ore tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.9
+## Version: 0.9.10-dev
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

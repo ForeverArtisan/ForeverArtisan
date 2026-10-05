@@ -253,3 +253,7 @@ end
 local tipEv = CreateFrame("Frame")
 tipEv:RegisterEvent("PLAYER_LOGIN")
 tipEv:SetScript("OnEvent", function() pcall(HookDropTips) end)
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)
+ForeverArtisan.GuardEvents(tipEv)

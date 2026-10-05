@@ -21,6 +21,43 @@ FA.BAR    = { 0.83, 0.66, 0.31, 0.85 }  -- brand gold for bars
 FA.BAR_DONE = { 0.25, 1, 0.25, 0.85 }
 FA.BAR_CAPPED = { 1, 0.25, 0.25, 0.85 }
 FA.WEBSITE = "foreverartisan.app"
+-- one line, same words everywhere it appears (What's new, /fa feedback, the welcome notice)
+FA.BUG_URL = "foreverartisan.app/bug"
+FA.BUG_LINE = "Seeing an error? Tell us at " .. FA.BUG_URL
+
+---------------------------------------------------------------- hidden ("secret") values
+-- Forever hides some values from addons: unit names and GUIDs on some nameplates, buffs and casts in combat.
+-- They look normal, but reading, comparing or using one as a table key throws an error.
+-- Every event handler in the suite runs through FA.GuardEvents: an event whose arguments are hidden is
+-- skipped, and a hidden-value error inside a handler is dropped quietly. Any other error still shows as usual.
+FA.secretSkips = 0
+function FA.IsSecret(v) return (issecretvalue ~= nil and v ~= nil and issecretvalue(v)) and true or false end
+function FA.AnySecret(...)
+  if not issecretvalue then return false end
+  for i = 1, select("#", ...) do
+    local v = select(i, ...)
+    if v ~= nil and issecretvalue(v) then return true end
+  end
+  return false
+end
+local function Report(ok, err, ...)
+  if ok then return err, ... end
+  if type(err) == "string" and err:find("secret", 1, true) then FA.secretSkips = FA.secretSkips + 1; return end
+  local h = geterrorhandler and geterrorhandler()
+  if h then h(err) else error(err, 0) end
+end
+function FA.Guard(fn)
+  if type(fn) ~= "function" then return fn end
+  return function(...) return Report(pcall(fn, ...)) end
+end
+function FA.GuardEvents(frame)
+  local h = frame and frame.GetScript and frame:GetScript("OnEvent")
+  if type(h) ~= "function" then return end
+  frame:SetScript("OnEvent", function(self, e, ...)
+    if FA.AnySecret(...) then FA.secretSkips = FA.secretSkips + 1; return end
+    return Report(pcall(h, self, e, ...))
+  end)
+end
 
 -- Tooltip lines we add to the game's tooltips (herbs, ores, mobs, items) get a small "FA" on the
 -- right of the first one, so players know the line comes from ForeverArtisan and not the game.

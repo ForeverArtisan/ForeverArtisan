@@ -632,3 +632,6 @@ SlashCmdList.FAHERB = function(msg)
     say("Commands: /fa herb (window), next, zone, zones, goal <amount> <herb>, goals reset, session, reminder, tooltips, verbose, cultivation, reset confirm")
   end
 end
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)

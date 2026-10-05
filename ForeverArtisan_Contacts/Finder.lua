@@ -467,3 +467,6 @@ SLASH_FASEARCH1 = "/fasearch"
 SlashCmdList.FASEARCH = function(msg)
   if ns.OpenSearch then ns.OpenSearch(strtrim(msg or "")) end
 end
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)

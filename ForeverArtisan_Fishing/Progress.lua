@@ -292,3 +292,6 @@ ev:SetScript("OnEvent", function(_, e, isInitialLogin)
   -- a real login starts goal progress over; /reload and zoning keep it
   if e == "PLAYER_ENTERING_WORLD" and isInitialLogin then ns.ResetGoalProgress(true) end
 end)
+
+-- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
+ForeverArtisan.GuardEvents(ev)

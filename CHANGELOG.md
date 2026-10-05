@@ -1,5 +1,9 @@
 # ForeverArtisan changelog
 
+## 0.9.10 (unreleased)
+- Sturdier in combat and crowded towns: Forever hides some values from addons (unit names on some nameplates, buffs, casts and cooldowns in combat). Every part of ForeverArtisan now skips those quietly instead of showing a Lua error, and keeps working once the values are readable again. `/fa version` shows how many it skipped this session.
+- Reporting errors: the What's new note, the welcome notice and `/fa feedback` (or `/fa bug`) now end with "Seeing an error? Tell us at foreverartisan.app/bug". Type that address in your browser; it opens the bug form.
+
 ## 0.9.9 (2026-10-04)
 - Fixed a Lua error ("cannot be indexed with secret keys") from nameplates in busy towns like the Undercity. Forever hides some unit names from addons; ForeverArtisan now skips those instead of erroring.
 - New icons: the minimap button is the gold FA logo and Trade Contacts is a gold map pin, so they no longer look like other addons' buttons. The AddOns list uses them too.
