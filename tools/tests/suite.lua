@@ -329,7 +329,7 @@ do
   for _,h in ipairs(un) do if h.npc.n=="Brawn Two" then hasBrawn=true end end
   assert(not hasBrawn, "a visited NPC is not in Only not visited")
   print("UNVISITED", #un)
-  cn.SetScout(false); assert(not cn.ScoutOn()); cn.SetScout(true); assert(cn.ScoutOn())
+  assert(cn.SetScout==nil and cn.SetScoutFromUI==nil, "no scout switch any more")
 end
 -- Contacts tab: grouped by town, Zone and Trade pickers
 do
@@ -918,20 +918,48 @@ do
   local FA=ForeverArtisan
   assert(type(FA.TownNamesOn)=="function" and type(FA.SetTownNames)=="function" and type(FA.NpcTitle)=="function", "Core has names in town")
   local was=FA.TownNamesOn()
-  FA.SetTownNames(false,true)
-  assert(FA.TownNamesOn()==false and ForeverArtisanContactsDB.scoutOff==true, "off, and Trade Contacts sees it")
-  FA.SetTownNames(true,true)
-  assert(FA.TownNamesOn()==true and not ForeverArtisanContactsDB.scoutOff, "back on")
+  -- /fa titles off|on changes only the titles, never the player's nameplate settings
+  local cv={nameplateShowFriends="0", nameplateShowFriendlyNPCs="1"}
+  local oldGet, oldSet = GetCVar, SetCVar
+  local sets=0
+  GetCVar=function(k) return cv[k] end
+  SetCVar=function(k,v) sets=sets+1; cv[k]=v end
+  FA.SetTownNames(false,true); assert(FA.TownNamesOn()==false, "titles off")
+  FA.SetTownNames(true,true); assert(FA.TownNamesOn()==true, "titles on")
+  assert(sets==0, "titles never touch nameplate settings")
+  assert(not FA.FriendlyPlatesOn(), "either setting off = plates off")
+  local st, off = FA.TownStatus()
+  assert(off and st:find("nameplates are off"), "status says plates are off")
+  local cn=loadedFrames["ForeverArtisan_Contacts"].ns
+  assert(not cn.ScoutOn(), "Trade Contacts knows scouting needs the plates")
+  FA.TurnOnFriendlyPlates()
+  assert(cv.nameplateShowFriends=="1" and cv.nameplateShowFriendlyNPCs=="1" and FA.FriendlyPlatesOn() and cn.ScoutOn(), "turn on, only when asked")
+  st, off = FA.TownStatus(); assert(not off and st:find("Job titles show"), "status when on")
+  for _,c in ipairs({"","titles","titles off","titles on","nameplates",""}) do SlashCmdList.FOREVERARTISAN(c) end
+  assert(FA.TownNamesOn()==true, "/fa titles on")
+  SlashCmdList.FOREVERARTISAN("contacts scout"); SlashCmdList.FOREVERARTISAN("contacts todo")
+  GetCVar, SetCVar = oldGet, oldSet
   -- an older install that had turned it off in Trade Contacts keeps it off
-  ForeverArtisanSettings.townNames=nil; ForeverArtisanContactsDB.scoutOff=true
-  assert(FA.TownNamesOn()==false, "migrates the old Trade Contacts switch")
+  -- automatic: on by itself, off when a nameplate addon like Plater runs, and the old switch doesn't count
+  local oldLoaded=C_AddOns.IsAddOnLoaded
+  local running={}
+  C_AddOns.IsAddOnLoaded=function(n) return running[n]==true end
+  ForeverArtisanSettings.titlesPick=nil; ForeverArtisanContactsDB.scoutOff=true
+  assert(FA.TownNamesOn()==true and FA.OtherPlatesAddon()==nil, "auto, old switch ignored")
+  running.Plater=true
+  assert(FA.OtherPlatesAddon()=="Plater" and FA.TownNamesOn()==false, "leaves titles to Plater")
+  assert(FA.TownStatus():find("Plater runs your nameplates"), "says why")
+  FA.SetTownNames(true,true); assert(FA.TownNamesOn()==true, "player can still pick on")
+  FA.SetTownNames(nil,true); assert(FA.TownNamesOn()==false, "back to auto")
+  SlashCmdList.FOREVERARTISAN("titles"); SlashCmdList.FOREVERARTISAN("titles auto")
+  C_AddOns.IsAddOnLoaded=oldLoaded
   FA.SetTownNames(was,true)
   assert(FA.KnownTitle and FA.KnownTitle(888)=="Journeyman Alchemist", "Trade Contacts supplies saved titles")
   assert(FA.TitleRelevant and FA.TitleRelevant("Journeyman Alchemist") and not FA.TitleRelevant("Innkeeper"), "crafting titles are gold")
   local lines={} local tt={AddLine=function(_,l) lines[#lines+1]=l end}
   FA.TownNamesTip(tt)
   local txt=table.concat(lines,"\n")
-  assert(txt:find("Leatherworking Trainer") and txt:find("NPCs seen so far"), "switch tooltip, with the Trade Contacts part")
+  assert(txt:find("Leatherworking Trainer") and txt:find("NPCs seen so far") and txt:find("nameplates"), "tooltip, with the Trade Contacts part")
   print("TOWN NAMES ok")
 end
 print("CRAFTS OK")

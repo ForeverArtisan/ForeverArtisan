@@ -107,11 +107,20 @@ local function BuildSearchPage(p)
   p.rows = MakeRows(p, SEARCH_ROWS, -50, false)
   ClickToWaypoint(p.rows)
   p.checks = {
-    K.Check(p, "Show NPC names in town", 16, -414, function() return ns.ScoutOn() end, function(v) ns.SetScoutFromUI(v) end),
     K.Check(p, "Only not visited", 250, -414, function() return view.onlyNew end, function(v) view.onlyNew = v; RunSearch() end),
   }
-  FA.UI.Tip(p.checks[1], function() ns.ScoutTip(GameTooltip) end)
-  FA.UI.Tip(p.checks[2], function()
+  -- noting NPCs as you pass has no switch; it needs the game's friendly NPC nameplates, so say when they're off
+  p.town = CreateFrame("Frame", nil, p)
+  p.town:SetPoint("TOPLEFT", 16, -414); p.town:SetSize(228, 26)
+  FA.UI.Tip(p.town, function() ns.ScoutTip(GameTooltip) end)
+  p.townText = Text(p.town, "GameFontHighlightSmall", "LEFT", 4, 0, p.town, "LEFT"); p.townText:SetWidth(222)
+  p.platesBtn = Button(p.town, "Turn on nameplates", 128, function()
+    if FA.TurnOnFriendlyPlates then FA.TurnOnFriendlyPlates() end
+    RunSearch()
+  end)
+  p.platesBtn:SetPoint("LEFT", p.town, "LEFT", 0, 0)
+  FA.UI.Tip(p.platesBtn, function() ns.ScoutTip(GameTooltip) end)
+  FA.UI.Tip(p.checks[1], function()
     GameTooltip:AddLine("Only not visited")
     GameTooltip:AddLine("Lists crafting NPCs you've passed but never talked to, nearest first. Talk to each one to save what it sells or trains.", 1, 1, 1, true)
   end)
@@ -125,6 +134,16 @@ local function RefreshSearchPage(p)
   view.searchOff = math.min(view.searchOff, math.max(0, #data - SEARCH_ROWS))
   Fill(p.rows, data, view.searchOff)
   for _, c in ipairs(p.checks) do c:Sync() end
+  local platesOn = ns.ScoutOn()
+  p.platesBtn:SetShown(not platesOn)
+  p.townText:ClearAllPoints()
+  if platesOn then
+    p.townText:SetPoint("LEFT", p.town, "LEFT", 4, 0); p.townText:SetWidth(222)
+    p.townText:SetText(GRAY .. "Crafting NPCs you pass are noted.|r")
+  else
+    p.townText:SetPoint("LEFT", p.platesBtn, "RIGHT", 6, 0); p.townText:SetWidth(94)
+    p.townText:SetText(YELLOW .. "NPCs you pass aren't noted.|r")
+  end
   local v, t = Counts()
   local q = p.box:GetText() or ""
   local hid = view.hidden or 0
@@ -139,7 +158,7 @@ local function RefreshSearchPage(p)
   elseif view.onlyNew and q ~= "" and #data == 0 then
     p.status:SetText(GRAY .. "Nothing matches among the NPCs you've met or passed.|r")
   elseif view.onlyNew then
-    p.status:SetText(#data == 0 and (GRAY .. "Nobody left to visit. Turn on 'Show NPC names in town' and ride through a town.|r")
+    p.status:SetText(#data == 0 and (GRAY .. "Nobody left to visit. Ride through a town and crafting NPCs you pass show up here.|r")
       or ("%d crafting NPC%s you've passed but not talked to, nearest first"):format(#data, #data == 1 and "" or "s"))
   elseif v + t == 0 then
     p.status:SetText(YELLOW .. "No contacts yet. Talk to a crafting vendor or profession trainer and they show up here.|r")

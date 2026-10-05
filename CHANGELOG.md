@@ -1,7 +1,8 @@
 # ForeverArtisan changelog
 
-## 0.9.10 (unreleased)
-- NPC names in town now work for everyone: the job titles under friendly NPC names (like <Leatherworking Trainer>) are part of Core, so they show even with Trade Contacts turned off. The "Show NPC names in town" switch is always in the `/fa` panel. With Trade Contacts on, it still notes the crafting NPCs you pass.
+## 0.9.10 (2026-10-05)
+- Job titles in town, no switch: friendly NPCs show their job under their name (like <Leatherworking Trainer>) for everyone, now part of Core so they work even with Trade Contacts off. The "Show NPC names in town" checkbox is gone. Titles and Trade Contacts' noting of crafting NPCs both need the game's friendly NPC nameplates on. If they're off, the `/fa` panel and the Search tab say so with a "Turn on nameplates" button, and chat reminds you once per session in town. `/fa nameplates` turns them on. ForeverArtisan no longer changes your nameplate settings by itself.
+- Plays nice with nameplate addons: if Plater, Threat Plates, Tidy Plates, Neat Plates, KuiNameplates, Platynator, nPlates or ElvUI nameplates are running, ForeverArtisan leaves NPC titles to them so you never see a title twice. Trade Contacts still notes the crafting NPCs you pass. `/fa titles on | off | auto` lets you choose for yourself.
 - Sturdier in combat and crowded towns: Forever hides some values from addons (unit names on some nameplates, buffs, casts and cooldowns in combat). Every part of ForeverArtisan now skips those quietly instead of showing a Lua error, and keeps working once the values are readable again. `/fa version` shows how many it skipped this session.
 - Reporting errors: the What's new note, the welcome notice and `/fa feedback` (or `/fa bug`) now end with "Seeing an error? Tell us at foreverartisan.app/bug". Type that address in your browser; it opens the bug form.
 

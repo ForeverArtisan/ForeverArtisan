@@ -855,7 +855,6 @@ end
 -- Names in town (nameplate titles) live in Core, so they work without this module. Core's ticker hands
 -- us every friendly plate on screen twice a second; we note crafting NPCs as you pass and sharpen where they stand.
 local FA = ForeverArtisan
-local function townOn() return FA.TownNamesOn and FA.TownNamesOn() end
 FA.OnTownUnit = function(unit) if ForeverArtisanContactsDB then scoutUnit(unit) end end
 -- titles we already saved, and which ones count as crafting (Core colors those gold)
 FA.KnownTitle = function(id)
@@ -883,15 +882,14 @@ local function todoList(all)
   return list
 end
 
--- Scout mode = Core's "Show NPC names in town" switch (the slash command and this window's checkbox use it).
-function ns.ScoutOn() return ForeverArtisanContactsDB and townOn() end
-function ns.SetScout(on) if FA.SetTownNames then FA.SetTownNames(on, true) end end
+-- Scouting has no switch: it works whenever the game's friendly NPC nameplates are on (Core checks that).
+function ns.ScoutOn() return FA.FriendlyPlatesOn == nil or FA.FriendlyPlatesOn() end
 function ns.IsRelevant(title) return isRelevant(title) end
 function ns.IsIgnored(title) return isIgnored(title) end
 function ns.ClassTrainer(title) return classTrainer(title) end
 function ns.WantedHere(title) return wantedHere(title) end
 
--- What the "Show NPC names in town" switch adds when Trade Contacts runs (Core shows the rest).
+-- What Trade Contacts adds to Core's names-in-town tooltip.
 FA.TownNamesExtraTip = function(tt)
   local total, rel = 0, 0
   for _, s in pairs((ForeverArtisanContactsDB and ForeverArtisanContactsDB.scouted) or {}) do
@@ -905,13 +903,6 @@ FA.TownNamesExtraTip = function(tt)
   tt:AddLine(total .. " NPCs seen so far, " .. rel .. " of them crafting-related.", 1, 0.82, 0)
 end
 function ns.ScoutTip(tt) if FA.TownNamesTip then FA.TownNamesTip(tt) end end
-
--- Checkbox version of /fa contacts scout: same switch, plus one line in chat so people see it worked.
-function ns.SetScoutFromUI(on)
-  ns.SetScout(on)
-  if on then say("names in town on. Ride through a town and crafting NPCs are noted as you pass.")
-  else say("names in town off. Your nameplate settings are back.") end
-end
 
 ---------------------------------------------------------------- events
 
@@ -959,7 +950,6 @@ f:SetScript("OnEvent", function(_, event, arg1)
   -- scout mode: quiet, cheap, never errors out loud
   if event == "PLAYER_LOGIN" or event == "NAME_PLATE_UNIT_REMOVED" then return end
   if event == "NAME_PLATE_UNIT_ADDED" or event == "UPDATE_MOUSEOVER_UNIT" or event == "PLAYER_TARGET_CHANGED" then
-    if not townOn() then return end
     local unit = (event == "NAME_PLATE_UNIT_ADDED" and arg1) or (event == "UPDATE_MOUSEOVER_UNIT" and "mouseover") or "target"
     if not InCombatLockdown() then pcall(scoutUnit, unit) end
     return
@@ -1007,7 +997,7 @@ SlashCmdList.FACONTACTS = function(msg)
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts  - open the window (search, contacts)")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa <item or vendor>  - search, e.g. /fa silk thread")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts tooltips  - 'Sold by' lines on item tooltips on/off")
-    DEFAULT_CHAT_FRAME:AddMessage("  Search tab: 'Show NPC names in town' finds crafting NPCs as you pass; 'Only not visited' lists the ones to talk to, nearest first")
+    DEFAULT_CHAT_FRAME:AddMessage("  Crafting NPCs you pass are noted while friendly NPC nameplates are on (/fa nameplates). Search tab: 'Only not visited' lists the ones to talk to, nearest first")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts forget <name>  - remove one contact (or right-click it twice on the Contacts tab)")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts note <text>  - add a note to the last contact  ·  /fa contacts quiet  - chat messages on/off")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts clear confirm  - forget everyone")
@@ -1046,15 +1036,14 @@ SlashCmdList.FACONTACTS = function(msg)
       say("nothing to add a note to yet.")
     end
   elseif cmd == "scout" then
-    if rest == "off" then
-      ns.SetScout(false)
-      say("scout mode off - nameplate settings restored.")
+    -- older versions had a scout switch; now it just reports, since scouting is always on with nameplates
+    local total, rel = 0, 0
+    for _, s in pairs(ForeverArtisanContactsDB.scouted or {}) do total = total + 1; if isRelevant(s.title) then rel = rel + 1 end end
+    if ns.ScoutOn() then
+      say("scouting is always on. Ride through a town and crafting NPCs are noted as you pass (" ..
+        total .. " seen so far, " .. rel .. " crafting-related).")
     else
-      ns.SetScout(true)
-      local total, rel = 0, 0
-      for _, s in pairs(ForeverArtisanContactsDB.scouted or {}) do total = total + 1; if isRelevant(s.title) then rel = rel + 1 end end
-      say("scout mode on - friendly NPC nameplates shown. Ride through town; NPCs log as you pass. (" ..
-        total .. " seen so far, " .. rel .. " crafting-related). /fa contacts scout off to restore your settings.")
+      say("Friendly NPC nameplates are off, so NPCs you pass aren't noted. Type /fa nameplates to turn them on.")
     end
   elseif cmd == "todo" then
     local list = todoList(rest == "all")
@@ -1068,11 +1057,10 @@ SlashCmdList.FACONTACTS = function(msg)
         if isRelevant(s.title) then rel = rel + 1; if opened[id] then done = done + 1 end end
       end
     end
-    local plates = GetCVar and (GetCVar("nameplateShowFriendlyNPCs") or "?") or "?"
     say(string.format("%s: %d NPCs scouted, %d crafting-related, %d of those already opened. Friendly NPC nameplates: %s",
-      rest == "all" and "Everywhere" or zone, seen, rel, done, plates == "1" and "on" or "OFF (type /fa contacts scout)"))
+      rest == "all" and "Everywhere" or zone, seen, rel, done, ns.ScoutOn() and "on" or "OFF (type /fa nameplates)"))
     if #list == 0 then
-      say("nothing left to open" .. (rest == "all" and "" or " in this zone") .. ". Ride around with /fa contacts scout to find more.")
+      say("nothing left to open" .. (rest == "all" and "" or " in this zone") .. ". Ride through a town to find more.")
     else
       say(#list .. " crafting NPCs seen but not opened" .. (rest == "all" and "" or " here") .. ", nearest first:")
       for i = 1, math.min(#list, 15) do

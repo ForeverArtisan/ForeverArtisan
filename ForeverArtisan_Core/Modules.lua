@@ -188,11 +188,11 @@ local function refreshPanel()
   panel.empty:SetShown(#modules == 0)
   panel.reload:SetShown(pending)
   panel.searchBtn:SetShown(FA.Vendors ~= nil)
-  -- names in town is Core's own switch, so it shows whether or not Trade Contacts runs
-  panel.scout:SetChecked(FA.TownNamesOn and FA.TownNamesOn() or false)
-  if panel.scoutLabel then
-    panel.scoutLabel:SetText("Show NPC names in town " .. GREY .. (FA.Vendors and "(finds crafting NPCs as you pass)"
-      or "(their job under the name)") .. "|r")
+  -- names in town: a status line, and a button when the friendly nameplates they need are off
+  if FA.TownStatus then
+    local text, off = FA.TownStatus()
+    panel.town:SetText(text)
+    panel.plates:SetShown(off)
   end
 
   -- "Coming soon" grid under the installed modules
@@ -280,24 +280,22 @@ local function buildPanel()
   panel.searchBtn:SetText("Vendor search")
   panel.searchBtn:SetScript("OnClick", function() panel:Hide(); if FA.Vendors then FA.Vendors.open() end end)
 
-  -- scout mode, right where people look first (also on Trade Contacts' Search tab)
-  panel.scout = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-  panel.scout:SetSize(24, 24)
-  panel.scout:SetPoint("BOTTOMLEFT", 14, 40)
-  local sl = panel.scout:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  sl:SetPoint("LEFT", panel.scout, "RIGHT", 2, 0)
-  sl:SetText("Show NPC names in town " .. GREY .. "(finds crafting NPCs as you pass)|r")
-  panel.scoutLabel = sl
-  panel.scout:SetScript("OnClick", function(self)
-    local on = self:GetChecked() and true or false
-    -- Trade Contacts adds its own line about noting NPCs; without it, Core says it
-    if FA.Vendors and FA.Vendors.setScout then FA.Vendors.setScout(on) elseif FA.SetTownNames then FA.SetTownNames(on) end
+  -- names in town: always on, so no switch; just say whether the game's friendly nameplates allow it
+  -- (also on Trade Contacts' Search tab). ForeverArtisan only turns those on when the player clicks.
+  local townHover = CreateFrame("Frame", nil, panel)
+  townHover:SetPoint("BOTTOMLEFT", 16, 42); townHover:SetSize(428, 28)
+  panel.town = townHover:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  panel.town:SetPoint("BOTTOMLEFT"); panel.town:SetWidth(428); panel.town:SetJustifyH("LEFT")
+  FA.UI.Tip(townHover, function() if FA.TownNamesTip then FA.TownNamesTip(GameTooltip) end end)
+  panel.plates = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+  panel.plates:SetSize(150, 24)
+  panel.plates:SetPoint("BOTTOMLEFT", 152, 12)
+  panel.plates:SetText("Turn on nameplates")
+  panel.plates:SetScript("OnClick", function()
+    if FA.TurnOnFriendlyPlates then FA.TurnOnFriendlyPlates() end
+    refreshPanel()
   end)
-  -- the label is part of the button, so hovering or clicking the words works too
-  panel.scout:SetHitRectInsets(0, -((sl:GetStringWidth() or 0) + 4), 0, 0)
-  FA.UI.Tip(panel.scout, function()
-    if FA.TownNamesTip then FA.TownNamesTip(GameTooltip) end
-  end)
+  FA.UI.Tip(panel.plates, function() if FA.TownNamesTip then FA.TownNamesTip(GameTooltip) end end)
 
   panel.reload = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
   panel.reload:SetSize(130, 24)
@@ -419,6 +417,8 @@ local NEWS = {
     .. "Tauren: herb tooltips say when Cultivation is ready." },
   { "0.9.9", "New gold FA and map pin minimap buttons, this What's new note after updates (/fa new), "
     .. "and a fix for a Lua error near crowded nameplates." },
+  { "0.9.10", "Job titles under NPC names in town, no switch needed (they need friendly NPC nameplates on: /fa nameplates). "
+    .. "Plays nice with Plater and other nameplate addons. Fewer Lua errors in combat. Bugs: " .. FA.BUG_URL },
 }
 
 local function verNum(v)
@@ -500,6 +500,8 @@ local function help()
   print("  /fa welcome  - what ForeverArtisan is for, and where to send bugs and ideas")
   print("  /fa bug  - where to report an error (" .. FA.BUG_URL .. ")")
   print("  /fa new  - what's new in recent releases")
+  print("  /fa nameplates  - turn on friendly NPC nameplates (job titles in town need them)")
+  print("  /fa titles on | off | auto  - job titles under NPC names (auto leaves them to Plater and other nameplate addons)")
   print("  /fa minimap [angle | reset | contacts]  - show/hide or move the minimap buttons")
   if FA.Vendors then print("  /fa <item, vendor or town>  - search your Trade Contacts") end
   print("  /fa enable <module>  |  /fa disable <module>")
@@ -536,6 +538,24 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     if (FA.secretSkips or 0) > 0 then
       print(GREY .. ("  Hidden game values skipped this session: %d (harmless)"):format(FA.secretSkips) .. "|r")
     end
+  elseif lower == "nameplates" or lower == "plates" then
+    if FA.TurnOnFriendlyPlates then FA.TurnOnFriendlyPlates() end
+    if panel and panel:IsShown() then refreshPanel() end
+  elseif lower == "titles" or lower == "names" then
+    local r = (rest or ""):lower()
+    if r == "on" or r == "off" then
+      FA.SetTownNames(r == "on")
+    elseif r == "auto" then
+      FA.SetTownNames(nil)
+    else
+      local other = FA.OtherPlatesAddon()
+      local auto = (ForeverArtisanSettings or {}).titlesPick == nil
+      print(PREFIX .. "Job titles under NPC names: " .. (FA.TownNamesOn() and "on" or "off")
+        .. (auto and (other and (" (automatic: " .. other .. " shows NPC names)") or " (automatic)") or "")
+        .. ". /fa titles on | off | auto")
+      if not FA.FriendlyPlatesOn() then print(PREFIX .. FA.PLATES_OFF_LINE) end
+    end
+    if panel and panel:IsShown() then refreshPanel() end
   elseif lower == "help" then
     help()
   elseif lower == "modules" then

@@ -454,8 +454,6 @@ FA.Vendors = {
   open = function(q) if ns.OpenSearch then ns.OpenSearch(q) end end,
   waypoint = function(npc) if npc then ns.SetWaypoint(npc) end end,
   scoutOn = function() return ns.ScoutOn and ns.ScoutOn() end,
-  setScout = function(on) if ns.SetScoutFromUI then ns.SetScoutFromUI(on) end end,
-  scoutTip = function(tt) if ns.ScoutTip then ns.ScoutTip(tt) end end,
   -- closest trainer you've met or passed for a profession ("Enchanting"), or nil
   nearestTrainer = function(trade)
     local h = ns.NearestTrainerHits and ns.NearestTrainerHits(trade)[1]
