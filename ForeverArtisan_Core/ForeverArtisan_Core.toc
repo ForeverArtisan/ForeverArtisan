@@ -1,9 +1,9 @@
 ## Interface: 16001
 ## Title: ForeverArtisan: Core
-## IconTexture: Interface\Icons\INV_Misc_Gear_01
+## IconTexture: Interface\AddOns\ForeverArtisan_Core\Media\addon
 ## Notes: Required base for the ForeverArtisan crafting suite: the /fa hub, a panel to turn modules on or off, the minimap button and the shared look.
 ## Author: ForeverArtisan
-## Version: 0.9.9-dev
+## Version: 0.9.9
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## X-Curse-Project-ID: 1716370

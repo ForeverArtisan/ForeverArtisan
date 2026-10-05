@@ -407,6 +407,8 @@ FA.ShowWelcome = showWelcome
 local NEWS = {
   { "0.9.8", "Camping: your camp items, the camp cooldown and campfire kits, with a reminder at a fire (/fa camp). "
     .. "Tauren: herb tooltips say when Cultivation is ready." },
+  { "0.9.9", "New gold FA and map pin minimap buttons, this What's new note after updates (/fa new), "
+    .. "and a fix for a Lua error near crowded nameplates." },
 }
 
 local function verNum(v)

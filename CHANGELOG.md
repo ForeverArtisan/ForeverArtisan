@@ -1,6 +1,8 @@
 # ForeverArtisan changelog
 
-## 0.9.9 (unreleased)
+## 0.9.9 (2026-10-04)
+- Fixed a Lua error ("cannot be indexed with secret keys") from nameplates in busy towns like the Undercity. Forever hides some unit names from addons; ForeverArtisan now skips those instead of erroring.
+- New icons: the minimap button is the gold FA logo and Trade Contacts is a gold map pin, so they no longer look like other addons' buttons. The AddOns list uses them too.
 - What's new: after an update, your first login prints the headline features of each release since the one you had (up to three) in chat. New installs get the welcome notice instead. `/fa new` shows it again.
 
 ## 0.9.8 (2026-10-03)

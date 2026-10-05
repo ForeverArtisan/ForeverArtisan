@@ -19,6 +19,9 @@ end
 -- mobs you've targeted, moused over or seen on a nameplate, so a corpse you loot still has a name
 -- (the combat log is off-limits to addons on Forever's client, so it's not used)
 local deadNames, deadOrder = {}, {}
+-- Forever hands addons "secret" strings for some units (in combat, some nameplates). They look like
+-- strings but can't be compared or used as table keys, so anything secret is skipped.
+local function Plain(v) return type(v) == "string" and not (issecretvalue and issecretvalue(v)) end
 local RememberDead
 local function RememberUnit(unit)
   if not (UnitGUID and UnitName and UnitExists and UnitExists(unit)) then return end
@@ -27,7 +30,7 @@ local function RememberUnit(unit)
   if ok then RememberDead(guid, name) end
 end
 RememberDead = function(guid, name)
-  if type(guid) ~= "string" or type(name) ~= "string" or deadNames[guid] then return end
+  if not (Plain(guid) and Plain(name)) or deadNames[guid] then return end
   deadNames[guid] = name
   deadOrder[#deadOrder + 1] = guid
   if #deadOrder > 200 then deadNames[table.remove(deadOrder, 1)] = nil end
@@ -69,13 +72,20 @@ end
 local function LootFrom(slot)
   local ok, guid
   if GetLootSourceInfo then ok, guid = pcall(GetLootSourceInfo, slot) end
-  if ok and type(guid) == "string" then
+  if ok and Plain(guid) then
     if guid:find("^Item") then return "a container", false end
     if guid:find("^GameObject") then return "a chest", false end
-    if UnitGUID and UnitGUID("target") == guid then return UnitName("target") or "a mob", true end
+    local tg = UnitGUID and UnitGUID("target")
+    if Plain(tg) and tg == guid then
+      local n = UnitName("target")
+      return Plain(n) and n or "a mob", true
+    end
     if deadNames[guid] then return deadNames[guid], true end
   end
-  if UnitExists and UnitExists("target") and UnitIsDead and UnitIsDead("target") then return UnitName("target") or "a mob", true end
+  if UnitExists and UnitExists("target") and UnitIsDead and UnitIsDead("target") then
+    local n = UnitName("target")
+    return Plain(n) and n or "a mob", true
+  end
   return "a mob", true
 end
 

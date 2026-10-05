@@ -7,11 +7,13 @@ local ADDON = ...
 local GREY, GREEN = "|cff9d9d9d", "|cff40ff40"
 local PREFIX = ForeverArtisan.Prefix()
 local LDB_NAME = "ForeverArtisan"
-local ICON = "Interface\\Icons\\Trade_BlackSmithing"
+-- our own textures (ForeverArtisan_Core\Media): the gold FA, and a gold map pin for Trade Contacts
+local MEDIA = "Interface\\AddOns\\ForeverArtisan_Core\\Media\\"
+local ICON = MEDIA .. "minimap"
 
 local mm, cm, LDBIcon -- cm: the Trade Contacts button
 local CONTACTS_LDB = "ForeverArtisanContacts"
-local CONTACTS_ICON = "Interface\\Icons\\INV_Misc_Book_09"
+local CONTACTS_ICON = MEDIA .. "contacts"
 
 local function S()
   ForeverArtisanSettings = ForeverArtisanSettings or {}
@@ -90,12 +92,13 @@ local function BuildOwnButton(cfg)
   b:SetFrameStrata("MEDIUM"); b:SetFrameLevel(Minimap:GetFrameLevel() + 12)
   b:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
   local bg = b:CreateTexture(nil, "BACKGROUND")
-  bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background"); bg:SetSize(20, 20); bg:SetPoint("TOPLEFT", 7, -5)
+  -- same layout as current LibDBIcon: the dark disc and the icon sit on the ring's center
+  bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background"); bg:SetSize(24, 24); bg:SetPoint("CENTER", 0, 1)
   local icon = b:CreateTexture(nil, "ARTWORK")
-  icon:SetTexture(cfg.icon); icon:SetSize(18, 18); icon:SetPoint("TOPLEFT", 7, -6)
-  icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  icon:SetTexture(cfg.icon); icon:SetSize(18, 18); icon:SetPoint("CENTER", 0, 1)
+  icon:SetTexCoord(0, 1, 0, 1) -- our icons carry their own padding, unlike the game's bordered ones
   local border = b:CreateTexture(nil, "OVERLAY")
-  border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder"); border:SetSize(53, 53); border:SetPoint("TOPLEFT")
+  border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder"); border:SetSize(50, 50); border:SetPoint("TOPLEFT")
   b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   b:SetScript("OnClick", cfg.onClick)
   b:RegisterForDrag("LeftButton")

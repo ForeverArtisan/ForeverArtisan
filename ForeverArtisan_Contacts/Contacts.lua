@@ -54,8 +54,12 @@ local function where()
   return w
 end
 
+-- Forever can hand addons "secret" values for units (in combat, some nameplates): they can't be read,
+-- compared or used as keys, so a unit with one is skipped.
+local function Secret(v) return issecretvalue and v ~= nil and issecretvalue(v) end
+
 local function npcIdFromGUID(guid)
-  if not guid then return nil end
+  if not guid or Secret(guid) then return nil end
   local kind, _, _, _, _, id = strsplit("-", guid)
   if kind == "Creature" or kind == "Vehicle" then return tonumber(id) end
 end
@@ -87,7 +91,7 @@ local function npcInfo(unit)
   }
   if n.level and n.level <= 0 then n.level = nil end
   local reaction = UnitReaction(unit, "player")
-  if reaction then n.reaction = reaction end -- 4 neutral, 5+ friendly
+  if reaction and not Secret(reaction) then n.reaction = reaction end -- 4 neutral, 5+ friendly
   return n
 end
 
@@ -814,8 +818,9 @@ local function scoutUnit(unit)
   if not unit or not UnitExists(unit) or UnitIsPlayer(unit) then return end
   if UnitPlayerControlled and UnitPlayerControlled(unit) then return end
   local reaction = UnitReaction(unit, "player")
-  if not reaction or reaction < 4 then return end
-  if UnitCreatureType and UnitCreatureType(unit) == "Critter" then return end
+  if not reaction or Secret(reaction) or reaction < 4 then return end
+  local ctype = UnitCreatureType and UnitCreatureType(unit)
+  if Secret(ctype) or ctype == "Critter" then return end
   local guid = UnitGUID(unit)
   local id = npcIdFromGUID(guid)
   if not id then return end
@@ -872,7 +877,7 @@ plateTitle = function(unit)
   if ForeverArtisanContactsDB.scoutOff or not (C_NamePlate and C_NamePlate.GetNamePlateForUnit) then return end
   if not UnitExists(unit) or UnitIsPlayer(unit) then return end
   local reaction = UnitReaction(unit, "player")
-  if not reaction or reaction < 4 then return end
+  if not reaction or Secret(reaction) or reaction < 4 then return end
   local plate = C_NamePlate.GetNamePlateForUnit(unit)
   if not plate or (plate.IsForbidden and plate:IsForbidden()) then return end
   local id = npcIdFromGUID(UnitGUID(unit))
