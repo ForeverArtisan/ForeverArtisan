@@ -326,10 +326,38 @@ end
 local pending        -- { node = name, t = GetTime(), ok = bool }
 local lastLootAt = -100
 
-local function LogGather()
+-- Backup for when the cast events don't reach us (Forever hides some event values from addons):
+-- loot with a herb in it, from a world object rather than a mob, is a herb you just picked.
+local function LootLooksPicked()
+  local found, node = false, nil
+  for i = 1, (GetNumLootItems and GetNumLootItems() or 0) do
+    local link = GetLootSlotLink(i)
+    local id = link and not ForeverArtisan.IsSecret(link) and tonumber(link:match("item:(%d+)"))
+    if id and (ns.herbById[id] or ns.BONUS[id]) then
+      local guid
+      if GetLootSourceInfo then
+        local ok, g = pcall(GetLootSourceInfo, i)
+        if ok and type(g) == "string" and not ForeverArtisan.IsSecret(g) then guid = g end
+      end
+      if guid and not guid:find("^GameObject") then return false end -- a herb off a mob or from a bag
+      found = true
+      if ns.herbById[id] then node = node or ns.herbById[id].name end
+    end
+  end
+  return found, node
+end
+
+local lastEntry, lastZ, lastEntryAt = nil, nil, -100
+
+local function LogGather(chatItems)
   local now = GetTime()
   if now - lastLootAt < 1 then return end
-  if not (pending and pending.ok and now - pending.t < 6) then return end
+  if not (pending and pending.ok and now - pending.t < 6) then
+    if chatItems then return end
+    local picked, node = LootLooksPicked()
+    if not picked then return end
+    pending = { node = node, ok = true, t = now }
+  end
   lastLootAt = now
   local zone, sub, mapID, x, y = Where()
   local z = ZoneRec(zone, sub, mapID)
@@ -338,12 +366,21 @@ local function LogGather()
                   node = pending.node, skill = rank, items = {} }
   pending = nil
   local got = {}
-  for i = 1, (GetNumLootItems() or 0) do
-    local link = GetLootSlotLink(i)
-    local id = link and tonumber(link:match("item:(%d+)"))
-    if id then
-      local _, name, qty, _, quality = GetLootSlotInfo(i)
-      qty = qty or 1
+  local list = chatItems
+  if not list then
+    list = {}
+    for i = 1, (GetNumLootItems() or 0) do
+      local link = GetLootSlotLink(i)
+      local id = link and tonumber(link:match("item:(%d+)"))
+      if id then
+        local _, name, qty, _, quality = GetLootSlotInfo(i)
+        list[#list + 1] = { id = id, name = name, qty = qty, quality = quality, link = link }
+      end
+    end
+  end
+  for _, li in ipairs(list) do
+    local id, name, qty, quality, link = li.id, li.name, li.qty or 1, li.quality, li.link
+    do
       entry.items[#entry.items + 1] = { id = id, n = qty }
       local it = z.items[id]
       if not it then it = { name = name, q = quality, n = 0, hauls = 0 }; z.items[id] = it end
@@ -361,6 +398,7 @@ local function LogGather()
   z.nodes = z.nodes + 1
   z.lastSeen = Today()
   db.raw[#db.raw + 1] = entry
+  if chatItems then lastEntry, lastZ, lastEntryAt = entry, z, now else lastEntry = nil end
   -- trim the oldest 10% at once instead of shifting the whole log on every pick
   if #db.raw > RAW_CAP then
     local n, drop = #db.raw, math.floor(RAW_CAP / 10)
@@ -498,11 +536,32 @@ end
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_UNGHOST", "PLAYER_ALIVE",
   "MINIMAP_UPDATE_TRACKING", "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_FAILED",
-  "UNIT_SPELLCAST_INTERRUPTED", "LOOT_OPENED", "CHAT_MSG_SKILL", "SKILL_LINES_CHANGED" }) do
+  "UNIT_SPELLCAST_INTERRUPTED", "LOOT_OPENED", "CHAT_MSG_LOOT", "CHAT_MSG_SKILL", "SKILL_LINES_CHANGED" }) do
   pcall(ev.RegisterEvent, ev, e)
 end
 
-ev:SetScript("OnEvent", function(_, e, a1, a2, a3, a4)
+-- auto loot on Forever can skip the loot window: count the node from the "You receive loot" line
+-- instead, right after a successful cast. More lines in the next moment are the same node (ore + stone).
+local function OnChatLoot(msg, guid)
+  local li = ForeverArtisan.ParseSelfLoot(msg, guid)
+  if not li then return end
+  local now = GetTime()
+  if pending and pending.ok and now - pending.t < 6 then
+    LogGather({ li })
+  elseif lastEntry and now - lastEntryAt < 2 then
+    lastEntryAt = now
+    lastEntry.items[#lastEntry.items + 1] = { id = li.id, n = li.qty }
+    local it = lastZ.items[li.id]
+    if not it then it = { name = li.name, n = 0, hauls = 0 }; lastZ.items[li.id] = it end
+    it.n, it.hauls, it.name, it.lastSeen = it.n + li.qty, it.hauls + 1, li.name or it.name, Today()
+    db.goalGot[li.id] = (db.goalGot[li.id] or 0) + li.qty
+    session.herbs = session.herbs + li.qty
+    CheckGoals()
+    if ns.OnChange then ns.OnChange() end
+  end
+end
+
+ev:SetScript("OnEvent", function(_, e, a1, a2, a3, a4, ...)
   if e == "ADDON_LOADED" and a1 == ADDON then
     ForeverArtisan.Migrate("ForeverArtisanHerbalismDB", "ForeverArtisanHerbDB")
     ForeverArtisanHerbalismDB = ForeverArtisanHerbalismDB or {}
@@ -546,6 +605,8 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3, a4)
     if IsHerbSpell(a3) and pending and not pending.ok then pending = nil end
   elseif e == "LOOT_OPENED" then
     LogGather()
+  elseif e == "CHAT_MSG_LOOT" then
+    OnChatLoot(a1, (select(8, ...)))
   elseif e == "CHAT_MSG_SKILL" then
     if type(a1) == "string" and (a1:find(HERBALISM, 1, true) or a1:find("Herbalism", 1, true)) then
       local n = tonumber(a1:match("(%d+)%.?%s*$")) or tonumber(a1:match("(%d+)"))

@@ -3,7 +3,7 @@
 ## IconTexture: Interface\Icons\Trade_BlackSmithing
 ## Notes: What to make next for skill-ups, a plan and shopping list to your target skill (ore and stone point to your Mining log), a craft log, where to train next, and material tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.10
+## Version: 0.9.11
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

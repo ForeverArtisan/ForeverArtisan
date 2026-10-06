@@ -50,6 +50,23 @@ function FA.Guard(fn)
   if type(fn) ~= "function" then return fn end
   return function(...) return Report(pcall(fn, ...)) end
 end
+-- "You receive loot: [Copper Ore]x2." -> { id, name, qty, link }, only for your own loot.
+-- On Forever, gathering with auto loot can skip the loot window entirely, so this chat line is
+-- sometimes the only sign of what a node gave you.
+function FA.ParseSelfLoot(msg, guid)
+  if type(msg) ~= "string" or FA.IsSecret(msg) then return nil end
+  local me = UnitGUID and UnitGUID("player")
+  if type(guid) == "string" and guid ~= "" and not FA.IsSecret(guid) and me and not FA.IsSecret(me) then
+    if guid ~= me then return nil end
+  elseif not msg:find("^You receive") then
+    return nil
+  end
+  local id = tonumber(msg:match("|Hitem:(%d+)"))
+  if not id then return nil end
+  return { id = id, name = msg:match("|h%[(.-)%]|h"), qty = tonumber(msg:match("|h|r%s*x(%d+)")) or 1,
+           link = msg:match("(|c%x+|Hitem:.-|h|r)") }
+end
+
 function FA.GuardEvents(frame)
   local h = frame and frame.GetScript and frame:GetScript("OnEvent")
   if type(h) ~= "function" then return end

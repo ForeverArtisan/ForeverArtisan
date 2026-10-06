@@ -875,11 +875,11 @@ do
   assert(ForeverArtisanSettings.lastVersion==ForeverArtisan.Version(), "fresh install records the version")
   local out={} local P=print
   print=function(...) local t={} for i=1,select("#",...) do t[#t+1]=tostring(select(i,...)) end out[#out+1]=table.concat(t," ") end
-  ForeverArtisanSettings.lastVersion="0.9.7"
+  ForeverArtisanSettings.lastVersion="0.9.8"
   fire("PLAYER_LOGIN")
   local txt=table.concat(out,"\n")
   print=P
-  assert(txt:find("What's new") and txt:find("Camping"), "update prints the news: "..txt)
+  assert(txt:find("What's new") and txt:find("Plater") and txt:find("Mining") and not txt:find("Camping"), "update prints the last three releases: "..txt)
   assert(txt:find("foreverartisan.app/bug", 1, true), "news ends with the bug line")
   assert(ForeverArtisanSettings.lastVersion==ForeverArtisan.Version(), "remembers the new version")
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
@@ -889,7 +889,7 @@ do
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
   run("FOREVERARTISAN","new")
   print=P
-  assert(table.concat(out,"\n"):find("Camping"), "/fa new prints it")
+  assert(table.concat(out,"\n"):find("0.9.11"), "/fa new prints it")
   print("NEWS ok")
 end
 -- hidden ("secret") values: events carrying them are skipped, their errors dropped, other errors still raised
@@ -961,6 +961,89 @@ do
   local txt=table.concat(lines,"\n")
   assert(txt:find("Leatherworking Trainer") and txt:find("NPCs seen so far") and txt:find("nameplates"), "tooltip, with the Trade Contacts part")
   print("TOWN NAMES ok")
+end
+-- gathering still counts when the cast events never arrive: ore or a herb looted from a world object
+do
+  local mn=loadedFrames["ForeverArtisan_Mining"].ns
+  local hb=loadedFrames["ForeverArtisan_Herbalism"].ns
+  local mdb,hdb=mn.DB(),hb.DB()
+  local sv={GetTime,GetNumLootItems,GetLootSlotLink,GetLootSourceInfo,GetLootSlotInfo}
+  local clock=5000
+  GetTime=function() return clock end
+  GetNumLootItems=function() return 1 end
+  local function loot(id,name,src) clock=clock+10
+    GetLootSlotLink=function() return "|cffffffff|Hitem:"..id.."|h["..name.."]|h|r" end
+    GetLootSlotInfo=function() return 0,name,1,nil,1 end
+    GetLootSourceInfo=function() return src end
+    fire("LOOT_OPENED") end
+  local m0,h0=mdb.sinceUp or 0,hdb.sinceUp or 0
+  loot(2770,"Copper Ore","GameObject-0-1-2-3-1731-0001")
+  assert((mdb.sinceUp or 0)==m0+1, "mined node counted without cast events")
+  loot(2770,"Copper Ore","Creature-0-1-2-3-2735-0001")
+  assert((mdb.sinceUp or 0)==m0+1, "ore off a mob is not a mined node")
+  loot(2447,"Peacebloom","GameObject-0-1-2-3-1617-0001")
+  assert((hdb.sinceUp or 0)==h0+1, "picked herb counted without cast events")
+  assert(mdb.raw[#mdb.raw].node=="Copper Vein", "node name from the ore")
+  local sk=loadedFrames["ForeverArtisan_Skinning"].ns
+  local sdb=sk.DB() local s0=sdb.sinceUp or 0
+  loot(2318,"Light Leather","Creature-0-1-2-3-1985-0001")
+  assert((sdb.sinceUp or 0)==s0+1, "skin counted without cast events")
+  -- a normal corpse loot with coins in it is not a skin
+  local oldLink=GetLootSlotLink
+  GetNumLootItems=function() return 2 end
+  clock=clock+10
+  GetLootSlotLink=function(i) if i==1 then return "|Hitem:2318|h[Light Leather]|h" end end
+  fire("LOOT_OPENED")
+  assert((sdb.sinceUp or 0)==s0+1, "corpse loot with coins is not a skin")
+  GetNumLootItems=function() return 1 end
+  GetTime,GetNumLootItems,GetLootSlotLink,GetLootSourceInfo,GetLootSlotInfo=sv[1],sv[2],sv[3],sv[4],sv[5]
+  -- auto loot with no loot window: the "You receive loot" line counts the node (ore + stone = one node)
+  do
+    local oldG,oldT=UnitGUID,GetTime
+    GetTime=function() return clock end
+    UnitGUID=function(u) if u=="player" then return "Player-1-ME" end end
+    clock=clock+10
+    local m1,items1=mdb.sinceUp or 0,#mdb.raw
+    fire("UNIT_SPELLCAST_SENT","player","Copper Vein","Cast-1",2575)
+    fire("UNIT_SPELLCAST_SUCCEEDED","player","Cast-1",2575)
+    local function line(msg,guid) fire("CHAT_MSG_LOOT",msg,"Me","","","Me","",0,0,"",0,201,guid or "Player-1-ME") end
+    line("You receive loot: |cffffffff|Hitem:2770::::::::14:::::|h[Copper Ore]|h|rx2.")
+    line("You receive loot: |cffffffff|Hitem:2835::::::::14:::::|h[Rough Stone]|h|r.")
+    assert((mdb.sinceUp or 0)==m1+1 and #mdb.raw==items1+1, "one node from the loot lines")
+    local e=mdb.raw[#mdb.raw]
+    assert(#e.items==2 and e.items[1].n==2 and e.node=="Copper Vein", "ore and stone on the same node")
+    clock=clock+10
+    line("You receive loot: |cffffffff|Hitem:2770::::::::14:::::|h[Copper Ore]|h|r.")
+    assert((mdb.sinceUp or 0)==m1+1, "loot with no cast before it is not a node")
+    clock=clock+10
+    fire("UNIT_SPELLCAST_SENT","player","Copper Vein","Cast-2",2575)
+    fire("UNIT_SPELLCAST_SUCCEEDED","player","Cast-2",2575)
+    line("Someone receives loot: |cffffffff|Hitem:2770::::::::14:::::|h[Copper Ore]|h|r.","Player-1-OTHER")
+    assert((mdb.sinceUp or 0)==m1+1, "someone else's loot doesn't count")
+    local h1=hdb.sinceUp or 0
+    clock=clock+10
+    fire("UNIT_SPELLCAST_SENT","player","Peacebloom","Cast-3",2366)
+    fire("UNIT_SPELLCAST_SUCCEEDED","player","Cast-3",2366)
+    line("You receive loot: |cffffffff|Hitem:2447::::::::14:::::|h[Peacebloom]|h|rx3.")
+    assert((hdb.sinceUp or 0)==h1+1, "herb from the loot line")
+    UnitIsDead=UnitIsDead or function() return true end
+    local sdb2=loadedFrames["ForeverArtisan_Skinning"].ns.DB() local k1=sdb2.sinceUp or 0
+    clock=clock+10
+    fire("UNIT_SPELLCAST_SENT","player","Mangy Wolf","Cast-4",8613)
+    fire("UNIT_SPELLCAST_SUCCEEDED","player","Cast-4",8613)
+    line("You receive loot: |cffffffff|Hitem:2318::::::::14:::::|h[Light Leather]|h|r.")
+    assert((sdb2.sinceUp or 0)==k1+1, "skin from the loot line")
+    UnitGUID,GetTime=oldG,oldT
+  end
+  SlashCmdList.FAMINING("debug")
+  GetNumLootItems=function() return 1 end
+  GetLootSlotLink=function() return "|Hitem:2770|h[Copper Ore]|h" end
+  GetLootSourceInfo=function() return "GameObject-1" end
+  GetLootSlotInfo=function() return 0,"Copper Ore",2 end
+  fire("LOOT_OPENED") fire("UNIT_SPELLCAST_SENT","player","Copper Vein","guid",2575)
+  SlashCmdList.FAMINING("debug")
+  GetNumLootItems,GetLootSlotLink,GetLootSourceInfo,GetLootSlotInfo=sv[2],sv[3],sv[4],sv[5]
+  print("GATHER FALLBACK ok (mining, herbalism, skinning)")
 end
 print("CRAFTS OK")
 print("SUITE OK")

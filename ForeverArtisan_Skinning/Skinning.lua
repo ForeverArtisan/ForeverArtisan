@@ -321,10 +321,46 @@ end
 local pending        -- { mob = name, level = n, t = GetTime(), ok = bool }
 local lastLootAt = -100
 
-local function LogSkin()
+-- Backup for when the cast events don't reach us (Forever hides some event values from addons):
+-- loot that is only leather, hides or scales (no coins, nothing else) from a creature is a skin.
+-- A normal corpse loot almost always has coins or other items in it.
+local function LootLooksSkinned()
+  local Hidden = ForeverArtisan.IsSecret
+  local n = GetNumLootItems and GetNumLootItems() or 0
+  if n == 0 then return false end
+  local guid
+  for i = 1, n do
+    local link = GetLootSlotLink(i)
+    local id = link and not Hidden(link) and tonumber(link:match("item:(%d+)"))
+    if not (id and (ns.leatherById[id] or ns.EXTRAS[id])) then return false end
+    if GetLootSourceInfo and not guid then
+      local ok, g = pcall(GetLootSourceInfo, i)
+      if ok and type(g) == "string" and not Hidden(g) then guid = g end
+    end
+  end
+  if guid and not guid:find("^Creature") then return false end
+  -- name the mob when the corpse is your target
+  local mob, lvl
+  local tg = UnitExists("target") and UnitGUID("target")
+  if guid and tg and not Hidden(tg) and tg == guid then
+    local un, ul = UnitName("target"), UnitLevel("target")
+    if not Hidden(un) then mob = un end
+    if not Hidden(ul) and ul and ul > 0 then lvl = ul end
+  end
+  return true, mob, lvl
+end
+
+local lastEntry, lastZ, lastEntryAt = nil, nil, -100
+
+local function LogSkin(chatItems)
   local now = GetTime()
   if now - lastLootAt < 1 then return end
-  if not (pending and pending.ok and now - pending.t < 6) then return end
+  if not (pending and pending.ok and now - pending.t < 6) then
+    if chatItems then return end
+    local skinned, mob, lvl = LootLooksSkinned()
+    if not skinned then return end
+    pending = { mob = mob, level = lvl, ok = true, t = now }
+  end
   lastLootAt = now
   local zone, sub, mapID, x, y = Where()
   local z = ZoneRec(zone, sub, mapID)
@@ -334,12 +370,21 @@ local function LogSkin()
   local mobName, mobLevel = pending.mob, pending.level
   pending = nil
   local got = {}
-  for i = 1, (GetNumLootItems() or 0) do
-    local link = GetLootSlotLink(i)
-    local id = link and tonumber(link:match("item:(%d+)"))
-    if id then
-      local _, name, qty, _, quality = GetLootSlotInfo(i)
-      qty = qty or 1
+  local list = chatItems
+  if not list then
+    list = {}
+    for i = 1, (GetNumLootItems() or 0) do
+      local link = GetLootSlotLink(i)
+      local id = link and tonumber(link:match("item:(%d+)"))
+      if id then
+        local _, name, qty, _, quality = GetLootSlotInfo(i)
+        list[#list + 1] = { id = id, name = name, qty = qty, quality = quality, link = link }
+      end
+    end
+  end
+  for _, li in ipairs(list) do
+    local id, name, qty, quality, link = li.id, li.name, li.qty or 1, li.quality, li.link
+    do
       entry.items[#entry.items + 1] = { id = id, n = qty }
       local it = z.items[id]
       if not it then it = { name = name, q = quality, n = 0, hauls = 0 }; z.items[id] = it end
@@ -370,6 +415,7 @@ local function LogSkin()
   end
   z.lastSeen = Today()
   db.raw[#db.raw + 1] = entry
+  if chatItems then lastEntry, lastZ, lastEntryAt = entry, z, now else lastEntry = nil end
   -- trim the oldest 10% at once instead of shifting the whole log on every pick
   if #db.raw > RAW_CAP then
     local n, drop = #db.raw, math.floor(RAW_CAP / 10)
@@ -472,11 +518,32 @@ end
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_UNGHOST", "PLAYER_ALIVE",
   "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_FAILED",
-  "UNIT_SPELLCAST_INTERRUPTED", "LOOT_OPENED", "CHAT_MSG_SKILL", "SKILL_LINES_CHANGED", "BAG_UPDATE_DELAYED" }) do
+  "UNIT_SPELLCAST_INTERRUPTED", "LOOT_OPENED", "CHAT_MSG_LOOT", "CHAT_MSG_SKILL", "SKILL_LINES_CHANGED", "BAG_UPDATE_DELAYED" }) do
   pcall(ev.RegisterEvent, ev, e)
 end
 
-ev:SetScript("OnEvent", function(_, e, a1, a2, a3, a4)
+-- auto loot on Forever can skip the loot window: count the node from the "You receive loot" line
+-- instead, right after a successful cast. More lines in the next moment are the same node (ore + stone).
+local function OnChatLoot(msg, guid)
+  local li = ForeverArtisan.ParseSelfLoot(msg, guid)
+  if not li then return end
+  local now = GetTime()
+  if pending and pending.ok and now - pending.t < 6 then
+    LogSkin({ li })
+  elseif lastEntry and now - lastEntryAt < 2 then
+    lastEntryAt = now
+    lastEntry.items[#lastEntry.items + 1] = { id = li.id, n = li.qty }
+    local it = lastZ.items[li.id]
+    if not it then it = { name = li.name, n = 0, hauls = 0 }; lastZ.items[li.id] = it end
+    it.n, it.hauls, it.name, it.lastSeen = it.n + li.qty, it.hauls + 1, li.name or it.name, Today()
+    db.goalGot[li.id] = (db.goalGot[li.id] or 0) + li.qty
+    session.items = session.items + li.qty
+    CheckGoals()
+    if ns.OnChange then ns.OnChange() end
+  end
+end
+
+ev:SetScript("OnEvent", function(_, e, a1, a2, a3, a4, ...)
   if e == "ADDON_LOADED" and a1 == ADDON then
     ForeverArtisanSkinningDB = ForeverArtisanSkinningDB or {}
     db = ForeverArtisanSkinningDB
@@ -530,6 +597,8 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3, a4)
     if IsSkinSpell(a3) and pending and not pending.ok then pending = nil end
   elseif e == "LOOT_OPENED" then
     LogSkin()
+  elseif e == "CHAT_MSG_LOOT" then
+    OnChatLoot(a1, (select(8, ...)))
   elseif e == "CHAT_MSG_SKILL" then
     if type(a1) == "string" and (a1:find(SKINNING, 1, true) or a1:find("Skinning", 1, true)) then
       local n = tonumber(a1:match("(%d+)%.?%s*$")) or tonumber(a1:match("(%d+)"))

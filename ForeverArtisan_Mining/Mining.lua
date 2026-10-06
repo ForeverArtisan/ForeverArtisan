@@ -336,10 +336,39 @@ end
 local pending        -- { node = name, t = GetTime(), ok = bool }
 local lastLootAt = -100
 
-local function LogMine()
+-- Backup for when the cast events don't reach us (Forever hides some event values from addons):
+-- loot with ore or stone in it, from a world object rather than a mob, is a node you just mined.
+local STONES = { [2835] = true, [2836] = true, [2838] = true, [7912] = true, [12365] = true }
+local function LootLooksMined()
+  local found, node = false, nil
+  for i = 1, (GetNumLootItems and GetNumLootItems() or 0) do
+    local link = GetLootSlotLink(i)
+    local id = link and not ForeverArtisan.IsSecret(link) and tonumber(link:match("item:(%d+)"))
+    if id and (ns.ORES[id] or STONES[id]) then
+      local guid
+      if GetLootSourceInfo then
+        local ok, g = pcall(GetLootSourceInfo, i)
+        if ok and type(g) == "string" and not ForeverArtisan.IsSecret(g) then guid = g end
+      end
+      if guid and not guid:find("^GameObject") then return false end -- ore off a mob or from a bag
+      found = true
+      if ns.ORES[id] then node = node or ns.ORES[id].node end
+    end
+  end
+  return found, node
+end
+
+local lastEntry, lastZ, lastEntryAt = nil, nil, -100
+
+local function LogMine(chatItems)
   local now = GetTime()
   if now - lastLootAt < 1 then return end
-  if not (pending and pending.ok and now - pending.t < 6) then return end
+  if not (pending and pending.ok and now - pending.t < 6) then
+    if chatItems then return end
+    local mined, node = LootLooksMined()
+    if not mined then return end
+    pending = { node = node, ok = true, t = now }
+  end
   lastLootAt = now
   local zone, sub, mapID, x, y = Where()
   local z = ZoneRec(zone, sub, mapID)
@@ -349,12 +378,21 @@ local function LogMine()
                   node = pending.node, skill = rank, items = {} }
   pending = nil
   local got = {}
-  for i = 1, (GetNumLootItems() or 0) do
-    local link = GetLootSlotLink(i)
-    local id = link and tonumber(link:match("item:(%d+)"))
-    if id then
-      local _, name, qty, _, quality = GetLootSlotInfo(i)
-      qty = qty or 1
+  local list = chatItems
+  if not list then
+    list = {}
+    for i = 1, (GetNumLootItems() or 0) do
+      local link = GetLootSlotLink(i)
+      local id = link and tonumber(link:match("item:(%d+)"))
+      if id then
+        local _, name, qty, _, quality = GetLootSlotInfo(i)
+        list[#list + 1] = { id = id, name = name, qty = qty, quality = quality, link = link }
+      end
+    end
+  end
+  for _, li in ipairs(list) do
+    local id, name, qty, quality, link = li.id, li.name, li.qty or 1, li.quality, li.link
+    do
       entry.items[#entry.items + 1] = { id = id, n = qty }
       local it = z.items[id]
       if not it then it = { name = name, q = quality, n = 0, hauls = 0 }; z.items[id] = it end
@@ -373,6 +411,7 @@ local function LogMine()
   if node then z.veins[node] = (z.veins[node] or 0) + 1 end
   z.lastSeen = Today()
   db.raw[#db.raw + 1] = entry
+  if chatItems then lastEntry, lastZ, lastEntryAt = entry, z, now else lastEntry = nil end
   -- trim the oldest 10% at once instead of shifting the whole log on every pick
   if #db.raw > RAW_CAP then
     local n, drop = #db.raw, math.floor(RAW_CAP / 10)
@@ -514,11 +553,32 @@ end
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_UNGHOST", "PLAYER_ALIVE",
   "MINIMAP_UPDATE_TRACKING", "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_FAILED",
-  "UNIT_SPELLCAST_INTERRUPTED", "LOOT_OPENED", "CHAT_MSG_SKILL", "SKILL_LINES_CHANGED", "BAG_UPDATE_DELAYED" }) do
+  "UNIT_SPELLCAST_INTERRUPTED", "LOOT_OPENED", "CHAT_MSG_LOOT", "CHAT_MSG_SKILL", "SKILL_LINES_CHANGED", "BAG_UPDATE_DELAYED" }) do
   pcall(ev.RegisterEvent, ev, e)
 end
 
-ev:SetScript("OnEvent", function(_, e, a1, a2, a3, a4)
+-- auto loot on Forever can skip the loot window: count the node from the "You receive loot" line
+-- instead, right after a successful cast. More lines in the next moment are the same node (ore + stone).
+local function OnChatLoot(msg, guid)
+  local li = ForeverArtisan.ParseSelfLoot(msg, guid)
+  if not li then return end
+  local now = GetTime()
+  if pending and pending.ok and now - pending.t < 6 then
+    LogMine({ li })
+  elseif lastEntry and now - lastEntryAt < 2 then
+    lastEntryAt = now
+    lastEntry.items[#lastEntry.items + 1] = { id = li.id, n = li.qty }
+    local it = lastZ.items[li.id]
+    if not it then it = { name = li.name, n = 0, hauls = 0 }; lastZ.items[li.id] = it end
+    it.n, it.hauls, it.name, it.lastSeen = it.n + li.qty, it.hauls + 1, li.name or it.name, Today()
+    db.goalGot[li.id] = (db.goalGot[li.id] or 0) + li.qty
+    session.items = session.items + li.qty
+    CheckGoals()
+    if ns.OnChange then ns.OnChange() end
+  end
+end
+
+ev:SetScript("OnEvent", function(_, e, a1, a2, a3, a4, ...)
   if e == "ADDON_LOADED" and a1 == ADDON then
     ForeverArtisanMiningDB = ForeverArtisanMiningDB or {}
     db = ForeverArtisanMiningDB
@@ -558,6 +618,8 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3, a4)
     if IsMineSpell(a3) and pending and not pending.ok then pending = nil end
   elseif e == "LOOT_OPENED" then
     LogMine()
+  elseif e == "CHAT_MSG_LOOT" then
+    OnChatLoot(a1, (select(8, ...)))
   elseif e == "CHAT_MSG_SKILL" then
     if type(a1) == "string" and (a1:find(MINING, 1, true) or a1:find("Mining", 1, true)) then
       local n = tonumber(a1:match("(%d+)%.?%s*$")) or tonumber(a1:match("(%d+)"))
@@ -589,6 +651,52 @@ local function ZoneReport(z)
   end
 end
 
+---------------------------------------------------------------- /fa mine debug
+-- Prints what the game hands us around a mined node, straight from the events (not through the
+-- hidden-value guard), so we can see which values Forever hides. Off by default; nothing is saved.
+local dbgFrame
+local function Show(v)
+  if v == nil then return "nil" end
+  if issecretvalue and issecretvalue(v) then return "HIDDEN" end
+  return tostring(v)
+end
+local function DebugEvent(_, e, ...)
+  local ok, err = pcall(function(...)
+    local parts = {}
+    for i = 1, select("#", ...) do parts[#parts + 1] = Show((select(i, ...))) end
+    say("|cff9d9d9d[debug]|r " .. e .. " (" .. table.concat(parts, ", ") .. ")")
+    if e == "LOOT_OPENED" then
+      local n = GetNumLootItems and GetNumLootItems() or 0
+      say("|cff9d9d9d[debug]|r loot slots: " .. Show(n) .. "   hidden-value skips so far: " .. tostring(ForeverArtisan.secretSkips or 0))
+      for i = 1, (type(n) == "number" and n or 0) do
+        local link = GetLootSlotLink(i)
+        local g = GetLootSourceInfo and select(2, pcall(GetLootSourceInfo, i))
+        local _, name, qty = GetLootSlotInfo(i)
+        say(("|cff9d9d9d[debug]|r   slot %d: link=%s name=%s qty=%s source=%s"):format(i,
+          (link and not (issecretvalue and issecretvalue(link))) and link:gsub("|", "||"):sub(1, 60) or Show(link),
+          Show(name), Show(qty), Show(g)))
+      end
+    end
+  end, ...)
+  if not ok then say("|cff9d9d9d[debug]|r error: " .. Show(err)) end
+end
+function ns.ToggleDebug()
+  if not dbgFrame then
+    dbgFrame = CreateFrame("Frame")
+    dbgFrame:SetScript("OnEvent", DebugEvent)
+  end
+  if dbgFrame.on then
+    dbgFrame:UnregisterAllEvents(); dbgFrame.on = nil
+    say("debug off.")
+  else
+    for _, e in ipairs({ "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED", "LOOT_OPENED", "CHAT_MSG_SKILL", "CHAT_MSG_LOOT" }) do
+      pcall(dbgFrame.RegisterEvent, dbgFrame, e)
+    end
+    dbgFrame.on = true
+    say("debug on. Mine one node, then send a screenshot of chat. /fa mine debug again to turn it off.")
+  end
+end
+
 SLASH_FAMINING1 = "/famining"
 SlashCmdList.FAMINING = function(msg)
   if not db then return end
@@ -596,6 +704,8 @@ SlashCmdList.FAMINING = function(msg)
   cmd = (cmd or ""):lower()
   if cmd == "" then
     if ns.ToggleWindow then ns.ToggleWindow() end
+  elseif cmd == "debug" then
+    ns.ToggleDebug()
   elseif cmd == "next" then
     local now, soon, skill = ns.PickNext()
     if not skill then say("You haven't learned Mining on this character.") return end
