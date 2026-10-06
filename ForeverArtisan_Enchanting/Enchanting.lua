@@ -104,7 +104,8 @@ function ns.Knows() return Skill() ~= nil end
 
 ---------------------------------------------------------------- recipe colors
 -- Forever reports the skill where a recipe turns gray. The live color from your last window scan
--- is used first; otherwise green is guessed 20 below gray and yellow 40 below.
+-- is used first; otherwise green is guessed 20 below gray and yellow 40 below, moved to fit the
+-- colors you've seen at other skills.
 -- Older windows (the Classic Craft window Enchanting uses) give only today's color, not the gray
 -- level. Then the gray level is estimated from that color so plans still work past today's skill.
 local GRAY_GUESS = { orange = 45, yellow = 30, green = 10, gray = 0 }
@@ -123,8 +124,9 @@ function ns.ColorFor(r, skill)
   local gray = GrayAt(r)
   if gray then
     if skill >= gray then return "gray" end
-    if skill >= gray - 20 then return "green" end
-    if skill >= gray - 40 then return "yellow" end
+    local y, g = ForeverArtisan.RecipeBands(r, gray)
+    if skill >= g then return "green" end
+    if skill >= y then return "yellow" end
     return "orange"
   end
   return "unknown"
@@ -135,9 +137,7 @@ function ns.Chance(r, skill)
   local c = ns.ColorFor(r, skill)
   if c == "orange" then return 1 end
   local gray = GrayAt(r)
-  if (c == "yellow" or c == "green") and gray then
-    return math.max(0.05, math.min(1, (gray - skill) / 40))
-  end
+  if (c == "yellow" or c == "green") and gray then return ForeverArtisan.FadeChance(r, gray, skill) end
   if c == "yellow" then return 0.75 end
   if c == "green" then return 0.25 end
   return 0
@@ -382,6 +382,7 @@ local function Scan()
   for name, r in pairs(got) do
     n = n + 1
     if r.learned then learned = learned + 1 end
+    ForeverArtisan.NoteRecipeColor(c.recipes[name], r)
     c.recipes[name] = r
   end
   local first = not c.scanned
@@ -574,29 +575,33 @@ function ns.Plan(target)
   end
 
   -- what you can make from your bags doesn't change while planning: count once, not on every pass
+  -- plus recipes a trainer you've met still teaches (they join the plan at the skill they need)
+  local cands, untrained = learned, 0
+  if ForeverArtisan.PlanRecipes then cands, untrained = ForeverArtisan.PlanRecipes(PROF, CharRec().recipes, Skipped) end
   local canMake = {}
-  for _, r in ipairs(learned) do canMake[r] = ns.Makeable(r) > 0 end
+  for _, r in ipairs(cands) do canMake[r] = ns.Makeable(r) > 0 end
+  -- what each recipe's materials cost in money, looked up once per plan
+  local moneyMemo = {}
+  local function Money(r) return ForeverArtisan.CraftMoney(r, makes, moneyMemo) end
 
   local steps, stuck = {}, nil
   while math.floor(s) < target and total < PLAN_LIMIT do
     local at = math.floor(s)
-    local best, bestScore, bestCost
-    for _, r in ipairs(learned) do
-      local ch = ns.Chance(r, at)
+    -- prefer the best skill-up chance, but favor recipes you can already make from your bags;
+    -- when two are close, the cheaper one per skill point; with no prices, on a tie the one that
+    -- uses fewer materials (Handstitched Cloak over the Vest)
+    local opts = {}
+    for _, r in ipairs(cands) do
+      local ch = (not r.train or at >= r.train.at) and ns.Chance(r, at) or 0
       if ch > 0 then
-        -- prefer the best skill-up chance, but favor recipes you can already make from your bags;
-        -- on a tie, the one that uses fewer materials (Handstitched Cloak over the Vest)
-        local score = ch + (canMake[r] and 0.15 or 0)
-        local cost = Cost(r)
-        if not best or score > bestScore + 0.001
-          or (math.abs(score - bestScore) <= 0.001 and cost < bestCost) then
-          best, bestScore, bestCost = r, score, cost
-        end
+        opts[#opts + 1] = { r = r, ch = ch, bag = canMake[r], mats = Cost(r), score = ch + (canMake[r] and 0.15 or 0) }
       end
     end
-    if not best then stuck = at; break end
+    local pick = ForeverArtisan.PickRecipe(opts, Money)
+    if not pick then stuck = at; break end
+    local best = pick.r
     if not cur or cur.r ~= best then
-      cur = { r = best, crafts = 0, from = at, to = at, sub = {} }
+      cur = { r = best, crafts = 0, from = at, to = at, sub = {}, train = best.train }
       steps[#steps + 1] = cur
     end
     Craft(best, 0)
@@ -622,6 +627,17 @@ function ns.Plan(target)
     NeedTools(st.r)
     for sr in pairs(st.sub or {}) do NeedTools(sr) end
   end
+  -- recipes to learn on the way: one line each, with the trainer and what it costs
+  local trained = {}
+  for _, st in ipairs(steps) do
+    local t = st.train
+    if t and not trained[st.r.name] then
+      trained[st.r.name] = true
+      shopping[#shopping + 1] = { name = "Train " .. st.r.name, need = 1, have = 0, train = t, price = t.cost,
+        source = ("Learn it at %d from %s%s."):format(t.at, t.who or "a trainer",
+          t.cost and (" for " .. ForeverArtisan.Money(t.cost)) or "") }
+    end
+  end
   for id, n in pairs(used) do
     local e = { id = id, name = ItemName(id, names[id]), need = n, have = Count(id) }
     if crafted[id] then
@@ -637,13 +653,21 @@ function ns.Plan(target)
   -- what each thing costs: your Auction House visits or Auctionator, or a vendor when cheaper
   if ForeverArtisan.PriceShopping then ForeverArtisan.PriceShopping(shopping) end
   table.sort(shopping, function(a, b)
+    if (a.train ~= nil) ~= (b.train ~= nil) then return a.train ~= nil end
+    if a.train and b.train and a.train.at ~= b.train.at then return a.train.at < b.train.at end
     if (a.tool and a.have < 1) ~= (b.tool and b.have < 1) then return a.tool and a.have < 1 end
     local sa, sb = a.need - a.have, b.need - b.have
     if (sa > 0) ~= (sb > 0) then return sa > 0 end
     if (a.craft ~= nil) ~= (b.craft ~= nil) then return a.craft ~= nil end
     return (a.name or "") < (b.name or "")
   end)
-  return steps, shopping, stuck, target, maxr
+  local hint
+  if stuck then
+    local any = false
+    for _, r in ipairs(cands) do if r.train then any = true end end
+    if not any and ForeverArtisan.TrainHint then hint = ForeverArtisan.TrainHint(PROF, untrained) end
+  end
+  return steps, shopping, stuck, target, maxr, hint
 end
 
 ---------------------------------------------------------------- where to learn it

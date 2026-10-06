@@ -164,7 +164,20 @@ local function RefreshMainPage(p)
 end
 
 ---------------------------------------------------------------- page 2: Progress (plan + shopping list)
-local PLAN_ROWS, SHOP_ROWS = 5, 8
+local PLAN_ROWS, SHOP_ROWS = 5, 8     -- at the normal window height
+local PLAN_MAX, SHOP_MAX = 12, 20     -- when the window is dragged taller
+-- A taller window shows more of both lists: a third of the extra rows go to the plan, the rest
+-- to the shopping list (which moves down). True when the row counts changed.
+local function LayoutProgress(p, extra)
+  local more = math.floor(math.max(0, extra or 0) / ROW_H)
+  local addPlan = math.min(PLAN_MAX - PLAN_ROWS, math.ceil(more / 3))
+  local addShop = math.min(SHOP_MAX - SHOP_ROWS, more - addPlan)
+  if p.planRows and #p.planRows == PLAN_ROWS + addPlan and #p.shopRows == SHOP_ROWS + addShop then return false end
+  p.planRows = K.Visible(p.planAll, PLAN_ROWS + addPlan, p.planRows)
+  p.shopRows = K.Visible(p.shopAll, SHOP_ROWS + addShop, p.shopRows)
+  p.shopBox:ClearAllPoints(); p.shopBox:SetPoint("TOPLEFT", 0, -238 - addPlan * ROW_H)
+  return true
+end
 local function BuildProgressPage(p)
   p.skillBar = K.SkillBar(p, -2, "Alchemy")
   p.rate = Text(p, "GameFontHighlightSmall", "TOPLEFT", 18, -36); p.rate:SetWidth(430)
@@ -173,18 +186,20 @@ local function BuildProgressPage(p)
   p.target = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
   p.target:SetSize(46, 20); p.target:SetPoint("TOPLEFT", 120, -50)
   p.target:SetAutoFocus(false); p.target:SetNumeric(true); p.target:SetMaxLetters(3)
-  p.target:SetScript("OnEnterPressed", function(self) self:ClearFocus(); view.target = tonumber(self:GetText()); ns.OnChange() end)
+  p.target:SetScript("OnEnterPressed", function(self) self:ClearFocus(); view.target = tonumber(self:GetText()); view.planOff, view.shopOff = 0, 0; ns.OnChange() end)
   p.target:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   Text(p, "GameFontDisableSmall", "TOPLEFT", 176, -56):SetText("type a skill and press Enter")
   -- cap / stuck notes sit right under the target box so the reason for a short plan is obvious
   p.note = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -74); p.note:SetWidth(430); p.note:SetJustifyH("LEFT")
-  p.planRows = MakeRows(p, PLAN_ROWS, -100, false)
+  p.planAll = MakeRows(p, PLAN_MAX, -100, false)
 
-  Header(p, -238, "Shopping list")
-  Text(p, "GameFontDisableSmall", "TOPLEFT", 120, -240):SetText("have / need  ·  hover for source and price  ·  gold = you craft it")
-  p.shopRows = MakeRows(p, SHOP_ROWS, -258, false)
+  -- the shopping list moves down when the window is taller and the plan shows more rows
+  p.shopBox = CreateFrame("Frame", nil, p); p.shopBox:SetSize(W, 20); p.shopBox:SetPoint("TOPLEFT", 0, -238)
+  Header(p.shopBox, 0, "Shopping list")
+  Text(p.shopBox, "GameFontDisableSmall", "TOPLEFT", 120, -2):SetText("have / need  ·  hover for source and price  ·  gold = you craft it")
+  p.shopAll = MakeRows(p.shopBox, SHOP_MAX, -20, false)
   -- click a shopping list item at the Auction House: its name goes in the search box (you press Search)
-  for _, r in ipairs(p.shopRows) do
+  for _, r in ipairs(p.shopAll) do
     r:SetScript("OnClick", function(self)
       local d = self.data
       if not (d and d.name) then return end
@@ -192,6 +207,10 @@ local function BuildProgressPage(p)
       ns.say("Open the Auction House, then click an item here to search for it.")
     end)
   end
+  -- mouse wheel over either list scrolls it
+  K.ScrollRows(p.planAll, "planOff", function() return (p.planCount or 0) - #p.planRows end)
+  K.ScrollRows(p.shopAll, "shopOff", function() return (p.shopCount or 0) - #p.shopRows end)
+  LayoutProgress(p, 0)
   p.cost = Text(p, "GameFontHighlightSmall", "BOTTOMLEFT", 20, 36, p, "BOTTOMLEFT"); p.cost:SetWidth(430); p.cost:SetJustifyH("LEFT")
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 20, -104); p.empty:SetWidth(420)
   p.open = FA.UI.ProfessionButton(p, "Alchemy", 240); p.open:SetPoint("TOPLEFT", 20, -128)
@@ -218,7 +237,7 @@ local function RefreshProgressPage(p)
   local default = math.min((i.max and i.max > i.rank) and i.max or (i.rank + 25), 300)
   local target = view.target or default
   if not p.target:HasFocus() then p.target:SetText(tostring(target)) end
-  local steps, shopping, stuck = ns.Plan(target)
+  local steps, shopping, stuck, _, _, hint = ns.Plan(target)
 
   local plan = {}
   for _, st in ipairs(steps) do
@@ -236,10 +255,21 @@ local function RefreshProgressPage(p)
       right = GRAY .. ("skill %d-%d"):format(st.from, st.to) .. "|r",
       tip = ReagentTip(st.r) .. (#tipExtra > 0 and ("\n" .. table.concat(tipExtra, "\n")) or "") }
   end
+  -- recipes to train on the way: say where and when
+  for k, st in ipairs(steps) do
+    local row = plan[k]
+    if st.train and row then
+      row.right = YELLOW .. ("train at %d"):format(st.train.at) .. "|r  " .. (row.right or "")
+      row.tip = YELLOW .. ("Not learned yet: train it at %d%s."):format(st.train.at,
+        st.train.who and (" from " .. st.train.who) or "") .. "|r\n" .. (row.tip or "")
+    end
+  end
   if #plan == 0 and i.rank and target <= i.rank then
     plan[1] = { icon = 134400, left = GREEN .. "You're already there.|r", right = "" }
   end
-  Fill(p.planRows, plan, 0)
+  p.planCount = #plan
+  view.planOff = math.max(0, math.min(view.planOff or 0, #plan - #p.planRows))
+  Fill(p.planRows, plan, view.planOff)
   -- explain why the plan is short: capped rank first, then recipes running out
   local notes, unreachable = {}, false
   if i.capped and target > i.max then
@@ -247,14 +277,17 @@ local function RefreshProgressPage(p)
     unreachable = true
   end
   if stuck and stuck < target then
-    notes[#notes + 1] = YELLOW .. ("Your learned recipes stop giving skill-ups at %d. Learn new recipes to go further.|r"):format(stuck)
+    notes[#notes + 1] = YELLOW .. ("Your recipes stop giving skill-ups at %d. Learn new recipes to go further.|r"):format(stuck)
+    if hint then notes[#notes + 1] = GRAY .. hint .. "|r" end
     unreachable = true
   end
   p.note:SetText(table.concat(notes, "\n"))
   if unreachable then p.target:SetTextColor(1, .4, .4) else p.target:SetTextColor(1, 1, 1) end
 
-  local shop = {}
+  -- training first: what you can learn now in one line, then the rest by the skill you need
+  local shop = FA.TrainShopRows and FA.TrainShopRows(shopping, i.rank) or {}
   for _, e in ipairs(shopping) do
+    if not e.train then
     local done = e.have >= e.need
     local cost = (not done and not e.craft and e.price) and (GRAY .. "  ·  " .. FA.Money(e.price * (e.need - e.have)) .. "|r") or ""
     shop[#shop + 1] = { id = e.id, icon = Icon(e.id), name = e.name,
@@ -262,8 +295,11 @@ local function RefreshProgressPage(p)
       right = ("%s%d / %d|r"):format(done and GREEN or YELLOW, math.min(e.have, e.need), e.need)
         .. (e.craft and (GOLD .. "  ·  craft " .. e.craft .. "|r") or "") .. cost,
       tip = " \n" .. GOLD .. "Shopping list|r\n" .. e.source .. ((not e.craft and FA.PriceLine) and ("\n" .. FA.PriceLine(e.id, e.name)) or "") }
+    end
   end
-  Fill(p.shopRows, shop, 0)
+  p.shopCount = #shop
+  view.shopOff = math.max(0, math.min(view.shopOff or 0, #shop - #p.shopRows))
+  Fill(p.shopRows, shop, view.shopOff)
   p.cost:SetText(ns.ShopCostText and ns.ShopCostText(shopping) or "")
 end
 
@@ -446,12 +482,16 @@ local function Build()
   BuildProgressPage(pages.progress)
   BuildLogPage(pages.log)
   BuildGuidePage(pages.guide)
+  -- drag the corner to make the window taller: the Progress tab shows more of the plan and list
+  K.Tall(f, "height", 900, function(extra)
+    if LayoutProgress(pages.progress, extra) and view.tab == "progress" then ns.OnChange() end
+  end, "pos")
 
   f:SetScript("OnUpdate", function(self, el)
     self.t = (self.t or 0) + el
     if self.t > 5 then self.t = 0; if view.tab == "main" then ns.RefreshSession(pages.main) end end
   end)
-  f:HookScript("OnShow", function() view.bookShow, view.guideOff = "all", 0 end)
+  f:HookScript("OnShow", function() view.bookShow, view.guideOff, view.planOff, view.shopOff = "all", 0, 0, 0 end)
   f:Hide()
   ShowTab("main")
 end

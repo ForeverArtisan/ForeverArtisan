@@ -257,3 +257,196 @@ tipEv:SetScript("OnEvent", function() pcall(HookDropTips) end)
 -- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
 ForeverArtisan.GuardEvents(ev)
 ForeverArtisan.GuardEvents(tipEv)
+
+---------------------------------------------------------------- recipes you can still train
+-- Crafting plans use these: a recipe you haven't learned that a trainer in your Trade Contacts
+-- teaches, with the skill it needs and what it costs. Only trainers you've opened count (no
+-- guessing from Classic data), so a plan never sends you after a recipe nobody here teaches.
+-- { at = skill needed, cost = copper or nil, who = "Arnok (Undercity)" } or nil
+function ForeverArtisan.TrainableRecipe(prof, name)
+  local V = ForeverArtisan.Vendors
+  if not (V and V.hitsForLink and name) then return nil end
+  local ok, hits = pcall(V.hitsForLink, nil, name)
+  if not ok or type(hits) ~= "table" then return nil end
+  local best
+  for _, h in ipairs(hits) do
+    local it = h.item
+    if it and it.train then
+      local sk = it.sk and tostring(it.sk)
+      if not sk or not prof or sk:find(prof, 1, true) then
+        local at = sk and tonumber(sk:match("(%d+)%s*$")) or 1
+        local who = h.npc and h.npc.n and (h.npc.n .. " (" .. (h.npc.s or h.npc.z or "?") .. ")")
+        if not best or at < best.at or (at == best.at and (it.p or 0) < (best.cost or 0)) then
+          best = { at = at, cost = it.p, who = who }
+        end
+      end
+    end
+  end
+  return best
+end
+
+-- The recipes a plan may use: everything learned, plus unlearned ones a trainer you've met teaches.
+-- Trainable ones come back as stand-ins that count as learned, with .train = { at, cost, who }.
+-- Second value: how many unlearned recipes had no trainer on file.
+function ForeverArtisan.PlanRecipes(prof, recipes, skip)
+  local list, unknown = {}, 0
+  for _, r in pairs(recipes or {}) do
+    if not (skip and skip(r)) then
+      if r.learned then
+        list[#list + 1] = r
+      elseif r.reagents and #r.reagents > 0 then
+        local t = ForeverArtisan.TrainableRecipe(prof, r.name)
+        if t then
+          list[#list + 1] = setmetatable({ learned = true, train = t, base = r }, { __index = r })
+        else
+          unknown = unknown + 1
+        end
+      end
+    end
+  end
+  return list, unknown
+end
+
+-- one line under a short plan, when meeting a trainer would help
+function ForeverArtisan.TrainHint(prof, unknown)
+  if not unknown or unknown == 0 then return nil end
+  if not ForeverArtisan.Vendors then
+    return "Turn on Trade Contacts and open a " .. prof .. " trainer once so plans can include recipes you can train."
+  end
+  return "Open a " .. prof .. " trainer's list once so plans can include recipes you can train there."
+end
+
+---------------------------------------------------------------- recipe colors you've seen
+-- Forever only reports the skill where a recipe turns gray, so yellow and green are guessed
+-- (40 and 20 below gray). Each time a crafting window shows a recipe's color we remember it at
+-- that skill, and the guess moves to fit: orange seen at 28 means yellow starts at 29 or later.
+function ForeverArtisan.NoteRecipeColor(old, new)
+  if not new then return end
+  local seen = {}
+  local same = old and old.seen and not (old.grayAt and new.grayAt and old.grayAt ~= new.grayAt)
+  if same then for k, v in pairs(old.seen) do seen[k] = v end end
+  local c, at = new.color, new.scanSkill
+  if c and at then
+    if c == "orange" then seen.o = math.max(seen.o or at, at)
+    elseif c == "yellow" then seen.ylo = math.min(seen.ylo or at, at); seen.yhi = math.max(seen.yhi or at, at)
+    elseif c == "green" then seen.glo = math.min(seen.glo or at, at)
+    end
+  end
+  new.seen = next(seen) and seen or nil
+end
+
+-- where yellow and green start for a recipe that turns gray at `gray`
+function ForeverArtisan.RecipeBands(r, gray)
+  local y, g = gray - 40, gray - 20
+  local s = r and r.seen
+  if s then
+    if s.o then y = math.max(y, s.o + 1); g = math.max(g, s.o + 1) end
+    if s.ylo then y = math.min(y, s.ylo) end
+    if s.yhi then g = math.max(g, s.yhi + 1) end
+    if s.glo then g = math.min(g, s.glo) end
+  end
+  if g > gray then g = gray end
+  if y > g then y = g end
+  return y, g
+end
+
+-- skill-up chance for a yellow or green recipe: falls evenly from yellow's start to gray
+function ForeverArtisan.FadeChance(r, gray, skill)
+  local y = ForeverArtisan.RecipeBands(r, gray)
+  return math.max(0.05, math.min(1, (gray - skill) / math.max(1, gray - y)))
+end
+
+---------------------------------------------------------------- cheapest way up
+-- What one craft's materials cost, in copper. Materials you'd make yourself count at what their
+-- own materials cost (`makes`: item id -> recipe). nil when anything has no price yet.
+function ForeverArtisan.CraftMoney(r, makes, memo, depth)
+  memo = memo or {}
+  if memo[r] ~= nil then return memo[r] or nil end
+  if not r.reagents or #r.reagents == 0 then memo[r] = false; return nil end
+  local total = 0
+  for _, g in ipairs(r.reagents) do
+    local via = g.id and makes and makes[g.id]
+    local each
+    if via and via ~= r and (depth or 0) < 3 then
+      local m = ForeverArtisan.CraftMoney(via, makes, memo, (depth or 0) + 1)
+      each = m and m / (via.makes or 1)
+    elseif ForeverArtisan.ItemPrice then
+      each = ForeverArtisan.ItemPrice(g.id, g.name)
+    end
+    if not each then memo[r] = false; return nil end
+    total = total + each * (g.n or 1)
+  end
+  memo[r] = total
+  return total
+end
+
+-- Pick the recipe for the next skill point from opts { r, ch, score, bag, mats }.
+-- The best skill-up chance wins (score adds a bonus for things you can make from your bags).
+-- Recipes within 0.1 of the best are close enough to compare money: when all of them have
+-- prices, the cheapest per skill point wins. Otherwise fewer materials breaks an exact tie.
+function ForeverArtisan.PickRecipe(opts, money)
+  local top
+  for _, o in ipairs(opts) do if not top or o.score > top.score + 0.001 then top = o end end
+  if not top then return nil end
+  local close, priced = {}, money ~= nil
+  for _, o in ipairs(opts) do
+    if o.score >= top.score - 0.1 and (o.bag and true or false) == (top.bag and true or false) then
+      close[#close + 1] = o
+      if priced then
+        o.money = money(o.r)
+        if not o.money then priced = false end
+      end
+    end
+  end
+  local best
+  for _, o in ipairs(close) do
+    if not best then best = o
+    elseif priced then
+      local a, b = o.money / o.ch, best.money / best.ch
+      if a < b - 0.5 or (math.abs(a - b) <= 0.5 and o.score > best.score + 0.001) then best = o end
+    elseif o.score > best.score + 0.001
+      or (math.abs(o.score - best.score) <= 0.001 and (o.mats or 0) < (best.mats or 0)) then
+      best = o
+    end
+  end
+  return best
+end
+
+---------------------------------------------------------------- training on the shopping list
+-- Shopping list rows for recipes to train: what you can learn right now in one line (one trip to
+-- the trainer), then the rest one line each with the skill you learn it at, soonest first.
+function ForeverArtisan.TrainShopRows(shopping, skill)
+  local FA = ForeverArtisan
+  local now, later = {}, {}
+  for _, e in ipairs(shopping or {}) do
+    if e.train then
+      if skill and (e.train.at or 0) <= skill then now[#now + 1] = e else later[#later + 1] = e end
+    end
+  end
+  table.sort(later, function(a, b)
+    if a.train.at ~= b.train.at then return a.train.at < b.train.at end
+    return (a.name or "") < (b.name or "")
+  end)
+  local rows = {}
+  if #now > 0 then
+    local names, lines, cost = {}, {}, 0
+    for _, e in ipairs(now) do
+      local n = (e.name or ""):gsub("^Train ", "")
+      names[#names + 1] = n
+      cost = cost + (e.price or 0)
+      lines[#lines + 1] = n .. (e.price and ("  " .. FA.Money(e.price)) or "")
+        .. (e.train.who and (FA.GRAY .. "  ·  " .. e.train.who .. "|r") or "")
+    end
+    rows[#rows + 1] = { icon = 136235, tipTitle = "Train now",
+      left = FA.YELLOW .. "Train now: " .. table.concat(names, ", ") .. "|r",
+      right = FA.YELLOW .. #now .. " to learn|r" .. (cost > 0 and (FA.GRAY .. "  ·  " .. FA.Money(cost) .. "|r") or ""),
+      tip = "Your skill is high enough to learn these now, in one trip:\n" .. table.concat(lines, "\n") }
+  end
+  for _, e in ipairs(later) do
+    rows[#rows + 1] = { icon = 136235, tipTitle = e.name,
+      left = FA.YELLOW .. e.name .. "|r",
+      right = FA.YELLOW .. ("at %d"):format(e.train.at) .. "|r" .. (e.price and (FA.GRAY .. "  ·  " .. FA.Money(e.price) .. "|r") or ""),
+      tip = e.source }
+  end
+  return rows
+end

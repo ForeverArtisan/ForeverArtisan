@@ -879,7 +879,7 @@ do
   fire("PLAYER_LOGIN")
   local txt=table.concat(out,"\n")
   print=P
-  assert(txt:find("What's new") and txt:find("Plater") and txt:find("Mining") and not txt:find("Camping"), "update prints the last three releases: "..txt)
+  assert(txt:find("What's new") and txt:find("train") and txt:find("Mining") and not txt:find("Plater"), "update prints the last three releases: "..txt)
   assert(txt:find("foreverartisan.app/bug", 1, true), "news ends with the bug line")
   assert(ForeverArtisanSettings.lastVersion==ForeverArtisan.Version(), "remembers the new version")
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
@@ -1094,6 +1094,151 @@ do
   AuctionFrame=nil BrowseName=nil
   assert(not FA.SearchAH("Silk Cloth"), "nothing when the Auction House is closed")
   print("PRICES ok")
+end
+-- plans include recipes a trainer you've met still teaches
+do
+  local FA=ForeverArtisan
+  local fa=loadedFrames["ForeverArtisan_FirstAid"].ns
+  local recs=fa.CharRec().recipes
+  recs["Test Bandage"]={name="Test Bandage",learned=false,grayAt=240,itemId=999001,reagents={{id=2589,name="Linen Cloth",n=1}}}
+  local oldV=FA.Vendors
+  FA.Vendors={hitsForLink=function(_,name)
+    if name=="Test Bandage" then return {{npc={n="Arnok",s="Undercity"},item={n="Test Bandage",train=true,sk="First Aid 150",p=180}}} end
+    return {} end}
+  local t=FA.TrainableRecipe("First Aid","Test Bandage")
+  assert(t and t.at==150 and t.cost==180 and t.who=="Arnok (Undercity)", "trainer on file")
+  assert(FA.TrainableRecipe("Cooking","Test Bandage")==nil, "another profession's trainer doesn't count")
+  local steps,shop,stuck,_,_,hint=fa.Plan(170)
+  local trainStep,trainLine
+  for _,st in ipairs(steps) do if st.train then trainStep=st end end
+  for _,e in ipairs(shop) do if e.train then trainLine=e end end
+  assert(trainStep and trainStep.r.name=="Test Bandage", "plan uses the recipe you can train")
+  assert(trainLine and trainLine.name=="Train Test Bandage" and trainLine.price==180 and trainLine.source:find("Arnok"), "shopping list says where to train")
+  assert(shop[1]==trainLine, "training comes first on the list")
+  assert(recs["Test Bandage"].learned==false, "the saved recipe stays unlearned")
+  -- no trainer on file: a hint instead
+  FA.Vendors={hitsForLink=function() return {} end}
+  steps,shop,stuck,_,_,hint=fa.Plan(300)
+  assert(stuck and hint and hint:find("trainer"), "hint to visit a trainer: "..tostring(hint))
+  FA.Vendors=oldV recs["Test Bandage"]=nil
+  -- the crafting template does the same
+  local lw=loadedFrames["ForeverArtisan_Leatherworking"].ns
+  local lr=lw.CharRec().recipes
+  lr["Test Belt"]={name="Test Belt",learned=false,grayAt=240,itemId=999002,reagents={{id=2318,name="Light Leather",n=2}}}
+  FA.Vendors={hitsForLink=function(_,name)
+    if name=="Test Belt" then return {{npc={n="Shelene"},item={n="Test Belt",train=true,sk="Leatherworking 150",p=500}}} end
+    return {} end}
+  steps,shop=lw.Plan(170)
+  local found
+  for _,e in ipairs(shop) do if e.train and e.name=="Train Test Belt" then found=e end end
+  assert(found and found.price==500, "template plan trains too")
+  local total=lw.ShopCost(shop)
+  assert(total>=500, "training cost counts in the total")
+  FA.Vendors=oldV lr["Test Belt"]=nil
+  print("TRAINABLE ok")
+end
+-- colors you've seen move the guess; close recipes go to the cheaper one per skill point
+do
+  local FA=ForeverArtisan
+  -- bands: guessed 40/20 below gray until you've seen better
+  local r={name="Linen",grayAt=60}
+  local y,g=FA.RecipeBands(r,60) assert(y==20 and g==40, "default guess")
+  FA.NoteRecipeColor(nil,{name="Linen",grayAt=60,color="orange",scanSkill=21}) -- no old: nothing kept but this scan
+  local a={name="Linen",grayAt=60,color="orange",scanSkill=21} FA.NoteRecipeColor(nil,a)
+  local b={name="Linen",grayAt=60,color="orange",scanSkill=29} FA.NoteRecipeColor(a,b)
+  assert(b.seen.o==29, "highest orange kept")
+  y,g=FA.RecipeBands(b,60) assert(y==30 and g==40, "yellow moves past what you saw: "..y)
+  assert(math.abs(FA.FadeChance(b,60,30)-1)<1e-9 and math.abs(FA.FadeChance(b,60,45)-0.5)<1e-9, "chance falls from yellow to gray")
+  local c={name="Linen",grayAt=60,color="green",scanSkill=36} FA.NoteRecipeColor(b,c)
+  y,g=FA.RecipeBands(c,60) assert(y==30 and g==36, "green seen early pulls green in")
+  local d={name="Linen",grayAt=75,color="yellow",scanSkill=40} FA.NoteRecipeColor(c,d)
+  assert(d.seen.o==nil and d.seen.ylo==40, "a new gray level starts over")
+  local fa=loadedFrames["ForeverArtisan_FirstAid"].ns
+  assert(fa.ColorFor({learned=true,grayAt=60,seen={o=29}},25)=="orange", "First Aid uses what you've seen")
+  -- picking
+  local cheap,dear={name="cheap"},{name="dear"}
+  local price={cheap=23,dear=31}
+  local function M(r) return price[r.name] end
+  local pick=FA.PickRecipe({{r=dear,ch=1,score=1},{r=cheap,ch=0.95,score=0.95}},M)
+  assert(pick.r==cheap, "close enough: cheaper per point wins")
+  pick=FA.PickRecipe({{r=dear,ch=1,score=1},{r=cheap,ch=0.5,score=0.5}},M)
+  assert(pick.r==dear, "far apart: the better chance wins")
+  price.cheap=nil
+  pick=FA.PickRecipe({{r=dear,ch=1,score=1},{r=cheap,ch=0.95,score=0.95}},M)
+  assert(pick.r==dear, "no price: the better chance wins")
+  price.cheap=23
+  pick=FA.PickRecipe({{r=dear,ch=1,score=1.15,bag=true},{r=cheap,ch=1,score=1}},M)
+  assert(pick.r==dear, "what you can make from your bags still comes first")
+  -- money through things you make yourself
+  local bolt={name="Bolt",makes=1,reagents={{id=2589,name="Linen Cloth",n=2}}}
+  local shirt={name="Shirt",reagents={{id=2996,name="Bolt",n=3}}}
+  local oldIP=FA.ItemPrice
+  FA.ItemPrice=function(id) if id==2589 then return 10 end end
+  assert(FA.CraftMoney(shirt,{[2996]=bolt})==60, "counts through crafted materials")
+  assert(FA.CraftMoney(shirt,nil)==nil, "unknown price: nil")
+  FA.ItemPrice=oldIP
+  print("CHEAPEST ok")
+end
+-- training lines: what you can learn now in one line, the rest by the skill you learn it at
+do
+  local FA=ForeverArtisan
+  local shop={
+    {name="Train Wool Bandage",train={at=80,who="Nurse Neela"},price=250,source="x"},
+    {name="Train Lesser Healing Potion",train={at=55,who="Nurse Neela"},price=150,source="x"},
+    {name="Train Heavy Linen Bandage",train={at=40,who="Nurse Neela"},price=100,source="x"},
+    {name="Train Simple Poultice",train={at=90},price=250,source="x"},
+    {name="Linen Cloth",need=2,have=0},
+  }
+  local rows=FA.TrainShopRows(shop,55)
+  assert(#rows==3, "now + 2 later: "..#rows)
+  assert(rows[1].left:find("Train now: Heavy Linen Bandage, Lesser Healing Potion") or rows[1].left:find("Train now: Lesser Healing Potion, Heavy Linen Bandage"), rows[1].left)
+  assert(rows[1].right:find("2 to learn") and rows[1].right:find("2s 50c"), rows[1].right)
+  assert(rows[1].tip:find("Nurse Neela"), "who to see")
+  assert(rows[2].left:find("Wool Bandage") and rows[2].right:find("at 80"), "soonest next")
+  assert(rows[3].left:find("Simple Poultice") and rows[3].right:find("at 90"), "then later")
+  assert(#FA.TrainShopRows(shop,10)==4, "nothing learnable yet: one line each")
+  -- the plan's shopping list puts training in that order too
+  local fa=loadedFrames["ForeverArtisan_FirstAid"].ns
+  local recs=fa.CharRec().recipes
+  recs["T1"]={name="T1",learned=false,grayAt=200,itemId=999011,reagents={{id=2589,name="Linen Cloth",n=1}}}
+  recs["T2"]={name="T2",learned=false,grayAt=260,itemId=999012,reagents={{id=2589,name="Linen Cloth",n=1}}}
+  local oldV=FA.Vendors
+  FA.Vendors={hitsForLink=function(_,name)
+    if name=="T1" then return {{npc={n="A"},item={n="T1",train=true,sk="First Aid 160",p=1}}} end
+    if name=="T2" then return {{npc={n="A"},item={n="T2",train=true,sk="First Aid 150",p=1}}} end
+    return {} end}
+  local _,sh=fa.Plan(240)
+  local order={}
+  for _,e in ipairs(sh) do if e.train then order[#order+1]=e.train.at end end
+  for k=2,#order do assert(order[k-1]<=order[k], "train lines by skill") end
+  FA.Vendors=oldV recs["T1"]=nil recs["T2"]=nil
+  print("TRAIN ORDER ok")
+end
+-- the Progress tab draws in every crafting window, at normal height and dragged taller
+do
+  local n=0
+  for _,f in ipairs(frames) do
+    if f._text=="Progress" and f.scripts.OnClick then
+      local ok,err=pcall(f.scripts.OnClick,f) assert(ok,"progress tab: "..tostring(err)) n=n+1
+    end
+  end
+  assert(n>=8, "progress tabs clicked: "..n)
+  local sized=0
+  for _,f in ipairs(frames) do
+    if f.scripts.OnSizeChanged then
+      local ok,err=pcall(f.scripts.OnSizeChanged,f,470,820) assert(ok,"taller: "..tostring(err))
+      ok,err=pcall(f.scripts.OnSizeChanged,f,470,578) assert(ok,"back: "..tostring(err))
+      sized=sized+1
+    end
+  end
+  assert(sized>=8, "resizable windows: "..sized)
+  local wheeled=0
+  for _,f in ipairs(frames) do
+    if f.scripts.OnMouseWheel and wheeled<40 then
+      local ok,err=pcall(f.scripts.OnMouseWheel,f,-1) assert(ok,"wheel: "..tostring(err)) wheeled=wheeled+1
+    end
+  end
+  print("WINDOWS ok", n, sized)
 end
 print("CRAFTS OK")
 print("SUITE OK")

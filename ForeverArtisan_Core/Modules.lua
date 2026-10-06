@@ -422,6 +422,8 @@ local NEWS = {
   { "0.9.11", "Fixed Mining, Herbalism and Skinning not counting nodes with auto loot. Every node and skin counts again." },
   { "0.9.12", "Prices in your crafting plans: each shopping list shows what missing materials cost and a total. "
     .. "No other addon needed (it remembers Auction House prices you see); uses Auctionator too if you have it." },
+  { "0.9.13", "Plans include recipes you can still train, with a \"Train now\" line and the cost. They pick the cheaper "
+    .. "recipe when two are close. Drag the window's corner to make it taller; long lists scroll." },
 }
 
 local function verNum(v)

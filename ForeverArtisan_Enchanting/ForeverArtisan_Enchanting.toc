@@ -3,7 +3,7 @@
 ## IconTexture: Interface\Icons\Trade_Engraving
 ## Notes: What to enchant next for skill-ups, a plan and shopping list to your target skill (dust and essences from disenchanting), a craft log, where to train next, and material tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.12
+## Version: 0.9.13
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

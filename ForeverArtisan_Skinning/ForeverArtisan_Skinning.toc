@@ -3,7 +3,7 @@
 ## IconTexture: Interface\Icons\INV_Misc_Pelt_Wolf_01
 ## Notes: Skinning log by zone and mob, skill-up tracker, which mob levels to skin next, goals, and leather tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.12
+## Version: 0.9.13
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

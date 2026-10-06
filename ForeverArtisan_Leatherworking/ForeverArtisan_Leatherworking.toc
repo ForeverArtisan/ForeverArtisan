@@ -3,7 +3,7 @@
 ## IconTexture: Interface\Icons\INV_Misc_ArmorKit_17
 ## Notes: What to make next for skill-ups, a plan and shopping list to your target skill (cured hides counted as crafts, leather points to your Skinning log), a craft log, where to train next, and material tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.12
+## Version: 0.9.13
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

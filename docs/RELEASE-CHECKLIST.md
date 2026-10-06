@@ -64,6 +64,10 @@ Look for overlapping text, rows running off the edge, and anything cut off.
 - [ ] Contacts tab: Zone and Trade pickers filter, town headers fold, innkeepers only under Everyone
 - [ ] Nearest trainer button (Search tab): menu opens upward, lists your class + professions with counts, picking one lists those trainers nearest first with yards; clicking a row sets the waypoint; typing in the box clears it; no supply vendors
 - [ ] Class trainers: saved when passed/talked to, listed under Trade > Class trainers, `/fa mage` finds them, Only not visited shows your class only, not under All crafting
+- [ ] Trainable recipes: after opening a trainer, a plan past your last recipe shows "train at N" on the new step and a "Train ..." line with cost at the top of the shopping list; before opening one, the plan shows the hint to visit a trainer
+- [ ] Cheaper way up: with prices on file, First Aid to 75 keeps Linen Bandage while it's nearly as likely to skill up and cheaper than potions; after leveling with the window open, recipes you saw orange stay orange in the plan up to that skill
+- [ ] Training lines: "Train now: ..." lists what your skill allows with the total, hover shows the trainer; later ones read "at N" in skill order
+- [ ] Taller window: drag the corner of a crafting window down, Progress shows more plan and shopping rows, /reload keeps the height; mouse wheel scrolls both lists
 - [ ] Prices: without Auctionator, search an item at the AH and the crafting shopping list shows its price, the total and "from today"; clicking a row at the AH fills the search box only; with Auctionator its prices show; a cheaper Trade Contacts vendor wins
 - [ ] Names in town: with friendly NPC nameplates off, `/fa` and the Search tab say so and "Turn on nameplates" turns them on; titles show under NPC names; `/fa titles off` hides only the titles; nothing changes nameplate settings on its own
 - [ ] With Plater (or another nameplate addon) on: no ForeverArtisan titles, the `/fa` line names the addon, Trade Contacts still notes NPCs; `/fa titles on` adds ours, `/fa titles auto` goes back

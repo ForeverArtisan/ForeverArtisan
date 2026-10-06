@@ -563,5 +563,70 @@ function UI.Kit(ns, view)
     end)
   end
 
+  -- A longer list than fits: the mouse wheel over any of its rows scrolls it (view[key] is the offset).
+  function K.ScrollRows(rows, key, getMax)
+    for _, r in ipairs(rows) do
+      r:EnableMouseWheel(true)
+      r:SetScript("OnMouseWheel", function(_, d)
+        view[key] = math.max(0, math.min((view[key] or 0) - d * 3, math.max(0, getMax())))
+        Changed()
+      end)
+    end
+  end
+
+  -- The first n of a set of rows, for a list that grows when the window is taller. The rest hide.
+  -- Keeps the "more below" line (it moves under the new last row).
+  function K.Visible(all, n, old)
+    local vis = {}
+    for i, r in ipairs(all) do
+      if i <= n then vis[i] = r else r.data = nil; r:Hide() end
+    end
+    if old and old.more then
+      vis.more = old.more
+      vis.more:ClearAllPoints()
+      vis.more:SetPoint("TOPRIGHT", vis[#vis], "BOTTOMRIGHT", -6, -1)
+    end
+    return vis
+  end
+
+  -- Let a window be dragged taller from its bottom-right corner (the width stays). The height is
+  -- remembered (settings[key]); onResize(extra) gets the pixels over the normal height, also while
+  -- dragging, so lists can show more rows.
+  function K.Tall(f, key, maxH, onResize, posKey)
+    local w, baseH = f:GetWidth(), f:GetHeight()
+    local function Fit(h)
+      h = math.max(baseH, math.min(maxH, math.floor((h or baseH) + 0.5)))
+      if onResize then onResize(h - baseH) end
+      return h
+    end
+    if f.SetResizable then f:SetResizable(true) end
+    if f.SetResizeBounds then pcall(f.SetResizeBounds, f, w, baseH, w, maxH)
+    else
+      if f.SetMinResize then pcall(f.SetMinResize, f, w, baseH) end
+      if f.SetMaxResize then pcall(f.SetMaxResize, f, w, maxH) end
+    end
+    local grip = CreateFrame("Button", nil, f)
+    grip:SetSize(16, 16); grip:SetPoint("BOTTOMRIGHT", -4, 4)
+    grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    grip:SetScript("OnMouseDown", function() if not InCombatLockdown() then f:StartSizing("BOTTOM") end end)
+    grip:SetScript("OnMouseUp", function()
+      f:StopMovingOrSizing()
+      local h = Fit(f:GetHeight())
+      f:SetSize(w, h)
+      S()[key] = (h > baseH) and h or nil
+      -- sizing can move the anchor: keep where the window is now
+      if posKey then local p, _, rp, x, y = f:GetPoint(); if p then S()[posKey] = { p, rp, x, y } end end
+      Changed()
+    end)
+    UI.Tip(grip, function()
+      GameTooltip:AddLine("Drag to make the window taller")
+      GameTooltip:AddLine("Longer plans and shopping lists fit. The size is remembered.", 1, 1, 1, true)
+    end)
+    f:HookScript("OnSizeChanged", function(_, _, h) Fit(h) end)
+    f:SetHeight(Fit(S()[key]))
+  end
+
   return K
 end

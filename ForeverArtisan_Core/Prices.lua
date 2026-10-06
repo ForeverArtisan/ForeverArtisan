@@ -212,7 +212,7 @@ end
 -- give each thing on a shopping list its price (things you craft yourself along the way don't need one)
 function FA.PriceShopping(shopping)
   for _, e in ipairs(shopping or {}) do
-    if not e.craft then e.price, e.priceSrc, e.priceAge = FA.ItemPrice(e.id, e.name) end
+    if not e.craft and not e.train then e.price, e.priceSrc, e.priceAge = FA.ItemPrice(e.id, e.name) end
   end
 end
 

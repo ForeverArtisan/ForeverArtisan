@@ -1,5 +1,12 @@
 # ForeverArtisan changelog
 
+## 0.9.13 (2026-10-06)
+- Plans include recipes you can still train: when a trainer you've opened (Trade Contacts) teaches a recipe you haven't learned, the plan uses it from the skill it needs, says "train at 40" on that step, and puts "Train Heavy Linen Bandage" with the trainer and cost at the top of the shopping list (the cost counts in the total). Plans no longer stop just because your only recipe went gray. If no trainer is on file yet, the plan tells you to open one once.
+- Plans pick the cheaper way up when two recipes are close: if their skill-up chances are within 10% of each other, the one that costs less per skill point wins (using the same prices as the shopping list). With no prices yet, the best chance still wins, and anything you can make from your bags still comes first.
+- Recipe colors you've seen now stick. Forever only tells addons where a recipe turns gray, so yellow and green were guessed at 40 and 20 below. Every time you open your crafting window, ForeverArtisan remembers each recipe's color at your skill and moves the guess to fit, so a bandage you saw orange at 28 isn't planned as yellow at 22. Skill-up chances for yellow and green now fall evenly from where yellow starts to gray.
+- Training on the shopping list is in the order you'll learn it. Everything your skill already allows sits on one "Train now" line with the total cost (one trip to the trainer; hover it for who teaches each). The rest follow one line each with the skill you learn it at ("at 80").
+- Drag the bottom-right corner of any crafting window to make it taller. The Progress tab then shows more of the plan and the shopping list, and the size is remembered. Long plans and shopping lists also scroll with the mouse wheel now ("more below, scroll down" used to say so without it working).
+
 ## 0.9.12 (2026-10-06)
 - Prices in your crafting plans: every shopping list (Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring, Cooking and First Aid) shows what each missing material costs and a total for everything you still need to buy, with how old the prices are. No other addon needed: ForeverArtisan remembers the cheapest buyout on Auction House pages you look at yourself. With Auctionator installed it uses Auctionator's scans too (whichever price is newer wins), and a vendor from your Trade Contacts wins when it's cheaper. At the Auction House, click a shopping list item to put its name in the search box. ForeverArtisan never searches or buys for you.
 

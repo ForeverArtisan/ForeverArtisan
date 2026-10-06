@@ -100,8 +100,10 @@ function ns.ColorFor(r, skill)
   if r.scanSkill == skill and r.color then return r.color end
   if r.grayAt then
     if skill >= r.grayAt then return "gray" end
-    if skill >= r.grayAt - 20 then return "green" end
-    if skill >= r.grayAt - 40 then return "yellow" end
+    -- guessed 40 and 20 below gray, moved to fit the colors you've seen at other skills
+    local y, g = ForeverArtisan.RecipeBands(r, r.grayAt)
+    if skill >= g then return "green" end
+    if skill >= y then return "yellow" end
     return "orange"
   end
   if r.scanSkill == skill and r.color then return r.color end
@@ -112,9 +114,7 @@ end
 function ns.Chance(r, skill)
   local c = ns.ColorFor(r, skill)
   if c == "orange" then return 1 end
-  if (c == "yellow" or c == "green") and r.grayAt then
-    return math.max(0.05, math.min(1, (r.grayAt - skill) / 40))
-  end
+  if (c == "yellow" or c == "green") and r.grayAt then return ForeverArtisan.FadeChance(r, r.grayAt, skill) end
   if c == "yellow" then return 0.75 end
   if c == "green" then return 0.25 end
   return 0
@@ -261,6 +261,7 @@ local function Scan()
   for name, r in pairs(got) do
     n = n + 1
     if r.learned then learned = learned + 1 end
+    ForeverArtisan.NoteRecipeColor(c.recipes[name], r)
     c.recipes[name] = r
   end
   local first = not c.scanned
@@ -367,26 +368,32 @@ function ns.Plan(target)
   target = math.min(tonumber(target) or (skill + 25), 300)
   local learned = {}
   for _, r in pairs(CharRec().recipes) do if r.learned then learned[#learned + 1] = r end end
+  -- plus recipes a trainer you've met still teaches (they join the plan at the skill they need)
+  local untrained = 0
+  if ForeverArtisan.PlanRecipes then learned, untrained = ForeverArtisan.PlanRecipes("First Aid", CharRec().recipes) end
   -- what you can make from your bags doesn't change while planning: count once
   local canMake = {}
   for _, r in ipairs(learned) do canMake[r] = ns.Makeable(r) > 0 end
+  -- what each recipe's materials cost, looked up once per plan
+  local memo = {}
+  local function Money(r) return ForeverArtisan.CraftMoney(r, nil, memo) end
   local steps, byName, s, stuck = {}, {}, skill, nil
   local guard = 0
   while s < target and guard < 400 do
     guard = guard + 1
-    local best, bestChance, bestScore
+    -- prefer the best skill-up chance, but favor recipes you can already make from your bags;
+    -- when two are close, the cheaper one per skill point
+    local opts = {}
     for _, r in ipairs(learned) do
-      local ch = ns.Chance(r, s)
-      if ch > 0 then
-        -- prefer the best skill-up chance, but favor recipes you can already make from your bags
-        local score = ch + (canMake[r] and 0.15 or 0)
-        if not best or score > bestScore + 0.001 then best, bestChance, bestScore = r, ch, score end
-      end
+      local ch = (not r.train or s >= r.train.at) and ns.Chance(r, s) or 0
+      if ch > 0 then opts[#opts + 1] = { r = r, ch = ch, bag = canMake[r], score = ch + (canMake[r] and 0.15 or 0) } end
     end
-    if not best then stuck = s; break end
+    local pick = ForeverArtisan.PickRecipe(opts, Money)
+    if not pick then stuck = s; break end
+    local best, bestChance = pick.r, pick.ch
     local st = byName[best.name]
     if not st or steps[#steps] ~= st then
-      st = { r = best, crafts = 0, from = s, to = s }
+      st = { r = best, crafts = 0, from = s, to = s, train = best.train }
       steps[#steps + 1] = st
       byName[best.name] = st
     end
@@ -406,6 +413,17 @@ function ns.Plan(target)
     end
   end
   local shopping = {}
+  -- recipes to learn on the way: one line each, with the trainer and what it costs
+  local trained = {}
+  for _, st in ipairs(steps) do
+    local t = st.train
+    if t and not trained[st.r.name] then
+      trained[st.r.name] = true
+      shopping[#shopping + 1] = { name = "Train " .. st.r.name, need = 1, have = 0, train = t, price = t.cost,
+        source = ("Learn it at %d from %s%s."):format(t.at, t.who or "a trainer",
+          t.cost and (" for " .. ForeverArtisan.Money(t.cost)) or "") }
+    end
+  end
   for _, e in pairs(need) do
     e.name = ItemName(e.id, e.name)
     e.have = Count(e.id)
@@ -415,11 +433,19 @@ function ns.Plan(target)
   -- what each thing costs: your Auction House visits or Auctionator, or a vendor when cheaper
   if ForeverArtisan.PriceShopping then ForeverArtisan.PriceShopping(shopping) end
   table.sort(shopping, function(a, b)
+    if (a.train ~= nil) ~= (b.train ~= nil) then return a.train ~= nil end
+    if a.train and b.train and a.train.at ~= b.train.at then return a.train.at < b.train.at end
     local sa, sb = a.need - a.have, b.need - b.have
     if (sa > 0) ~= (sb > 0) then return sa > 0 end
     return (a.name or "") < (b.name or "")
   end)
-  return steps, shopping, stuck, target, maxr
+  local hint
+  if stuck then
+    local any = false
+    for _, r in ipairs(learned) do if r.train then any = true end end
+    if not any and ForeverArtisan.TrainHint then hint = ForeverArtisan.TrainHint("First Aid", untrained) end
+  end
+  return steps, shopping, stuck, target, maxr, hint
 end
 
 ---------------------------------------------------------------- where to learn it
