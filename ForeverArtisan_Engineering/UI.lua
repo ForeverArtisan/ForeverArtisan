@@ -181,8 +181,18 @@ local function BuildProgressPage(p)
   p.planRows = MakeRows(p, PLAN_ROWS, -100, false)
 
   Header(p, -238, "Shopping list")
-  Text(p, "GameFontDisableSmall", "TOPLEFT", 120, -240):SetText("have / need  ·  hover for source  ·  gold = you craft it")
+  Text(p, "GameFontDisableSmall", "TOPLEFT", 120, -240):SetText("have / need  ·  hover for source and price  ·  gold = you craft it")
   p.shopRows = MakeRows(p, SHOP_ROWS, -258, false)
+  -- click a shopping list item at the Auction House: its name goes in the search box (you press Search)
+  for _, r in ipairs(p.shopRows) do
+    r:SetScript("OnClick", function(self)
+      local d = self.data
+      if not (d and d.name) then return end
+      if FA.SearchAH and FA.SearchAH(d.name) then return end
+      ns.say("Open the Auction House, then click an item here to search for it.")
+    end)
+  end
+  p.cost = Text(p, "GameFontHighlightSmall", "BOTTOMLEFT", 20, 36, p, "BOTTOMLEFT"); p.cost:SetWidth(430); p.cost:SetJustifyH("LEFT")
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 20, -104); p.empty:SetWidth(420)
   p.open = FA.UI.ProfessionButton(p, "Engineering", 240); p.open:SetPoint("TOPLEFT", 20, -128)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
@@ -200,7 +210,7 @@ local function RefreshProgressPage(p)
   if i.rank then p.rate:SetText(("%d craft%s since your last skill-up  ·  "):format(i.sinceUp or 0, (i.sinceUp or 0) == 1 and "" or "s") .. (p.rate:GetText() or "")) end
   p.open:ShowIf(ns.Knows() and not ns.HasRecipes())
   if not (ns.Knows() and ns.HasRecipes()) then
-    Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); p.note:SetText(""); p.target:SetTextColor(1, 1, 1)
+    Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); p.note:SetText(""); p.cost:SetText(""); p.target:SetTextColor(1, 1, 1)
     p.empty:SetText(ns.Knows() and "Open your Engineering window once so I can read your recipes." or "")
     return
   end
@@ -246,13 +256,15 @@ local function RefreshProgressPage(p)
   local shop = {}
   for _, e in ipairs(shopping) do
     local done = e.have >= e.need
-    shop[#shop + 1] = { id = e.id, icon = Icon(e.id),
+    local cost = (not done and not e.craft and e.price) and (GRAY .. "  ·  " .. FA.Money(e.price * (e.need - e.have)) .. "|r") or ""
+    shop[#shop + 1] = { id = e.id, icon = Icon(e.id), name = e.name,
       left = (done and GREEN or "") .. e.name .. (done and "|r" or "") .. (e.tool and (GRAY .. "  (tool)|r") or ""),
       right = ("%s%d / %d|r"):format(done and GREEN or YELLOW, math.min(e.have, e.need), e.need)
-        .. (e.craft and (GOLD .. "  ·  craft " .. e.craft .. "|r") or ""),
-      tip = e.source }
+        .. (e.craft and (GOLD .. "  ·  craft " .. e.craft .. "|r") or "") .. cost,
+      tip = " \n" .. GOLD .. "Shopping list|r\n" .. e.source .. ((not e.craft and FA.PriceLine) and ("\n" .. FA.PriceLine(e.id, e.name)) or "") }
   end
   Fill(p.shopRows, shop, 0)
+  p.cost:SetText(ns.ShopCostText and ns.ShopCostText(shopping) or "")
 end
 
 ---------------------------------------------------------------- page 3: Craft log
@@ -451,4 +463,8 @@ end
 
 function ns.OnChange()
   if f and f:IsShown() and REFRESH[view.tab] then REFRESH[view.tab](pages[view.tab]) end
+end
+-- new Auction House prices refresh the shopping list while it's open
+if FA.PriceWatchers then
+  table.insert(FA.PriceWatchers, function() if view.tab == "progress" then ns.OnChange() end end)
 end

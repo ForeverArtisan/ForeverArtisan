@@ -1045,5 +1045,55 @@ do
   GetNumLootItems,GetLootSlotLink,GetLootSourceInfo,GetLootSlotInfo=sv[2],sv[3],sv[4],sv[5]
   print("GATHER FALLBACK ok (mining, herbalism, skinning)")
 end
+-- material prices for crafting plans: works with no other addon; Auctionator and vendors when there
+do
+  local FA=ForeverArtisan
+  assert(FA.ItemPrice(4306)==nil, "no price before you've seen one")
+  local lw=loadedFrames["ForeverArtisan_Leatherworking"].ns
+  assert(lw.ShopCostText({{id=4306,name="Silk Cloth",need=4,have=0}}):find("No prices yet"), "says how to get prices")
+  -- an Auction House page you looked at (Classic-style)
+  GetNumAuctionItems=function() return 2 end
+  GetAuctionItemInfo=function(_,i)
+    if i==1 then return "Silk Cloth",nil,20,1,true,0,"",0,0,4000,0,nil,nil,"a",nil,0,4306,true end
+    return "Silk Cloth",nil,5,1,true,0,"",0,0,750,0,nil,nil,"b",nil,0,4306,true
+  end
+  fire("AUCTION_ITEM_LIST_UPDATE")
+  local p,src,age=FA.ItemPrice(4306)
+  assert(p==150 and src=="your Auction House visits" and age==0, "cheapest per unit remembered: "..tostring(p))
+  -- the newer Auction House
+  C_AuctionHouse={GetBrowseResults=function() return {{itemKey={itemID=2589},minPrice=40}} end}
+  fire("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+  assert(FA.ItemPrice(2589)==40, "browse results remembered")
+  C_AuctionHouse=nil GetNumAuctionItems=nil GetAuctionItemInfo=nil
+  -- Auctionator, when installed, is used first
+  Auctionator={API={v1={GetAuctionPriceByItemID=function(_,id) if id==4306 then return 120 end end,
+    GetAuctionAgeByItemID=function() return 2 end}}}
+  p,src,age=FA.ItemPrice(4306)
+  assert(p==150 and src=="your Auction House visits", "your visit today beats a 2-day-old Auctionator scan")
+  Auctionator.API.v1.GetAuctionAgeByItemID=function() return 0 end
+  p,src,age=FA.ItemPrice(4306)
+  assert(p==120 and src=="Auctionator" and age==0, "same day: Auctionator")
+  -- a vendor in Trade Contacts wins when cheaper
+  local oldV=FA.Vendors
+  FA.Vendors={hitsForLink=function() return {{npc={n="Tamar"},item={id=4306,p=500,stack=5}}} end}
+  p,src=FA.ItemPrice(4306,"Silk Cloth")
+  assert(p==100 and src=="vendor", "cheaper vendor wins")
+  FA.Vendors=oldV Auctionator=nil
+  -- the shopping list total
+  local list={{id=4306,name="Silk Cloth",need=10,have=2,price=150,priceAge=3},{id=2321,name="Fine Thread",need=4,have=0},
+    {id=4305,name="Bolt of Silk Cloth",need=5,have=0,craft=5}}
+  local total,unpriced,oldest,buying=lw.ShopCost(list)
+  assert(total==1200 and unpriced==1 and oldest==3 and buying==2, "cost counts only what you still buy")
+  local t=lw.ShopCostText(list)
+  print("COST", t)
+  assert(t:find("up to 3 days old") and t:find("1 item with no price"), "cost line")
+  -- clicking a row types into the Auction House search box, nothing more
+  local typed
+  AuctionFrame={IsShown=function() return true end} BrowseName={SetText=function(_,x) typed=x end}
+  assert(FA.SearchAH("Silk Cloth") and typed=="Silk Cloth", "fills the search box")
+  AuctionFrame=nil BrowseName=nil
+  assert(not FA.SearchAH("Silk Cloth"), "nothing when the Auction House is closed")
+  print("PRICES ok")
+end
 print("CRAFTS OK")
 print("SUITE OK")

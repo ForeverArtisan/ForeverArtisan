@@ -470,6 +470,9 @@ function ns.RecipeSource(name)
   end
 end
 
+-- what the shopping list still costs to buy (Core Prices.lua)
+ns.ShopCost, ns.ShopCostText = ForeverArtisan.ShopCost, ForeverArtisan.ShopCostText
+
 ---------------------------------------------------------------- make now / plan
 function ns.Makeable(r)
   if not r.reagents or #r.reagents == 0 then return 0 end
@@ -631,6 +634,8 @@ function ns.Plan(target)
     end
     shopping[#shopping + 1] = e
   end
+  -- what each thing costs: your Auction House visits or Auctionator, or a vendor when cheaper
+  if ForeverArtisan.PriceShopping then ForeverArtisan.PriceShopping(shopping) end
   table.sort(shopping, function(a, b)
     if (a.tool and a.have < 1) ~= (b.tool and b.have < 1) then return a.tool and a.have < 1 end
     local sa, sb = a.need - a.have, b.need - b.have
@@ -978,8 +983,11 @@ SlashCmdList.FATAILOR = function(msg)
     if stuck then say(YELLOW .. ("Your recipes run out at %d. Learn new recipes to go further.|r"):format(stuck)) end
     for _, e in ipairs(shopping) do
       local short = e.need - e.have
-      say(("  %s%s|r  %d/%d  %s%s|r"):format(short > 0 and YELLOW or GREEN, e.name, math.min(e.have, e.need), e.need, GRAY, e.source))
+      local cost = (short > 0 and e.price) and ("  " .. ForeverArtisan.Money(e.price * short)) or ""
+      say(("  %s%s|r  %d/%d%s  %s%s|r"):format(short > 0 and YELLOW or GREEN, e.name, math.min(e.have, e.need), e.need, cost, GRAY, e.source))
     end
+    local costLine = ns.ShopCostText(shopping)
+    if costLine then say(costLine) end
   elseif cmd == "tooltips" then
     db.settings.tooltips = not db.settings.tooltips
     say(PROF .. " tooltip lines " .. (db.settings.tooltips and "on." or "off."))

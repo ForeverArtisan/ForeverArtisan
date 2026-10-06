@@ -3,7 +3,7 @@
 ## IconTexture: Interface\Icons\Trade_Fishing
 ## Notes: One key to cast and keep a lure on your pole, plus a catch log by zone, skill and lure.
 ## Author: ForeverArtisan
-## Version: 0.9.11
+## Version: 0.9.12
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

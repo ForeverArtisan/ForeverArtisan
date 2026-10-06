@@ -412,6 +412,8 @@ function ns.Plan(target)
     e.source = ns.SourceFor(e.id, e.name)
     shopping[#shopping + 1] = e
   end
+  -- what each thing costs: your Auction House visits or Auctionator, or a vendor when cheaper
+  if ForeverArtisan.PriceShopping then ForeverArtisan.PriceShopping(shopping) end
   table.sort(shopping, function(a, b)
     local sa, sb = a.need - a.have, b.need - b.have
     if (sa > 0) ~= (sb > 0) then return sa > 0 end

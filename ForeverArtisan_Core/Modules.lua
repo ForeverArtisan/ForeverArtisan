@@ -420,6 +420,8 @@ local NEWS = {
   { "0.9.10", "Job titles under NPC names in town, no switch needed (they need friendly NPC nameplates on: /fa nameplates). "
     .. "Plays nice with Plater and other nameplate addons. Fewer Lua errors in combat. Bugs: " .. FA.BUG_URL },
   { "0.9.11", "Fixed Mining, Herbalism and Skinning not counting nodes with auto loot. Every node and skin counts again." },
+  { "0.9.12", "Prices in your crafting plans: each shopping list shows what missing materials cost and a total. "
+    .. "No other addon needed (it remembers Auction House prices you see); uses Auctionator too if you have it." },
 }
 
 local function verNum(v)

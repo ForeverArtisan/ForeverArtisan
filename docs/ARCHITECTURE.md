@@ -87,3 +87,4 @@ Per-character vs account data: SavedVariables are per account. Anything that bel
 - No automation: every action needs a key press. Free, no premium, no in-game donation asks.
 - Forever client 16001: use C_Item.*, C_Spell.*, C_TradeSkillUI, GetProfessions (old globals missing).
 - After any change: luac -p every file, run the suite smoke test (stub harness), note it under "(unreleased)" in CHANGELOG.md. Changes land in the repo only. Version bumps happen only through tools\release.py, for the whole suite.
+- Prices (`Core\Prices.lua`): `FA.ItemPrice(id, name)` returns per-unit copper, source and age. Order: Auctionator API v1 if installed, then our own memory of AH pages the player viewed (`ForeverArtisanSettings.prices[realm-faction]`, 30 days), then a cheaper Trade Contacts vendor. We only read what is on screen; `FA.SearchAH` only fills the search box. Never send AH queries or buy anything.

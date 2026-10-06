@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.12 (2026-10-06)
+- Prices in your crafting plans: every shopping list (Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring, Cooking and First Aid) shows what each missing material costs and a total for everything you still need to buy, with how old the prices are. No other addon needed: ForeverArtisan remembers the cheapest buyout on Auction House pages you look at yourself. With Auctionator installed it uses Auctionator's scans too (whichever price is newer wins), and a vendor from your Trade Contacts wins when it's cheaper. At the Auction House, click a shopping list item to put its name in the search box. ForeverArtisan never searches or buys for you.
+
 ## 0.9.11 (2026-10-06)
 - Fixed Mining, Herbalism and Skinning not counting ("0 nodes since your last skill-up"). With auto loot, Forever can skip the loot window entirely, so ForeverArtisan never saw what a node gave you. It now also counts the node from the "You receive loot" line in chat, right after your Mining, Herb Gathering or Skinning cast, so every node and skin counts again. `/fa mine debug` shows what the game reports while you mine, for bug reports.
 
