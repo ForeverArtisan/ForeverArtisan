@@ -310,6 +310,8 @@ function ns.SourceFor(id, name)
   if w then return "Mine: " .. w end
   local drop = ForeverArtisan.MaterialWhere and ForeverArtisan.MaterialWhere(id)
   if drop then return drop end
+  local herbAt = ForeverArtisan.HerbSkill and ForeverArtisan.HerbSkill(id)
+  if herbAt then return ("Herb: gather it (Herbalism %d), or the Auction House. It's not in your Herbalism log yet."):format(herbAt) end
   if name and name:find("^Raw ") then return "Fish (not in your catch log yet)" end
   return "Drops from mobs"
 end

@@ -25,6 +25,12 @@ local function ReagentTip(r)
     local col = have >= (g.n or 1) and GREEN or RED
     lines[#lines + 1] = ("%s%d/%d|r %s"):format(col, math.min(have, g.n or 1), g.n or 1, ns.ItemName(g.id, g.name))
   end
+  -- what one craft costs and what it sells for (Auction House or vendor)
+  local value = FA.CraftValueLines and FA.CraftValueLines(r) or {}
+  if #value > 0 then
+    lines[#lines + 1] = " "
+    for _, l in ipairs(value) do lines[#lines + 1] = l end
+  end
   return table.concat(lines, "\n")
 end
 
@@ -190,9 +196,14 @@ local function BuildProgressPage(p)
   for _, r in ipairs(p.shopAll) do
     r:SetScript("OnClick", function(self)
       local d = self.data
+      -- a Train line: waypoint to the trainer
+      if d and d.waypoint and FA.Vendors and FA.Vendors.waypoint then FA.Vendors.waypoint(d.waypoint) return end
       if not (d and d.name) then return end
       if FA.SearchAH and FA.SearchAH(d.name) then return end
-      ns.say("Open the Auction House, then click an item here to search for it.")
+      -- away from the Auction House: a waypoint to the cheapest vendor you've met who sells it
+      local npc = FA.VendorNPC and FA.VendorNPC(d.id, d.name)
+      if npc and FA.Vendors and FA.Vendors.waypoint then FA.Vendors.waypoint(npc) return end
+      ns.say(("No vendor you've met sells %s. At the Auction House, click it here to search for it."):format(d.name))
     end)
   end
   -- mouse wheel over either list scrolls it
@@ -272,7 +283,8 @@ local function RefreshProgressPage(p)
     shop[#shop + 1] = { id = e.id, icon = Icon(e.id), name = e.name,
       left = (done and GREEN or "") .. e.name .. (done and "|r" or ""),
       right = ("%s%d / %d|r"):format(done and GREEN or YELLOW, math.min(e.have, e.need), e.need) .. cost,
-      tip = " \n" .. GOLD .. "Shopping list|r\n" .. e.source .. (FA.PriceLine and ("\n" .. FA.PriceLine(e.id, e.name)) or "") }
+      tip = " \n" .. GOLD .. "Shopping list|r\n" .. e.source
+        .. ((not e.craft and FA.VendorNPC and FA.VendorNPC(e.id, e.name)) and "\n|cff80c0ffClick for a waypoint to the vendor (at the Auction House: search it)|r" or "") .. ((FA.RowPriceLine and FA.RowPriceLine(e.id, e.name)) and ("\n" .. FA.RowPriceLine(e.id, e.name)) or "") }
     end
   end
   p.shopCount = #shop

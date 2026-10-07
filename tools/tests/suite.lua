@@ -718,6 +718,12 @@ do
   K.Fill(rows, data, 7)
   assert(rows.more._text:find("end of list"), "end of list hint")
   K.Fill(rows, {data[1]}, 0)
+  -- a price (tail) stays whole at the right; the next fill without one hides it
+  K.Fill(rows, {{left="Fishing Pole", right="Felicia Doan, Trade Quarter (before update)", tail="23c"}}, 0)
+  assert(rows[1].tail and rows[1].tail._text=="23c" and rows[1].tail:IsShown(), "price tail shown")
+  K.Fill(rows, {{left="Fishing Pole", right="Old Man Heming"}}, 0)
+  assert(not rows[1].tail:IsShown(), "tail hidden without a price")
+  print("PRICE TAIL ok")
 end
 -- minimap: the anvil and the Trade Contacts book, both built (own buttons, no LibDBIcon in the test)
 do
@@ -879,7 +885,7 @@ do
   fire("PLAYER_LOGIN")
   local txt=table.concat(out,"\n")
   print=P
-  assert(txt:find("What's new") and txt:find("train") and txt:find("Mining") and not txt:find("Plater"), "update prints the last three releases: "..txt)
+  assert(txt:find("What's new") and txt:find("tooltips") and txt:find("train") and txt:find("worth") and not txt:find("Mining"), "update prints the last three releases: "..txt)
   assert(txt:find("foreverartisan.app/bug", 1, true), "news ends with the bug line")
   assert(ForeverArtisanSettings.lastVersion==ForeverArtisan.Version(), "remembers the new version")
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
@@ -889,7 +895,7 @@ do
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
   run("FOREVERARTISAN","new")
   print=P
-  assert(table.concat(out,"\n"):find("0.9.11"), "/fa new prints it")
+  assert(table.concat(out,"\n"):find("0.9.15"), "/fa new prints it")
   print("NEWS ok")
 end
 -- hidden ("secret") values: events carrying them are skipped, their errors dropped, other errors still raised
@@ -1239,6 +1245,228 @@ do
     end
   end
   print("WINDOWS ok", n, sized)
+end
+-- prices on item tooltips, and Train lines that set a waypoint
+do
+  local FA=ForeverArtisan
+  local oldA=_G.Auctionator _G.Auctionator=nil
+  FA.NotePrice(765, 26)
+  local line=FA.TooltipPrice(765)
+  assert(line and line:find("26c") and line:find("today"), "tooltip price: "..tostring(line))
+  assert(FA.TooltipPrice(999999)==nil, "no price, no line")
+  run("FOREVERARTISAN","prices off")
+  assert(FA.TooltipPrice(765)==nil and not FA.PriceTipsOn(), "/fa prices off")
+  run("FOREVERARTISAN","prices on")
+  assert(FA.TooltipPrice(765), "/fa prices on")
+  _G.Auctionator={API={v1={}}}
+  assert(FA.TooltipPrice(765)==nil, "quiet when Auctionator shows its own")
+  _G.Auctionator=oldA
+  -- waypoints
+  local neela={n="Nurse Neela",m=1420,x=61,y=52}
+  local rows=FA.TrainShopRows({
+    {name="Train A",train={at=40,npc=neela},price=100,source="x"},
+    {name="Train B",train={at=80,npc=neela},price=250,source="y"}},55)
+  assert(rows[1].waypoint==neela and rows[1].tip:find("Click for a waypoint to Nurse Neela"), "train now: waypoint")
+  assert(rows[2].waypoint==neela and rows[2].tip:find("waypoint"), "later: waypoint")
+  local oldV=FA.Vendors
+  FA.Vendors={hitsForLink=function(_,name)
+    if name=="X" then return {{npc=neela,item={n="X",train=true,sk="First Aid 40",p=100}}} end return {} end}
+  assert(FA.TrainableRecipe("First Aid","X").npc==neela, "trainer contact kept")
+  FA.Vendors=oldV
+  print("TOOLTIP PRICES ok")
+end
+-- 0.9.14 fixes from in-game testing
+do
+  local FA=ForeverArtisan
+  -- TomTom: the arrow comes back even when TomTom already has that waypoint
+  local added, arrowed, removed = 0, nil, nil
+  local oldTT=TomTom
+  TomTom={profile={arrow={arrival=15}},
+    AddWaypoint=function(_,m,x,y,o) added=added+1 return "uid"..added end,
+    RemoveWaypoint=function(_,u) removed=u end,
+    SetCrazyArrow=function(_,u) arrowed=u end}
+  local cns=loadedFrames["ForeverArtisan_Contacts"].ns
+  cns.SetWaypoint({n="Nurse Neela",m=1420,x=61,y=52,z="Tirisfal Glades"})
+  assert(arrowed=="uid1", "arrow pointed at the waypoint")
+  cns.SetWaypoint({n="Nurse Neela",m=1420,x=61,y=52,z="Tirisfal Glades"})
+  assert(removed=="uid1" and arrowed=="uid2", "old one replaced, arrow shown again")
+  TomTom=oldTT
+  -- material rows: waypoint to the cheapest vendor with a place on the map
+  local a={n="Far",m=1,x=1,y=1} local b2={n="Cheap",m=1,x=2,y=2} local c={n="NoMap"}
+  local oldV=FA.Vendors
+  FA.Vendors={hitsForLink=function() return {
+    {npc=a,item={id=3371,p=20}},{npc=b2,item={id=3371,p=10}},{npc=c,item={id=3371,p=1}},
+    {npc=a,item={id=3371,train=true,p=1}}} end}
+  assert(FA.VendorNPC(3371,"Empty Vial")==b2, "cheapest vendor you can walk to")
+  FA.Vendors={hitsForLink=function() return {} end}
+  assert(FA.VendorNPC(3371,"Empty Vial")==nil, "none met: nil")
+  FA.Vendors=oldV
+  -- no price twice: the row skips it when the item tooltip already shows it
+  local oldA=_G.Auctionator _G.Auctionator=nil
+  FA.NotePrice(2447, 24)
+  assert(FA.TooltipPrice(2447) and FA.RowPriceLine(2447,"Peacebloom")==nil, "own price already on the tooltip")
+  assert(FA.RowPriceLine(999998,"Nothing"):find("No price yet"), "no price: the hint stays")
+  _G.Auctionator=oldA
+  -- herbs never say "Drops from mobs"
+  assert(FA.HerbSkill and FA.HerbSkill(2447)==1 and FA.HerbSkill(2589)==nil, "herb skill lookup")
+  local fa=loadedFrames["ForeverArtisan_FirstAid"].ns
+  local src=fa.SourceFor(2449,"Earthroot")
+  assert(src:find("Herbalism 15") and not src:find("Drops from mobs"), "First Aid: "..src)
+  local ck=loadedFrames["ForeverArtisan_Cooking"].ns
+  assert(ck.SourceFor(2449,"Earthroot"):find("Herbalism"), "Cooking herb source")
+  -- auto loot: a mob drop counts from the chat line, with the dead target as the source
+  local oldT,oldD,oldN,oldE,oldP,oldI=GetTime,UnitIsDead,UnitName,UnitExists,UnitIsPlayer,GetItemInfoInstant
+  local clock=5000 GetTime=function() return clock end
+  UnitExists=function(u) return u=="target" end UnitIsDead=function(u) return u=="target" end
+  UnitIsPlayer=function() return false end
+  UnitName=function(u) if u=="target" then return "Vampire Bat" end return "Me" end
+  GetItemInfoInstant=function(id) return id,"Trade Goods","Trade Goods","",0,7,0 end
+  local me=UnitGUID and UnitGUID("player") or "Player-1"
+  fire("CHAT_MSG_LOOT","You receive loot: |cffffffff|Hitem:3685::::::::|h[Bat Wing]|h|r.","","","","","","","","","",me)
+  local w=FA.MaterialWhere(3685)
+  assert(w and w:find("Vampire Bat"), "drop from chat: "..tostring(w))
+  -- right after a gathering cast: not a mob drop
+  GetSpellInfo=function() return "Skinning" end
+  fire("UNIT_SPELLCAST_SUCCEEDED","player","cast",8613)
+  clock=clock+1
+  fire("CHAT_MSG_LOOT","You receive loot: |cffffffff|Hitem:4234::::::::|h[Heavy Leather]|h|r.","","","","","","","","","",me)
+  assert(FA.MaterialWhere(4234)==nil, "skinning isn't a drop")
+  GetTime,UnitIsDead,UnitName,UnitExists,UnitIsPlayer,GetItemInfoInstant=oldT,oldD,oldN,oldE,oldP,oldI GetSpellInfo=nil
+  print("IN-GAME FIXES ok")
+end
+-- module panel: trades you know first, with your skill; a note about Trade Contacts
+do
+  local oldN,oldI=GetNumSkillLines,GetSkillLineInfo
+  local lines={{"Professions",true},{"Tailoring",false,52,75},{"Cooking",false,30,75},{"Secondary Skills",true},{"First Aid",false,51,150}}
+  GetNumSkillLines=function() return #lines end
+  GetSkillLineInfo=function(i) local l=lines[i] return l[1],l[2],nil,l[3],nil,0,l[4] end
+  run("FOREVERARTISAN","")
+  local panel=_G.ForeverArtisanPanel
+  assert(panel and panel.rows, "panel built")
+  panel.scripts.OnShow(panel)
+  local titles={}
+  for i,row in ipairs(panel.rows) do if row.m then titles[#titles+1]=(row.title._text or ""):gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r","") end end
+  local all=table.concat(titles," | ")
+  local lastKnown, firstOther = 0, nil
+  for i,t in ipairs(titles) do
+    if t:find("%d+/%d+") then lastKnown=i elseif not firstOther and not t:find("^Camping") then firstOther=i end
+  end
+  assert(lastKnown>0 and firstOther and lastKnown<firstOther, "known trades first: "..all)
+  assert(all:find("Tailoring  52/75"), "skill shown: "..all)
+  for i=2,lastKnown do assert(titles[i-1]<titles[i], "known A to Z: "..all) end
+  assert(titles[firstOther]:find("^Alchemy"), "then the other trades A to Z: "..all)
+  local campAt
+  for i,x in ipairs(titles) do if x:find("^Camping") then campAt=i end end
+  assert(campAt and campAt<firstOther, "Camping with what you have: "..all)
+  assert(panel.headings[1]._shown and panel.headings[2]._shown and panel.headings[3]._shown, "a heading per group")
+  assert(panel.headings[1]._text:find("Your trades") and panel.headings[2]._text:find("Not learned"), "heading text")
+  assert(panel.contacts._text and panel.contacts._text:find("Trade Contacts"), "contacts note")
+  assert(panel.site and panel.site._text=="foreverartisan.app", "site address to copy")
+  -- turning Trade Contacts off asks first
+  local shownPopup
+  StaticPopupDialogs={} StaticPopup_Show=function(name) shownPopup=name end
+  local crow
+  for _,row in ipairs(panel.rows) do if row.m and row.m.key=="contacts" then crow=row end end
+  local checked=false
+  crow.check.GetChecked=function() return checked end
+  crow.check.SetChecked=function(_,v) checked=v end
+  crow.check.scripts.OnClick(crow.check)
+  assert(shownPopup=="FOREVERARTISAN_CONTACTS_OFF" and checked==true, "asks first, stays checked")
+  assert(crow.m.enabled~=false, "not turned off yet")
+  StaticPopupDialogs.FOREVERARTISAN_CONTACTS_OFF.OnCancel()
+  assert(crow.m.enabled~=false, "Keep it on: still on")
+  shownPopup=nil
+  run("FOREVERARTISAN","disable contacts")
+  assert(shownPopup=="FOREVERARTISAN_CONTACTS_OFF", "/fa disable contacts asks too")
+  StaticPopupDialogs=nil StaticPopup_Show=nil
+  run("FOREVERARTISAN","")
+  GetNumSkillLines,GetSkillLineInfo=oldN,oldI
+  print("PANEL ORDER ok")
+end
+-- profession gear read from tooltips, and what a craft is worth
+do
+  local FA=ForeverArtisan
+  local worn={[16]={"Strong Fishing Pole","Equip: Increased Fishing +5.","Enchanted: Eternium Line","Requires Fishing (10)"},
+              [7]={"Smelting Pants","Equip: 25% faster smelting."}}
+  local bags={[0]={
+    {"Arcanite Fishing Pole","Equip: Increased Fishing +35.","Requires Fishing (300)"},
+    {"Master Angler's Fishing Hat","Cosmetic","Head","Use: Add this appearance to your Account collection."},
+    {"High Test Eternium Fishing Line","Use: Replaces the fishing line on your fishing pole with a high test eternium line.","Requires Fishing (150)"},
+    {"Miner's Gloves","Equip: Increased Mining +5."},
+    {"Cookie Stirring Rod","Equip: 25% faster cooking."},
+    {"Herbalist's Gloves","Enchanted: Herbalism +5"}}}
+  local function L(t) local out={} for _,x in ipairs(t) do out[#out+1]={leftText=x} end return {lines=out} end
+  local oTI,oC,oL,oN,oI,oInst=C_TooltipInfo,C_Container,GetInventoryItemLink,GetNumSkillLines,GetSkillLineInfo,GetItemInfoInstant
+  C_TooltipInfo={GetInventoryItem=function(_,slot) return worn[slot] and L(worn[slot]) end,
+                 GetBagItem=function(bag,slot) return bags[bag] and bags[bag][slot] and L(bags[bag][slot]) end}
+  C_Container={GetContainerNumSlots=function(bag) return bags[bag] and #bags[bag] or 0 end,
+               GetContainerItemLink=function(bag,slot) local it=bags[bag] and bags[bag][slot] return it and ("|Hitem:1|h["..it[1].."]|h") end}
+  GetInventoryItemLink=function(_,slot) return worn[slot] and ("|Hitem:2|h["..worn[slot][1].."]|h") end
+  GetNumSkillLines=function() return 2 end
+  GetSkillLineInfo=function(i) if i==1 then return "Fishing",false,nil,225 end return "Mining",false,nil,41 end
+  GetItemInfoInstant=function(link)
+    if link:find("Pole") then return 1,"","","INVTYPE_2HWEAPON" end
+    if link:find("Gloves") then return 1,"","","INVTYPE_HAND" end
+    return 1,"","","INVTYPE_WEAPON" end
+  FA.GearChanged()
+  local g=FA.GearFor("Fishing")
+  assert(g.bonus==5 and g.line=="Eternium Line", "worn pole +5 with the line: "..tostring(g.bonus).." "..tostring(g.line))
+  assert(g.better[1] and g.better[1].name=="Arcanite Fishing Pole" and g.better[1].ready==false and g.better[1].req==300, "better pole, not yet")
+  local lines=table.concat(FA.GearLines("Fishing"),"\n")
+  assert(lines:find("usable at 300") and not lines:find("Hat") and not lines:find("use it on your pole"), "fishing lines: "..lines)
+  -- plain pole worn, Strong pole in bags: the one you can use now comes first, even when the
+  -- skill list hides Fishing (read from the profession list instead)
+  do
+    local keep=worn[16]
+    worn[16]={"Fishing Pole"}
+    table.insert(bags[0], 1, {"Strong Fishing Pole","Equip: Increased Fishing +5.","Enchanted: Eternium Line","Requires Fishing (10)"})
+    local sN,sI,oP,oPI=GetNumSkillLines,GetSkillLineInfo,GetProfessions,GetProfessionInfo
+    GetNumSkillLines=function() return 0 end
+    GetProfessions=function() return nil,nil,nil,7,nil end
+    GetProfessionInfo=function(i) if i==7 then return "Fishing",nil,225,225 end end
+    FA.GearChanged()
+    local gl=FA.GearLine("Fishing")
+    assert(gl:find("Strong Fishing Pole") and gl:find("equip it"), "usable pole first: "..tostring(gl))
+    local all=table.concat(FA.GearLines("Fishing"),"\n")
+    assert(all:find("Arcanite"), "hover lists the 300 pole too: "..all)
+    GetNumSkillLines,GetSkillLineInfo,GetProfessions,GetProfessionInfo=sN,sI,oP,oPI
+    table.remove(bags[0],1); worn[16]=keep
+    FA.GearChanged()
+  end
+  -- the line still in bags shows until one is on the pole
+  worn[16]={"Strong Fishing Pole","Equip: Increased Fishing +5."}
+  FA.GearChanged()
+  lines=table.concat(FA.GearLines("Fishing"),"\n")
+  assert(lines:find("High Test Eternium Fishing Line") and lines:find("use it on your pole"), "line reminder: "..lines)
+  -- Mining: gloves are better, pants worn count as worn perk
+  g=FA.GearFor("Mining")
+  assert(g.better[1] and g.better[1].name=="Miner's Gloves", "mining gloves")
+  assert(#g.worn==1 and g.worn[1].perk:find("smelting"), "smelting pants worn")
+  assert(FA.GearLine("Mining"):find("Miner's Gloves"), "bags first")
+  local hb=FA.GearFor("Herbalism")
+  assert(hb.better[1] and hb.better[1].name=="Herbalist's Gloves" and hb.better[1].bonus==5, "glove enchant counts")
+  local ck=FA.GearFor("Cooking")
+  assert(ck.perks[1] and ck.perks[1].name=="Cookie Stirring Rod", "cooking perk in bags")
+  C_TooltipInfo,C_Container,GetInventoryItemLink,GetNumSkillLines,GetSkillLineInfo,GetItemInfoInstant=oTI,oC,oL,oN,oI,oInst
+  FA.GearChanged()
+  -- craft value: materials, Auction House, vendor, profit
+  local oA,oGI=_G.Auctionator,GetItemInfo _G.Auctionator=nil
+  FA.NotePrice(990001, 10) FA.NotePrice(990002, 60)
+  GetItemInfo=function(id) if id==990002 then return "Thing",nil,1,1,1,"","",1,"",1,15 end end
+  local r={itemId=990002, reagents={{id=990001,name="Bit",n=3}}}
+  local v=table.concat(FA.CraftValueLines(r),"\n")
+  assert(v:find("Materials: about 30c") and v:find("Auction House: about 60c each") and v:find("Vendors pay 15c"), v)
+  assert(v:find("Profit: about 27c a craft") and v:find("after its 5%% cut"), "profit after the cut: "..v)
+  FA.NotePrice(990003, 5)
+  local loss=table.concat(FA.CraftValueLines({itemId=990003, reagents={{id=990001,n=3}}}),"\n")
+  assert(loss:find("more than it sells for"), "leveling cost: "..loss)
+  -- a vendor that pays more than the Auction House after its cut wins
+  FA.NotePrice(990004, 29)
+  GetItemInfo=function(id) if id==990004 then return "Poultice",nil,1,1,1,"","",1,"",1,28 end end
+  local pv=table.concat(FA.CraftValueLines({itemId=990004, reagents={{id=990001,n=7}}}),"\n")
+  assert(pv:find("Costs about 42c more than it sells for %(to a vendor%)"), "vendor beats the house after its cut: "..pv)
+  _G.Auctionator,GetItemInfo=oA,oGI
+  print("GEAR AND VALUE ok")
 end
 print("CRAFTS OK")
 print("SUITE OK")

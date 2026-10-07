@@ -161,26 +161,64 @@ local function Vendor(id, name)
   return best, who
 end
 
--- price per unit in copper, where it came from, how many days old (nil for vendors), vendor name
-function FA.ItemPrice(id, name)
-  if not id and not name then return end
-  local ah, age, src
-  if id then
-    ah, age = FromAuctionator(id)
-    if ah then src = "Auctionator" end
-    -- your own Auction House visit wins when it's newer than Auctionator's scan (same day: Auctionator)
-    local e = Store()[id]
-    if e then
-      local mine = math.floor((time() - (e.t or 0)) / 86400)
-      if not ah or (age and mine < age) then ah, age, src = e.p, mine, "your Auction House visits" end
+-- the cheapest vendor you've met for an item, as a Trade Contacts entry with a place to go, or nil
+function FA.VendorNPC(id, name)
+  local V = FA.Vendors
+  if not (V and V.hitsForLink) or not (id or name) then return end
+  local ok, hits = pcall(V.hitsForLink, id and ("item:" .. id) or nil, name)
+  if not ok or type(hits) ~= "table" then return end
+  local best, bestUnit
+  for _, h in ipairs(hits) do
+    local it = h.item
+    if h.npc and h.npc.m and not (it and it.train) and (not id or not (it and it.id) or it.id == id) then
+      local unit = (it and it.p and it.p > 0) and (it.p / (it.stack or 1)) or math.huge
+      if not best or unit < bestUnit then best, bestUnit = h.npc, unit end
     end
   end
+  return best
+end
+
+-- price per unit in copper, where it came from, how many days old (nil for vendors), vendor name
+-- Auction House price only (Auctionator or your own visits), no vendors: what it sells for there.
+-- price per unit, where it came from, how many days old
+function FA.AHPrice(id)
+  id = tonumber(id)
+  if not id then return end
+  local ah, age = FromAuctionator(id)
+  local src = ah and "Auctionator" or nil
+  -- your own Auction House visit wins when it's newer than Auctionator's scan (same day: Auctionator)
+  local e = Store()[id]
+  if e then
+    local mine = math.floor((time() - (e.t or 0)) / 86400)
+    if not ah or (age and mine < age) then ah, age, src = e.p, mine, "your Auction House visits" end
+  end
+  return ah, src, age
+end
+
+function FA.ItemPrice(id, name)
+  if not id and not name then return end
+  local ah, src, age
+  if id then ah, src, age = FA.AHPrice(id) end
   local v, who = Vendor(id, name)
   if v and (not ah or v <= ah) then return v, "vendor", nil, who end
   return ah, src, age
 end
 
 ---------------------------------------------------------------- showing prices
+-- One line for item tooltips: the cheapest buyout you've seen at the Auction House.
+-- Nil when Auctionator is installed (it shows its own), when there's no price, or when turned off
+-- (/fa prices off). Vendors aren't repeated here: Trade Contacts already adds "Sold by" lines.
+function FA.PriceTipsOn() return not (ForeverArtisanSettings and ForeverArtisanSettings.priceTips == false) end
+function FA.TooltipPrice(id)
+  id = tonumber(id)
+  if not id or not FA.PriceTipsOn() then return end
+  if FromAuctionator(id) or (type(_G.Auctionator) == "table" and _G.Auctionator.API) then return end
+  local e = Store()[id]
+  if not (e and e.p) then return end
+  local days = math.floor((time() - (e.t or 0)) / 86400)
+  return ("Auction House: %s each (seen %s)"):format(FA.Money(e.p), FA.AgeText(days))
+end
+
 function FA.Money(copper)
   if not copper then return "" end
   copper = math.floor(copper + 0.5)
@@ -206,6 +244,63 @@ function FA.PriceLine(id, name)
   end
   if src == "vendor" then return "Vendor price: " .. FA.Money(p) .. " each" .. (who and (" at " .. who) or "") end
   return ("Auction House: %s each (%s, %s)"):format(FA.Money(p), src, FA.AgeText(age))
+end
+
+-- The price line for a shopping list row's tooltip. Skipped when the item tooltip above it already
+-- shows the same price (ForeverArtisan's own line, or Auctionator's).
+function FA.RowPriceLine(id, name)
+  local p, src = FA.ItemPrice(id, name)
+  if p and src == "Auctionator" and type(_G.Auctionator) == "table" then return nil end
+  if p and src == "your Auction House visits" and id and FA.TooltipPrice(id) then return nil end
+  return FA.PriceLine(id, name)
+end
+
+---------------------------------------------------------------- what a craft is worth
+-- what a vendor pays you for one (the game's sell price), or nil
+local function VendorSell(id)
+  if not id then return end
+  local Info = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+  if not Info then return end
+  local ok, r = pcall(function() return { Info(id) } end)
+  local p = ok and r and r[11]
+  if type(p) == "number" and p > 0 and not Secret(p) then return p end
+end
+FA.VendorSell = VendorSell
+
+-- Tooltip lines for a recipe: what one craft's materials cost, what it sells for, and the difference.
+-- Empty when nothing is known. Sale prices are before the Auction House cut.
+FA.AH_CUT = 0.05
+
+function FA.CraftValueLines(r)
+  local lines = {}
+  if not r then return lines end
+  local makes = r.makes or 1
+  local cost = FA.CraftMoney and FA.CraftMoney(r)
+  local ah, src, age = FA.AHPrice(r.itemId)
+  local vend = VendorSell(r.itemId)
+  if not (cost or ah or vend) then return lines end
+  lines[#lines + 1] = FA.GOLD .. "What it's worth|r"
+  if cost then lines[#lines + 1] = "Materials: about " .. FA.Money(cost) .. " a craft" end
+  if ah then
+    lines[#lines + 1] = ("Auction House: about %s each%s (%s, %s)"):format(FA.Money(ah),
+      makes > 1 and (", makes " .. makes) or "", src, FA.AgeText(age))
+  end
+  if vend then lines[#lines + 1] = "Vendors pay " .. FA.Money(vend) .. " each" end
+  if cost then
+    -- the Auction House keeps 5% of a sale (your faction's house), so profit is what you'd actually get
+    local best, where = nil, nil
+    if ah then best, where = math.floor(ah * makes * (1 - FA.AH_CUT)), "at the Auction House, after its 5% cut" end
+    if vend and (not best or vend * makes > best) then best, where = vend * makes, "to a vendor" end
+    if best then
+      local d = best - cost
+      if d >= 0 then
+        lines[#lines + 1] = FA.GREEN .. "Profit: about " .. FA.Money(d) .. " a craft|r" .. FA.GRAY .. " (" .. where .. ")|r"
+      else
+        lines[#lines + 1] = FA.GRAY .. "Costs about " .. FA.Money(-d) .. " more than it sells for (" .. where .. ")|r"
+      end
+    end
+  end
+  return lines
 end
 
 ---------------------------------------------------------------- shopping list totals

@@ -3,7 +3,7 @@
 ## IconTexture: Interface\Icons\Trade_Tailoring
 ## Notes: What to make next for skill-ups, a plan and shopping list to your target skill (bolts of cloth counted as crafts), a craft log, where to train next, and material tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.13
+## Version: 0.9.15
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

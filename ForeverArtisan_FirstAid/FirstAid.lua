@@ -314,6 +314,8 @@ function ns.SourceFor(id, name)
   if w then return "Fish: " .. w end
   local drop = ForeverArtisan.MaterialWhere and ForeverArtisan.MaterialWhere(id)
   if drop then return drop end
+  local herbAt = ForeverArtisan.HerbSkill and ForeverArtisan.HerbSkill(id)
+  if herbAt then return ("Herb: gather it (Herbalism %d), or the Auction House. It's not in your Herbalism log yet."):format(herbAt) end
   if name and name:find("Cloth$") then return "Cloth: drops from humanoid mobs" end
   if name and name:find("Venom Sac$") then return "Drops from spiders" end
   return "Drops from mobs"

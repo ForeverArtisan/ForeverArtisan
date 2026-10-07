@@ -527,6 +527,11 @@ local function FishingSkill()
   return r, m, mx or (c and c.max)
 end
 function ns.FishingNotLearned() return noFishing end
+-- Core's gear reminders ask here when the profession list can't say (this reads chat too)
+if ForeverArtisan then
+  ForeverArtisan.SkillFrom = ForeverArtisan.SkillFrom or {}
+  ForeverArtisan.SkillFrom.Fishing = function() return (FishingSkill()) end
+end
 FishingSkillLive = function()
   noFishing = false
   local listed = false

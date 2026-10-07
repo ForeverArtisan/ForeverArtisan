@@ -129,6 +129,36 @@ local function OnLoot()
   end
 end
 
+-- With auto loot, Forever can skip the loot window entirely (no LOOT_OPENED), so drops are also
+-- counted from your own "You receive loot" line. The mob is your dead target. Herbs, ore, skins,
+-- fish, chests and disenchanting aren't mob drops: loot right after those casts is skipped.
+local lastWindow, lastGather = -100, -100
+local GATHER = { "Skinning", "Herb Gathering", "Mining", "Fishing", "Opening", "Disenchant", "Pick Lock", "Prospecting" }
+local function IsGatherSpell(spellID)
+  local GetName = (C_Spell and C_Spell.GetSpellName) or (GetSpellInfo and function(i) return (GetSpellInfo(i)) end)
+  local ok, n = pcall(function() return GetName and GetName(spellID) end)
+  if not (ok and Plain(n)) then return false end
+  for _, g in ipairs(GATHER) do if n:find(g, 1, true) then return true end end
+  return false
+end
+local function OnChatLoot(msg, guid)
+  local now = GetTime()
+  if now - lastWindow < 3 or now - lastGather < 5 then return end
+  local got = FA.ParseSelfLoot and FA.ParseSelfLoot(msg, guid)
+  if not got then return end
+  if not (UnitExists and UnitExists("target") and UnitIsDead and UnitIsDead("target")) then return end
+  if UnitIsPlayer and UnitIsPlayer("target") then return end
+  local n = UnitName("target")
+  if not Plain(n) then return end
+  if IsRecipeItem(got.name) then
+    Note(got.name, "drops", n)
+  else
+    local id = MaterialId(got.link or ("item:" .. got.id))
+    if id then NoteMat(id, n, got.qty) end
+  end
+end
+FA.NoteChatLoot = OnChatLoot
+
 local function OnQuest()
   local title = (GetTitleText and GetTitleText()) or "a quest"
   local giver = UnitName and UnitName("npc")
@@ -146,12 +176,17 @@ end
 
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "LOOT_OPENED", "QUEST_DETAIL", "QUEST_COMPLETE", "PLAYER_TARGET_CHANGED",
-  "UPDATE_MOUSEOVER_UNIT", "NAME_PLATE_UNIT_ADDED" }) do pcall(ev.RegisterEvent, ev, e) end
-ev:SetScript("OnEvent", function(_, e, a1)
-  if e == "PLAYER_TARGET_CHANGED" then RememberUnit("target")
+  "UPDATE_MOUSEOVER_UNIT", "NAME_PLATE_UNIT_ADDED", "CHAT_MSG_LOOT" }) do pcall(ev.RegisterEvent, ev, e) end
+pcall(ev.RegisterUnitEvent, ev, "UNIT_SPELLCAST_SUCCEEDED", "player")
+ev:SetScript("OnEvent", function(_, e, a1, ...)
+  if e == "CHAT_MSG_LOOT" then pcall(OnChatLoot, a1, (select(11, ...)))
+  elseif e == "UNIT_SPELLCAST_SUCCEEDED" then
+    local spellID = select(2, ...)
+    if IsGatherSpell(spellID) then lastGather = GetTime() end
+  elseif e == "PLAYER_TARGET_CHANGED" then RememberUnit("target")
   elseif e == "UPDATE_MOUSEOVER_UNIT" then RememberUnit("mouseover")
   elseif e == "NAME_PLATE_UNIT_ADDED" then if a1 then RememberUnit(a1) end
-  elseif e == "LOOT_OPENED" then pcall(OnLoot) else pcall(OnQuest) end
+  elseif e == "LOOT_OPENED" then lastWindow = GetTime(); pcall(OnLoot) else pcall(OnQuest) end
 end)
 
 local function Place(e) return e.sub and (e.sub .. ", " .. e.zone) or e.zone end
@@ -225,12 +260,15 @@ end
 
 -- Item tooltips: "Dropped by Greater Duskbat, Tirisfal Glades (you looted it 2 times)" on any material
 -- you've looted from a mob, whether or not you know a recipe that uses it yet.
+-- Also the Auction House price you last saw for it (when Auctionator isn't there to show its own).
 local function DropTip(tt, id)
   if not id or tt.faDropTip then return end
   local line = FA.MaterialWhere(id)
-  if not line then return end
+  local price = FA.TooltipPrice and FA.TooltipPrice(id)
+  if not line and not price then return end
   tt.faDropTip = true
-  tt:AddLine(FA.GOLD .. "ForeverArtisan:|r " .. line, 1, 1, 1, true)
+  if line then tt:AddLine(FA.GOLD .. "ForeverArtisan:|r " .. line, 1, 1, 1, true) end
+  if price then tt:AddLine(FA.GOLD .. "ForeverArtisan:|r " .. price, 1, 1, 1, true) end
   tt:Show()
 end
 local function HookDropTips()
@@ -262,7 +300,7 @@ ForeverArtisan.GuardEvents(tipEv)
 -- Crafting plans use these: a recipe you haven't learned that a trainer in your Trade Contacts
 -- teaches, with the skill it needs and what it costs. Only trainers you've opened count (no
 -- guessing from Classic data), so a plan never sends you after a recipe nobody here teaches.
--- { at = skill needed, cost = copper or nil, who = "Arnok (Undercity)" } or nil
+-- { at = skill needed, cost = copper or nil, who = "Arnok (Undercity)", npc = the contact } or nil
 function ForeverArtisan.TrainableRecipe(prof, name)
   local V = ForeverArtisan.Vendors
   if not (V and V.hitsForLink and name) then return nil end
@@ -277,7 +315,7 @@ function ForeverArtisan.TrainableRecipe(prof, name)
         local at = sk and tonumber(sk:match("(%d+)%s*$")) or 1
         local who = h.npc and h.npc.n and (h.npc.n .. " (" .. (h.npc.s or h.npc.z or "?") .. ")")
         if not best or at < best.at or (at == best.at and (it.p or 0) < (best.cost or 0)) then
-          best = { at = at, cost = it.p, who = who }
+          best = { at = at, cost = it.p, who = who, npc = h.npc }
         end
       end
     end
@@ -428,25 +466,30 @@ function ForeverArtisan.TrainShopRows(shopping, skill)
     return (a.name or "") < (b.name or "")
   end)
   local rows = {}
+  local CLICK = "\n|cff80c0ffClick for a waypoint to %s|r"
   if #now > 0 then
-    local names, lines, cost = {}, {}, 0
+    local names, lines, cost, npc = {}, {}, 0, nil
     for _, e in ipairs(now) do
       local n = (e.name or ""):gsub("^Train ", "")
       names[#names + 1] = n
       cost = cost + (e.price or 0)
+      npc = npc or e.train.npc
       lines[#lines + 1] = n .. (e.price and ("  " .. FA.Money(e.price)) or "")
         .. (e.train.who and (FA.GRAY .. "  ·  " .. e.train.who .. "|r") or "")
     end
     rows[#rows + 1] = { icon = 136235, tipTitle = "Train now",
       left = FA.YELLOW .. "Train now: " .. table.concat(names, ", ") .. "|r",
       right = FA.YELLOW .. #now .. " to learn|r" .. (cost > 0 and (FA.GRAY .. "  ·  " .. FA.Money(cost) .. "|r") or ""),
-      tip = "Your skill is high enough to learn these now, in one trip:\n" .. table.concat(lines, "\n") }
+      waypoint = npc,
+      tip = "Your skill is high enough to learn these now, in one trip:\n" .. table.concat(lines, "\n")
+        .. (npc and npc.n and CLICK:format(npc.n) or "") }
   end
   for _, e in ipairs(later) do
     rows[#rows + 1] = { icon = 136235, tipTitle = e.name,
       left = FA.YELLOW .. e.name .. "|r",
       right = FA.YELLOW .. ("at %d"):format(e.train.at) .. "|r" .. (e.price and (FA.GRAY .. "  ·  " .. FA.Money(e.price) .. "|r") or ""),
-      tip = e.source }
+      waypoint = e.train.npc,
+      tip = e.source .. (e.train.npc and e.train.npc.n and CLICK:format(e.train.npc.n) or "") }
   end
   return rows
 end

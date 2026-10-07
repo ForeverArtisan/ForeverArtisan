@@ -175,8 +175,27 @@ function ns.SetWaypoint(npc)
   end
   local title = npc.n .. " (" .. where(npc) .. ")"
   if TomTom and TomTom.AddWaypoint then
-    TomTom:AddWaypoint(npc.m, npc.x / 100, npc.y / 100, { title = title, persistent = false, crazy = true })
-    print(PREFIX .. "waypoint set: " .. title)
+    -- replace the last one we set, then point the arrow at it: TomTom keeps a waypoint you hid the
+    -- arrow for, and hands back the old one instead of showing the arrow again
+    if ns.lastTomTom and TomTom.RemoveWaypoint then pcall(TomTom.RemoveWaypoint, TomTom, ns.lastTomTom) end
+    local ok, uid = pcall(TomTom.AddWaypoint, TomTom, npc.m, npc.x / 100, npc.y / 100,
+      { title = title, persistent = false, crazy = true, from = "ForeverArtisan" })
+    if ok and uid then
+      ns.lastTomTom = uid
+      if TomTom.SetCrazyArrow then
+        local arrival = TomTom.profile and TomTom.profile.arrow and TomTom.profile.arrow.arrival
+        pcall(TomTom.SetCrazyArrow, TomTom, uid, arrival or 15, title)
+      end
+    end
+    -- TomTom only draws the arrow on the same continent: say so instead of showing nothing
+    local pm, px, py = playerPos()
+    local myCont = worldPos(pm, px, py)
+    local theirCont = worldPos(npc.m, npc.x, npc.y)
+    if myCont and theirCont and myCont ~= theirCont then
+      print(PREFIX .. ("waypoint set: %s. It's in %s, on another continent, so the arrow shows once you get there."):format(title, npc.z or "another zone"))
+    else
+      print(PREFIX .. "waypoint set: " .. title)
+    end
     return
   end
   if C_Map and C_Map.SetUserWaypoint and UiMapPoint and UiMapPoint.CreateFromCoordinates then

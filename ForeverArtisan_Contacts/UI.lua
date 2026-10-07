@@ -48,7 +48,8 @@ local function SearchData()
     if it then
       data[#data + 1] = { id = it.id, icon = it.id and Icon(it.id) or (it.train and 136235 or 134400), npc = npc,
         left = it.n .. (it.sk and (GRAY .. "  " .. it.sk .. "|r") or ""),
-        right = GRAY .. npc.n .. ", " .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "") .. "|r  " .. ns.Money(it),
+        right = GRAY .. npc.n .. ", " .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "") .. "|r",
+        tail = ns.Money(it),
         tipFn = function() return npc.n .. (npc.t and (" <" .. npc.t .. ">") or "") .. "\n" .. ns.DetailText(npc, it) end }
     elseif npc.seenOnly then
       data[#data + 1] = { icon = 134400, npc = npc, tipTitle = npc.n,

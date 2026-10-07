@@ -24,6 +24,14 @@ local function BuildMainPage(p)
   p.skill = Text(p, "GameFontNormalLarge", "TOPLEFT", 18, -6)
   p.color = Text(p, "GameFontHighlightSmall", "TOPLEFT", 18, -30); p.color:SetWidth(430)
   p.find = Text(p, "GameFontHighlight", "TOPLEFT", 18, -56); p.find:SetWidth(430)
+  -- profession gear: what you wear for Herbalism and anything better in your bags (hover for all)
+  p.gearHover = CreateFrame("Frame", nil, p); p.gearHover:SetPoint("TOPLEFT", 18, -74); p.gearHover:SetSize(430, 14)
+  p.gear = Text(p.gearHover, "GameFontHighlightSmall", "TOPLEFT", 0, 0); p.gear:SetWidth(430); p.gear:SetWordWrap(false)
+  K.Tip(p.gearHover, function()
+    GameTooltip:AddLine("Herbalism gear")
+    for _, l in ipairs(ForeverArtisan.GearLines and ForeverArtisan.GearLines("Herbalism") or {}) do GameTooltip:AddLine(l, 1, 1, 1, true) end
+    GameTooltip:AddLine("Read from your gear and bags. ForeverArtisan never equips anything for you.", 0.6, 0.6, 0.6, true)
+  end)
 
   Header(p, -88, "This session")
   p.sess = Text(p, "GameFontHighlight", "TOPLEFT", 18, -108); p.sess:SetWidth(430)
@@ -76,6 +84,8 @@ function ns.RefreshSession(p)
 end
 
 local function RefreshMainPage(p)
+  local gl = ForeverArtisan.GearLine and ForeverArtisan.GearLine("Herbalism")
+  p.gear:SetText(gl or ""); p.gearHover:SetShown(gl ~= nil)
   local i = ns.SkillInfo()
   if i.rank then
     p.skill:SetText(("Herbalism %d%s%s"):format(i.rank, i.max and (" / " .. i.max) or "",
@@ -116,12 +126,12 @@ end
 ---------------------------------------------------------------- page 2: Progress
 local function BuildProgressPage(p)
   p.skillBar = K.SkillBar(p, -2, "Herbalism")
-  p.rate = Text(p, "GameFontHighlightSmall", "TOPLEFT", 18, -36); p.rate:SetWidth(430)
+  p.rate = Text(p, "GameFontHighlightSmall", "TOPLEFT", 18, -36); p.rate:SetWidth(430); p.rate:SetWordWrap(false)
 
   Header(p, -54, "Pick next")
   Text(p, "GameFontDisableSmall", "TOPLEFT", 90, -56):SetText("herbs that still give skill-ups")
   p.nextRows = MakeRows(p, 6, -72, true)
-  p.soon = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -222); p.soon:SetWidth(430)
+  p.soon = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -233); p.soon:SetWidth(430)
 
   Header(p, -250, "Goals")
   Text(p, "GameFontHighlightSmall", "TOPLEFT", 300, -252):SetText("Amount")
@@ -147,7 +157,7 @@ local function RefreshProgressPage(p)
     if i.capped then
       p.rate:SetText(RED .. "You're capped. Train the next rank to keep going.|r")
     elseif i.npp and i.toCap then
-      p.rate:SetText(("About %.1f nodes per point  ·  %d points to %d  ·  ~%d nodes"):format(i.npp, i.toCap, i.max, i.nodesToCap or 0))
+      p.rate:SetText(("%.1f nodes per point  ·  ~%d nodes to %d"):format(i.npp, i.nodesToCap or 0, i.max))
     else
       p.rate:SetText(GRAY .. "Pick a few herbs and your pace shows here.|r")
     end

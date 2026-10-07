@@ -78,6 +78,33 @@ local function comingSoon()
   return out
 end
 
+-- The professions this character knows: lowercase name -> { rank, max }. Read from the skill list,
+-- so it works with every module on or off.
+local function learnedTrades()
+  local out = {}
+  local function add(name, rank, maxr)
+    if type(name) ~= "string" or (FA.IsSecret and (FA.IsSecret(name) or FA.IsSecret(rank) or FA.IsSecret(maxr))) then return end
+    out[name:lower()] = { rank = tonumber(rank), max = tonumber(maxr) }
+  end
+  if GetNumSkillLines and GetSkillLineInfo then
+    local ok, n = pcall(GetNumSkillLines)
+    for i = 1, (ok and tonumber(n) or 0) do
+      local ok2, name, header, _, rank, _, _, maxr = pcall(GetSkillLineInfo, i)
+      if ok2 and not header then add(name, rank, maxr) end
+    end
+  end
+  if GetProfessions and GetProfessionInfo then
+    local ok, a, b, c, d, e, f = pcall(GetProfessions)
+    if ok then
+      for _, idx in ipairs({ a, b, c, d, e, f }) do
+        local ok2, name, _, rank, maxr = pcall(GetProfessionInfo, idx)
+        if ok2 then add(name, rank, maxr) end
+      end
+    end
+  end
+  return out
+end
+
 local function scan()
   wipe(modules)
   for i = 1, GetNum() do
@@ -97,13 +124,21 @@ local function scan()
       }
     end
   end
-  -- professions first (A to Z), then tools like the Logger
+  -- what this character has first (professions it knows, plus Camping, which everyone has), then
+  -- the other professions, then Trade Contacts; A to Z inside each group
   local isProf = {}
   for _, n in ipairs(PLANNED) do isProf[n:lower()] = true end
-  for _, m in ipairs(modules) do m.isProf = isProf[m.title:lower()] or false end
+  local known = learnedTrades()
+  for _, m in ipairs(modules) do
+    m.isProf = isProf[m.title:lower()] or false
+    m.learned = m.isProf and known[m.title:lower()] or nil
+  end
+  for _, m in ipairs(modules) do
+    m.group = (m.learned or m.key == "camping") and 1 or (m.isProf and 2 or 3)
+  end
   table.sort(modules, function(a, b)
-    local pa, pb = isProf[a.title:lower()] or false, isProf[b.title:lower()] or false
-    if pa ~= pb then return pa end
+    local ga, gb = a.group, b.group
+    if ga ~= gb then return ga < gb end
     return a.title < b.title
   end)
   return modules
@@ -150,6 +185,22 @@ local function setEnabled(m, on)
   print(PREFIX .. m.title .. (on and " turned on." or " turned off.") .. " Type /reload to apply.")
 end
 
+-- Turning Trade Contacts off asks first: nothing you meet is saved while it's off.
+-- after(): refresh whatever asked (the panel), whichever button was pressed.
+local function confirmContactsOff(m, after)
+  if not (StaticPopupDialogs and StaticPopup_Show) then setEnabled(m, false); if after then after() end; return end
+  StaticPopupDialogs.FOREVERARTISAN_CONTACTS_OFF = {
+    text = "Turn off Trade Contacts?\n\nWhile it's off, vendors and trainers you meet aren't saved. "
+      .. "Shopping lists lose vendor prices and waypoints, and recipe books can't say where to train.\n\n"
+      .. "Everything already saved stays, and comes back when you turn it on.",
+    button1 = "Turn off", button2 = "Keep it on",
+    OnAccept = function() setEnabled(m, false); if after then after() end end,
+    OnCancel = function() if after then after() end end,
+    timeout = 0, whileDead = true, hideOnEscape = true, showAlert = true, preferredIndex = 3,
+  }
+  StaticPopup_Show("FOREVERARTISAN_CONTACTS_OFF")
+end
+
 ---------------------------------------------------------------- panel
 
 local ROW_H = 30 -- compact: every profession has a module now, so notes live in the hover tooltip
@@ -170,12 +221,28 @@ end
 local function refreshPanel()
   if not panel then return end
   scan()
+  -- rows flow down the panel under a heading for each group
+  local y, prev = -34, nil
+  for _, h in ipairs(panel.headings) do h:Hide() end
   for i, row in ipairs(panel.rows) do
     local m = modules[i]
     if m then
+      if m.group ~= prev then
+        if prev then y = y - 8 end
+        local h = panel.headings[m.group]
+        h:ClearAllPoints(); h:SetPoint("TOPLEFT", 18, y); h:Show()
+        y = y - 20
+      end
+      prev = m.group
+      row:ClearAllPoints(); row:SetPoint("TOPLEFT", 16, y)
+      y = y - ROW_H
       row.m = m
       row.check:SetChecked(m.enabled)
-      row.title:SetText(m.title .. (m.alias ~= "" and (GREY .. "   /fa " .. m.alias .. "|r") or ""))
+      -- trades you know: name in white with your skill; the others gray
+      local L = m.learned
+      local name = (m.isProf and not L) and (GREY .. m.title .. "|r") or m.title
+      local skill = (L and L.rank) and (GOLD .. "  " .. L.rank .. (L.max and ("/" .. L.max) or "") .. "|r") or ""
+      row.title:SetText(name .. skill .. (m.alias ~= "" and (GREY .. "   /fa " .. m.alias .. "|r") or ""))
       row.notes:SetText(m.notes)
       row.status:SetText(statusText(m))
       row.open:SetShown(m.loaded and m.slash ~= nil)
@@ -194,10 +261,20 @@ local function refreshPanel()
     panel.town:SetText(text)
     panel.plates:SetShown(off)
   end
+  -- vendors and trainers are only saved while Trade Contacts runs, for every profession
+  local tc
+  for _, m in ipairs(modules) do if m.key == "contacts" then tc = m end end
+  if tc and tc.loaded then
+    panel.contacts:SetText(GREY .. "Keep Trade Contacts on. It saves every vendor and trainer you meet, for all professions, even ones turned off here. Shopping lists and recipe books use them.|r")
+  elseif tc then
+    panel.contacts:SetText(GOLD .. "Trade Contacts is off, so vendors and trainers you meet aren't saved. Turn it on so shopping lists and recipe books know where to buy and train.|r")
+  else
+    panel.contacts:SetText("")
+  end
 
   -- "Coming soon" grid under the installed modules
   local shown = math.min(#modules, #panel.rows)
-  local top = (shown > 0) and (-54 - shown * ROW_H - 10) or -110
+  local top = (shown > 0) and (y - 10) or -110
   local soon = comingSoon()
   panel.soonHeader:ClearAllPoints()
   panel.soonHeader:SetPoint("TOPLEFT", 18, top)
@@ -216,7 +293,7 @@ local function refreshPanel()
     end
   end
   local gridRows = math.ceil(#soon / SOON_COLS)
-  panel:SetHeight(math.max(260, -top + 20 + gridRows * SOON_H + 110))
+  panel:SetHeight(math.max(320, -top + 20 + gridRows * SOON_H + 180))
 end
 
 local function buildPanel()
@@ -225,7 +302,6 @@ local function buildPanel()
     setPos = function(pos) ForeverArtisanSettings = ForeverArtisanSettings or {}; ForeverArtisanSettings.panelPos = pos end,
     defaultPos = { "CENTER", 0, 0 } })
 
-  FA.UI.Header(panel, -34, "Modules", 18)
 
   panel.rows = {}
   for i = 1, 16 do
@@ -235,7 +311,14 @@ local function buildPanel()
     row.check = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
     row.check:SetPoint("LEFT", 0, 0)
     row.check:SetScript("OnClick", function(self)
-      if row.m then setEnabled(row.m, self:GetChecked() and true or false); refreshPanel() end
+      if not row.m then return end
+      local on = self:GetChecked() and true or false
+      if not on and row.m.key == "contacts" then
+        self:SetChecked(true) -- stays on until they confirm
+        confirmContactsOff(row.m, refreshPanel)
+        return
+      end
+      setEnabled(row.m, on); refreshPanel()
     end)
     row.title = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.title:SetPoint("LEFT", 34, 0); row.title:SetJustifyH("LEFT")
@@ -256,10 +339,24 @@ local function buildPanel()
       GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
       GameTooltip:AddLine(self.m.title)
       GameTooltip:AddLine(self.m.notes, 1, 1, 1, true)
+      if self.m.isProf then
+        local L = self.m.learned
+        GameTooltip:AddLine(L and ("You know " .. self.m.title .. (L.rank and (" (" .. L.rank .. (L.max and ("/" .. L.max) or "") .. ")") or "") .. ".")
+          or "Not learned on this character. Turn it on to plan ahead, or leave it off.", 0.83, 0.66, 0.31, true)
+      end
       GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
     panel.rows[i] = row
+  end
+
+  -- one heading per group: what this character has, the professions it doesn't, and tools
+  panel.headings = {}
+  for i, text in ipairs({ "Your trades", "Not learned on this character", "Tools" }) do
+    local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    h:SetText(GOLD .. text .. "|r")
+    h:Hide()
+    panel.headings[i] = h
   end
 
   panel.empty = panel:CreateFontString(nil, "OVERLAY", "GameFontDisable")
@@ -287,6 +384,27 @@ local function buildPanel()
   panel.town = townHover:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   panel.town:SetPoint("BOTTOMLEFT"); panel.town:SetWidth(428); panel.town:SetJustifyH("LEFT")
   FA.UI.Tip(townHover, function() if FA.TownNamesTip then FA.TownNamesTip(GameTooltip) end end)
+  -- feedback: the site can't open from the game, so the address sits in a box ready to copy
+  local shape = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  shape:SetPoint("BOTTOMLEFT", 16, 120)
+  shape:SetText(GOLD .. "Help shape ForeverArtisan:|r")
+  local site = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+  site:SetSize(130, 20); site:SetPoint("LEFT", shape, "RIGHT", 12, 0)
+  site:SetAutoFocus(false); site:SetText(FA.WEBSITE)
+  site:SetScript("OnTextChanged", function(self, user) if user then self:SetText(FA.WEBSITE); self:HighlightText() end end)
+  site:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+  site:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  site:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+  local copy = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  copy:SetPoint("LEFT", site, "RIGHT", 8, 0); copy:SetText("click, Ctrl+C")
+  FA.UI.Tip(site, function()
+    GameTooltip:AddLine("Help shape ForeverArtisan")
+    GameTooltip:AddLine("Ideas, comments and feature requests go through the site. Copy the address, then paste it in your browser.", 1, 1, 1, true)
+  end)
+  panel.site = site
+
+  panel.contacts = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  panel.contacts:SetPoint("BOTTOMLEFT", 16, 76); panel.contacts:SetWidth(428); panel.contacts:SetJustifyH("LEFT")
   panel.plates = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
   panel.plates:SetSize(150, 24)
   panel.plates:SetPoint("BOTTOMLEFT", 152, 12)
@@ -424,6 +542,10 @@ local NEWS = {
     .. "No other addon needed (it remembers Auction House prices you see); uses Auctionator too if you have it." },
   { "0.9.13", "Plans include recipes you can still train, with a \"Train now\" line and the cost. They pick the cheaper "
     .. "recipe when two are close. Drag the window's corner to make it taller; long lists scroll." },
+  { "0.9.14", "Auction House prices on item tooltips (Auctionator users keep theirs). Click a Train line or a material "
+    .. "on a shopping list for a waypoint to the trainer or vendor. \"Dropped by\" now works with auto loot." },
+  { "0.9.15", "Recipe tooltips show what a craft is worth: materials, sale price and profit after the Auction House cut. "
+    .. "Profession gear: the Fishing tab shows your pole's bonus and line, and gathering tabs point out better gear in your bags." },
 }
 
 local function verNum(v)
@@ -507,6 +629,7 @@ local function help()
   print("  /fa new  - what's new in recent releases")
   print("  /fa nameplates  - turn on friendly NPC nameplates (job titles in town need them)")
   print("  /fa titles on | off | auto  - job titles under NPC names (auto leaves them to Plater and other nameplate addons)")
+  print("  /fa prices on | off  - Auction House prices on item tooltips (off while Auctionator shows its own)")
   print("  /fa minimap [angle | reset | contacts]  - show/hide or move the minimap buttons")
   if FA.Vendors then print("  /fa <item, vendor or town>  - search your Trade Contacts") end
   print("  /fa enable <module>  |  /fa disable <module>")
@@ -561,6 +684,14 @@ SlashCmdList.FOREVERARTISAN = function(msg)
       if not FA.FriendlyPlatesOn() then print(PREFIX .. FA.PLATES_OFF_LINE) end
     end
     if panel and panel:IsShown() then refreshPanel() end
+  elseif lower == "prices" or lower == "price" then
+    local r = (rest or ""):lower()
+    ForeverArtisanSettings = ForeverArtisanSettings or {}
+    if r == "on" then ForeverArtisanSettings.priceTips = nil
+    elseif r == "off" then ForeverArtisanSettings.priceTips = false end
+    print(PREFIX .. "Auction House prices on item tooltips: " .. (FA.PriceTipsOn and FA.PriceTipsOn() and "on" or "off")
+      .. ((type(_G.Auctionator) == "table" and _G.Auctionator.API) and " (Auctionator shows its own, so ForeverArtisan stays quiet)" or "")
+      .. ". /fa prices on | off")
   elseif lower == "help" then
     help()
   elseif lower == "modules" then
@@ -568,6 +699,7 @@ SlashCmdList.FOREVERARTISAN = function(msg)
   elseif lower == "enable" or lower == "disable" then
     local m = find(rest)
     if not m then print(PREFIX .. "no module called '" .. rest .. "'. /fa help lists them.") return end
+    if lower == "disable" and m.key == "contacts" then confirmContactsOff(m, refreshPanel) return end
     setEnabled(m, lower == "enable")
     refreshPanel()
   elseif lower == "search" then

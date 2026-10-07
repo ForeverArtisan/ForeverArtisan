@@ -68,6 +68,12 @@ Look for overlapping text, rows running off the edge, and anything cut off.
 - [ ] Cheaper way up: with prices on file, First Aid to 75 keeps Linen Bandage while it's nearly as likely to skill up and cheaper than potions; after leveling with the window open, recipes you saw orange stay orange in the plan up to that skill
 - [ ] Training lines: "Train now: ..." lists what your skill allows with the total, hover shows the trainer; later ones read "at N" in skill order
 - [ ] Taller window: drag the corner of a crafting window down, Progress shows more plan and shopping rows, /reload keeps the height; mouse wheel scrolls both lists
+- [ ] Tooltip prices: without Auctionator, search an item at the AH, then hover it in your bags: one ForeverArtisan line with the price and "seen today"; `/fa prices off` hides it; with Auctionator on, no ForeverArtisan price line
+- [ ] Trainer waypoint: click "Train now" or an "at N" Train line on the shopping list; a TomTom arrow or map pin goes to the trainer
+- [ ] Vendor waypoint: away from the AH, click Empty Vial on a shopping list: arrow to the vendor; clear the TomTom arrow and click again: it comes back
+- [ ] Craft value: hover a recipe you have prices for; the tooltip shows materials, Auction House and vendor prices, and a profit or leveling-cost line
+- [ ] Profession gear (full restart, new file): Fishing tab pole line shows +bonus and the fishing line; a better pole in bags shows "usable at N"; a fishing line in bags shows until one is on the pole; Herbalism/Mining/Skinning show a gear line; the cosmetic hat never shows
+- [ ] Dropped by (auto loot on): kill and loot a mob that drops a material (bat wing, boar meat); hover it: "Dropped by <mob>, <zone>"; skinning that mob doesn't add a Dropped by line for the leather
 - [ ] Prices: without Auctionator, search an item at the AH and the crafting shopping list shows its price, the total and "from today"; clicking a row at the AH fills the search box only; with Auctionator its prices show; a cheaper Trade Contacts vendor wins
 - [ ] Names in town: with friendly NPC nameplates off, `/fa` and the Search tab say so and "Turn on nameplates" turns them on; titles show under NPC names; `/fa titles off` hides only the titles; nothing changes nameplate settings on its own
 - [ ] With Plater (or another nameplate addon) on: no ForeverArtisan titles, the `/fa` line names the addon, Trade Contacts still notes NPCs; `/fa titles on` adds ours, `/fa titles auto` goes back

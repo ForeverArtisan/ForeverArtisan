@@ -245,13 +245,38 @@ local function BuildFishingPage(p)
   p.swapKeyBtn = KeyButton(p, 244, -368, "swapKey", ns.UpdateSwapKey, 120)
   local gh = Text(p, "GameFontDisableSmall", "TOPLEFT", 176, -396); gh:SetWidth(270)
   gh:SetText("Toggles pole <-> weapons, even in combat. Empty slots use what you last wore. The fishing key also grabs your weapons once combat starts.")
+
+  -- profession gear from your bags: a better pole, a fishing line to put on (hover for all)
+  p.gearHover = CreateFrame("Frame", nil, p); p.gearHover:SetPoint("TOPLEFT", 20, -446); p.gearHover:SetSize(430, 32)
+  p.gear = Text(p.gearHover, "GameFontHighlightSmall", "TOPLEFT", 0, 0); p.gear:SetWidth(430); p.gear:SetJustifyH("LEFT")
+  K.Tip(p.gearHover, function()
+    GameTooltip:AddLine("Fishing gear")
+    for _, l in ipairs(ForeverArtisan.GearLines and ForeverArtisan.GearLines("Fishing") or {}) do GameTooltip:AddLine(l, 1, 1, 1, true) end
+    GameTooltip:AddLine("Read from your gear and bags. ForeverArtisan never equips anything for you.", 0.6, 0.6, 0.6, true)
+  end)
 end
 
 local function RefreshFishingPage(p)
   local s = S()
   local left, pole = ns.LureLeft(), ns.PoleEquipped()
   local lureTxt = left > 0 and ((left > 60 and GREEN or YELLOW) .. Clock(left) .. "|r") or (RED .. "none|r")
-  p.s1:SetText(("Pole: %s     Lure on pole: %s"):format(pole and (GREEN .. "equipped|r") or (GRAY .. "not equipped|r"), lureTxt))
+  -- the pole's +Fishing and its line, read from the tooltip
+  local g = ForeverArtisan.GearFor and ForeverArtisan.GearFor("Fishing")
+  local poleTxt = pole and (GREEN .. "equipped|r") or (GRAY .. "not equipped|r")
+  if pole and g then
+    local bits = {}
+    if g.bonus and g.bonus > 0 then bits[#bits + 1] = "+" .. g.bonus end
+    if g.line then bits[#bits + 1] = g.line end
+    if #bits > 0 then poleTxt = poleTxt .. GRAY .. " (" .. table.concat(bits, ", ") .. ")|r" end
+  end
+  p.s1:SetText(("Pole: %s     Lure on pole: %s"):format(poleTxt, lureTxt))
+  -- bag reminders only (what you wear is in the pole line)
+  local bagLines = {}
+  for _, l in ipairs(ForeverArtisan.GearLines and ForeverArtisan.GearLines("Fishing") or {}) do
+    if l:find("In your bags", 1, true) then bagLines[#bagLines + 1] = l end
+  end
+  p.gear:SetText(table.concat(bagLines, "\n", 1, math.min(2, #bagLines)))
+  p.gearHover:SetShown(#bagLines > 0)
   local i = ns.SkillInfo()
   p.s2:SetText(("Fishing skill: %s%s%s"):format(
     i.rank and (i.rank .. (i.max and (" / " .. i.max) or ""))

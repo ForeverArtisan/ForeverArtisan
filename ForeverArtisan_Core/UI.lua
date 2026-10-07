@@ -472,6 +472,8 @@ function UI.Kit(ns, view)
     local rowW = (r.GetWidth and r:GetWidth()) or 0
     if not rowW or rowW <= 0 then return end
     local avail = rowW - 28 - 10 - ((r.act and r.act.IsShown and r.act:IsShown()) and ((r.act:GetWidth() or 0) + 8) or 0)
+    -- d.tail (a price) always shows in full; the detail text gives way instead
+    if r.tail and r.tail:IsShown() then avail = avail - ((r.tail.GetStringWidth and r.tail:GetStringWidth()) or 0) - 6 end
     r.right:SetWidth(0)
     local rw = (r.right.GetStringWidth and r.right:GetStringWidth()) or 0
     local maxRight = math.floor(avail * 0.6)
@@ -503,6 +505,19 @@ function UI.Kit(ns, view)
             r.right:SetPoint("RIGHT", r.edit, "LEFT", -8, 0)
           else
             r.edit:Hide()
+            if r.act then r.right:SetPoint("RIGHT", r.act, "LEFT", -8, 0) else r.right:SetPoint("RIGHT", r, "RIGHT", -6, 0) end
+          end
+        end
+        if not r.edit and (d.tail or r.tail) then
+          -- a tail (like a price) sits at the far right and never gets cut off
+          if not r.tail then r.tail = UI.Text(r, "GameFontHighlightSmall", "RIGHT", -6, 0, r, "RIGHT"); r.tail:SetJustifyH("RIGHT") end
+          r.tail:ClearAllPoints(); r.right:ClearAllPoints()
+          if r.act then r.tail:SetPoint("RIGHT", r.act, "LEFT", -8, 0) else r.tail:SetPoint("RIGHT", r, "RIGHT", -6, 0) end
+          if d.tail then
+            r.tail:SetText(d.tail); r.tail:Show()
+            r.right:SetPoint("RIGHT", r.tail, "LEFT", -6, 0)
+          else
+            r.tail:Hide()
             if r.act then r.right:SetPoint("RIGHT", r.act, "LEFT", -8, 0) else r.right:SetPoint("RIGHT", r, "RIGHT", -6, 0) end
           end
         end

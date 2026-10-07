@@ -437,6 +437,8 @@ function ns.SourceFor(id, name)
   if drop then return drop end
   local class, sub = ItemKind(id)
   name = name or ""
+  local herbAt = ForeverArtisan.HerbSkill and ForeverArtisan.HerbSkill(id)
+  if herbAt then return ("Herb: gather it (Herbalism %d), or the Auction House. It's not in your Herbalism log yet."):format(herbAt) end
   if (class == 7 and sub == 9) then
     return "Herb: not in your Herbalism log yet. Gather it or check the Auction House."
   end

@@ -47,6 +47,8 @@ for _, h in ipairs(ns.HERBS) do
   ns.herbById[rec.id] = rec
   ns.herbByName[rec.name:lower()] = rec
 end
+-- for crafting shopping lists: the Herbalism skill an herb needs, or nil when it isn't an herb
+ForeverArtisan.HerbSkill = function(id) local h = id and ns.herbById[id]; return h and h.req end
 
 -- Classic gathering colors: orange = always a skill-up, yellow = usually, green = sometimes, gray = never.
 function ns.HerbColor(req, skill)
