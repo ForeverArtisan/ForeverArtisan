@@ -434,11 +434,13 @@ do
   local cns2=loadedFrames["ForeverArtisan_Cooking"].ns
   assert(hns.Skill() and cns2.Skill(), "learned at first")
   local oldProf=GetProfessions
+  local was={} for n,r in pairs(cns2.CharRec().recipes) do was[n]=r.learned end
   GetProfessions=function() return nil,2,nil,4,nil,6 end -- Herbalism and Cooking dropped
   print("UNLEARNED", hns.Skill(), hns.Knows(), cns2.Skill())
   assert(hns.Skill()==nil and not hns.Knows(), "herbalism unlearned")
   assert(cns2.Skill()==nil, "cooking unlearned")
   GetProfessions=oldProf
+  for n,r in pairs(cns2.CharRec().recipes) do r.learned=was[n] end -- a rescan after relearning restores these
   assert(hns.Skill(), "relearned shows again")
 end
 -- one-button fishing: reel-in key = fishing key turns on "same key reels in"
@@ -451,6 +453,90 @@ do
   fns.SetKey("reelKey","")
   assert(st.reelSameKey==false and st.key=="F", "Clear on reel-in turns it off, fishing key kept")
   st.reelSameKey=true
+  -- controller buttons in the key box: PAD1 as the fishing key; a pad button used as Shift is a modifier
+  local oldKey=st.key
+  fns.CaptureKey("swapKey")
+  local cap=_G.ForeverArtisanFishingKeyCapture
+  cap.scripts.OnGamePadButtonDown(cap, "PADDUP")
+  assert(st.swapKey=="PADDUP", "controller button as the swap key: "..tostring(st.swapKey))
+  local oCV, oSh = GetCVar, IsShiftKeyDown
+  GetCVar=function(k) if k=="GamePadEmulateShift" then return "PADLTRIGGER" end return oCV(k) end
+  IsShiftKeyDown=function() return true end
+  fns.CaptureKey("swapKey")
+  cap.scripts.OnGamePadButtonDown(cap, "PADLTRIGGER")
+  assert(st.swapKey=="PADDUP", "the Shift stand-in alone doesn't count")
+  cap.scripts.OnGamePadButtonDown(cap, "PAD2")
+  assert(st.swapKey=="SHIFT-PAD2", "Shift + a controller button: "..tostring(st.swapKey))
+  GetCVar, IsShiftKeyDown = oCV, oSh
+  fns.SetKey("swapKey","") st.key=oldKey
+  -- key bindings that open windows (a controller button can be set in the game's Key Bindings)
+  assert(type(ForeverArtisanTogglePanel)=="function" and type(ForeverArtisanFishingToggle)=="function"
+    and type(ForeverArtisanContactsToggle)=="function", "binding functions exist")
+  assert(BINDING_NAME_FOREVERARTISAN_PANEL:find("^ForeverArtisan:") and BINDING_NAME_FOREVERARTISAN_FISHING_OPEN:find("^ForeverArtisan:")
+    and BINDING_NAME_FOREVERARTISAN_CONTACTS_OPEN:find("^ForeverArtisan:") and BINDING_NAME_FOREVERARTISAN_FISHING_SNAPCAMERA:find("^ForeverArtisan:"),
+    "binding names say ForeverArtisan")
+  ForeverArtisanFishingToggle() ForeverArtisanFishingToggle()
+  ForeverArtisanContactsToggle() ForeverArtisanContactsToggle()
+  ForeverArtisanTogglePanel() ForeverArtisanTogglePanel()
+  for _,b in ipairs({"ForeverArtisan_Core/Bindings.xml","ForeverArtisan_Contacts/Bindings.xml","ForeverArtisan_Fishing/Bindings.xml"}) do
+    local fh=assert(io.open((arg[1] or ".").."/"..b)); local x=fh:read("*a"); fh:close()
+    for fn in x:gmatch("%s([%w_]+)%(%)") do assert(type(_G[fn])=="function", b.." calls missing "..fn) end
+  end
+  -- reel-in on a controller: settings reapplied at cast if missing, bobber picked up after a late landing
+  do
+    local lf=loadedFrames["ForeverArtisan_Fishing"]
+    local evf
+    for i=lf.first,lf.last do local fr=frames[i]; if fr.scripts.OnEvent and not evf then
+      local ok=pcall(fr.scripts.OnEvent, fr, "UNIT_SPELLCAST_CHANNEL_STOP", "player", nil, 7620)
+      if ok then evf=fr end end end
+    local oInv, oII, oCI3, oT, oUE, oUG, oCV, oSCV = GetInventoryItemID, GetItemInfoInstant, C_Item, C_Timer, UnitExists, UnitGUID, GetCVar, SetCVar
+    local cv={SoftTargetInteract="0", SoftTargetInteractArc="0", SoftTargetInteractRange="10"}
+    GetCVar=function(k) if cv[k] then return cv[k] end return oCV(k) end
+    SetCVar=function(k,v) if cv[k] then cv[k]=v end end
+    GetInventoryItemID=function(_,slot) if slot==16 then return 6256 end end
+    local inst=function() return 6256,"","","INVTYPE_2HWEAPON",1,2,20 end
+    GetItemInfoInstant=inst C_Item={GetItemInfoInstant=inst, GetItemInfo=function() end}
+    local queue={}
+    -- short timers run on tick(); the 30-second safety timer never comes due in this test
+    C_Timer={After=function(d,fn) if d<10 then queue[#queue+1]=fn end end, NewTicker=function() return {Cancel=function() end} end}
+    local soft=false
+    UnitExists=function(u) if u=="softinteract" then return soft end return oUE and oUE(u) end
+    UnitGUID=function(u) if u=="softinteract" then return soft and "GameObject-0-1-2-3-35591-9" or nil end return oUG and oUG(u) end
+    local oUN=UnitName
+    UnitName=function(u) if u=="softinteract" then return soft and "Fishing Bobber" or nil end return oUN(u) end
+    fns.SetKey("key","PAD1") fns.SetKey("reelKey","PAD1") ForeverArtisanFishingDB.settings.padRecast=true
+    cv.SoftTargetInteract, cv.SoftTargetInteractArc, cv.SoftTargetInteractRange = "0", "0", "10"  -- as if they never went on at login
+    assert(fns.EnvMissing(), "settings off at login are noticed")
+    evf.scripts.OnEvent(evf, "UNIT_SPELLCAST_CHANNEL_START", "player", nil, 7620)
+    assert(cv.SoftTargetInteract=="3", "cast turns soft targeting on: "..cv.SoftTargetInteract)
+    assert(fns.ReelMode()=="mouseover", "no bobber yet")
+    local function tick() local q=queue; queue={}; for _,fn in ipairs(q) do fn() end end
+    tick() tick() assert(fns.ReelMode()=="mouseover", "still nothing targeted")
+    -- a cast with nothing targeted for about 2 seconds is a miss; on a controller the key casts again
+    local dg=ForeverArtisanFishingDB.diag or {}
+    local none0=dg.softNone or 0
+    for _=1,8 do tick() end
+    assert((ForeverArtisanFishingDB.diag.softNone or 0)==none0+1, "a missed cast is counted")
+    local wf=_G.ForeverArtisanFishingFarWarn
+    assert(wf and wf._shown and wf.text._text:find("out of reach"), "controller miss shows the on-screen warning")
+    assert(fns.ReelMode()=="recast", "controller key casts again on a far bobber: "..fns.ReelMode())
+    -- the bobber turns up later after all: back to reeling in
+    soft=true tick() tick()
+    assert(fns.ReelMode()=="target", "a late bobber still switches to reel-in")
+    assert(not wf._shown, "the warning clears when the bobber turns up late")
+    soft=false
+    evf.scripts.OnEvent(evf, "UNIT_SPELLCAST_CHANNEL_STOP", "player", nil, 7620)
+    evf.scripts.OnEvent(evf, "UNIT_SPELLCAST_CHANNEL_START", "player", nil, 7620)
+    tick() tick()
+    soft=true tick() tick()
+    assert(fns.ReelMode()=="target", "a late bobber is picked up: "..fns.ReelMode())
+    evf.scripts.OnEvent(evf, "UNIT_SPELLCAST_CHANNEL_STOP", "player", nil, 7620)
+    GetInventoryItemID, GetItemInfoInstant, C_Item, C_Timer, UnitExists, UnitGUID, GetCVar, SetCVar, UnitName = oInv, oII, oCI3, oT, oUE, oUG, oCV, oSCV, oUN
+    ForeverArtisanFishingDB.settings.padRecast=nil
+    fns.RestoreEnv() fns.UpdateEnv()
+    print("CONTROLLER REEL ok")
+  end
+  print("CONTROLLER KEYS ok")
 end
 -- the four new crafting modules: Tailoring makes its own bolts, Blacksmithing points ore to the Mining log,
 -- Enchanting reads the old Craft window (Classic) and logs casts
@@ -603,6 +689,7 @@ do
   assert(tag=="quest" and lines[1]:find("Quest reward: Kaldorei Spider Kabob"), "quest reward")
   GetTitleText,GetNumQuestRewards,GetNumQuestChoices,GetQuestItemLink=nil
   -- the Recipe book renders unlearned recipes with a source tag
+  local oldGP=GetProfessions
   run("FATAILOR",""); run("FACOOK",""); run("FAAID","")
   loadedFrames["ForeverArtisan_Tailoring"].ns.OnChange(); loadedFrames["ForeverArtisan_Cooking"].ns.OnChange()
   for _,name in ipairs({"FACOOK","FATAILOR"}) do end
@@ -885,7 +972,7 @@ do
   fire("PLAYER_LOGIN")
   local txt=table.concat(out,"\n")
   print=P
-  assert(txt:find("What's new") and txt:find("tooltips") and txt:find("train") and txt:find("worth") and not txt:find("Mining"), "update prints the last three releases: "..txt)
+  assert(txt:find("What's new") and txt:find("tooltips") and txt:find("worth") and txt:find("Best crafts") and not txt:find("Drag the window"), "update prints the last three releases: "..txt)
   assert(txt:find("foreverartisan.app/bug", 1, true), "news ends with the bug line")
   assert(ForeverArtisanSettings.lastVersion==ForeverArtisan.Version(), "remembers the new version")
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
@@ -895,7 +982,7 @@ do
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
   run("FOREVERARTISAN","new")
   print=P
-  assert(table.concat(out,"\n"):find("0.9.15"), "/fa new prints it")
+  assert(table.concat(out,"\n"):find("0.9.16"), "/fa new prints it")
   print("NEWS ok")
 end
 -- hidden ("secret") values: events carrying them are skipped, their errors dropped, other errors still raised
@@ -1070,6 +1157,19 @@ do
   C_AuctionHouse={GetBrowseResults=function() return {{itemKey={itemID=2589},minPrice=40}} end}
   fire("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
   assert(FA.ItemPrice(2589)==40, "browse results remembered")
+  -- listen test: counts what it heard, including a full-scan (replicate) list read in slices
+  C_AuctionHouse={GetNumReplicateItems=function() return 2500 end,
+    GetReplicateItemInfo=function(i) return "x",nil,3,1,true,1,0,0,0,100,0,nil,nil,"o",nil,0,50000+(i%1200),true end}
+  fire("REPLICATE_ITEM_LIST_UPDATE")
+  assert(FA.AHTest.replicate==2500 and FA.AHTest.replicateRead==2500, "full scan read: "..FA.AHTest.replicateRead)
+  assert(FA.AHTest.nIds>=1200 and FA.AHTest.withQty>=1200, "distinct items heard: "..FA.AHTest.nIds)
+  local outT={} local P0=print print=function(...) outT[#outT+1]=table.concat({...}," ") end
+  run("FOREVERARTISAN","ahtest") print=P0
+  local rep=table.concat(outT,"\n")
+  assert(rep:find("REPLICATE_ITEM_LIST_UPDATE x1") and rep:find("full%-scan list: 2500"), "report: "..rep)
+  run("FOREVERARTISAN","ahtest reset")
+  assert(FA.AHTest.nIds==0, "reset")
+  print("AH LISTEN TEST ok")
   C_AuctionHouse=nil GetNumAuctionItems=nil GetAuctionItemInfo=nil
   -- Auctionator, when installed, is used first
   Auctionator={API={v1={GetAuctionPriceByItemID=function(_,id) if id==4306 then return 120 end end,
@@ -1467,6 +1567,163 @@ do
   assert(pv:find("Costs about 42c more than it sells for %(to a vendor%)"), "vendor beats the house after its cut: "..pv)
   _G.Auctionator,GetItemInfo=oA,oGI
   print("GEAR AND VALUE ok")
+end
+-- Best crafts: ranking, confidence from price history, goblin houses kept apart, the tab itself
+do
+  local FA=ForeverArtisan
+  local oA=_G.Auctionator _G.Auctionator=nil
+  FA.WatchItems({991001,991002,991003,991004})
+  FA.NotePrice(991001, 10) FA.NotePrice(991002, 100) FA.NotePrice(991003, 300)
+  local oZ=GetMinimapZoneText
+  -- today's listings at your faction house: plenty listed, steady
+  GetMinimapZoneText=function() return "Valley of Strength" end
+  FA.NoteMarket(991002, 100, 40) FA.NoteMarket(991003, 300, 2)
+  -- Booty Bay sees a much higher price: stays in its own memory
+  GetMinimapZoneText=function() return "Booty Bay" end
+  FA.NotePrice(991002, 5000) FA.NoteMarket(991002, 5000, 1)
+  GetMinimapZoneText=oZ
+  assert(FA.AHPrice(991002)==100, "goblin house price doesn't leak into your faction's: "..tostring(FA.AHPrice(991002)))
+  assert(FA.PriceConfidence(991002).level=="good", "40 listed today is steady")
+  assert(FA.PriceConfidence(991003).level=="shaky", "2 listed is shaky")
+  local recipes={
+    A={name="Cheap Thing", learned=true, itemId=991002, reagents={{id=991001,n=2}}},  -- 95-20 = +75
+    B={name="Pricey Thing", learned=true, itemId=991003, reagents={{id=991001,n=5}}}, -- 285-50 = +235
+    C={name="Loser", learned=true, itemId=991001, reagents={{id=991003,n=1}}},         -- sells 9, costs 300
+    D={name="Unknown", learned=false, itemId=991004, reagents={{id=991001,n=1}}},
+  }
+  recipes.E={name="Basic Campfire", learned=true, itemId=991002, reagents={{id=991001,n=1}}} -- would earn, but left out
+  local chance={["Cheap Thing"]=1, ["Loser"]=0.5, ["Basic Campfire"]=1}
+  local rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "profit")
+  assert(rows[1].r.name=="Pricey Thing" and rows[2].r.name=="Cheap Thing" and rows[3].r.name=="Loser" and #rows==3, "most profit first")
+  rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "level")
+  assert(#rows==2 and rows[1].r.name=="Cheap Thing" and rows[1].perPoint<0, "cheapest to level: one that earns money first")
+  rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "both")
+  assert(#rows==1 and rows[1].r.name=="Cheap Thing", "both: skill-ups that pay")
+  local src=table.concat(FA.PriceSourceLines(),"\n")
+  assert(src:find("own Auction House visits") and src:find("Works best with Auctionator"), "source line without Auctionator: "..src)
+  _G.Auctionator={API={v1={}}} AUCTIONATOR_SAVEDVARS={TimeOfLastBrowseScan=time()}
+  src=table.concat(FA.PriceSourceLines(),"\n")
+  assert(src:find("Auctionator, full scan today") and not src:find("Works best"), "source line with Auctionator: "..src)
+  _G.Auctionator=oA AUCTIONATOR_SAVEDVARS=nil
+  -- the tab: open Cooking, click Best crafts, switch modes
+  local ck=loadedFrames["ForeverArtisan_Cooking"].ns
+  local c=ck.CharRec()
+  c.recipes["Cheap Thing"]=recipes.A c.recipes["Pricey Thing"]=recipes.B
+  for _,f in pairs(frames) do if f._text=="Best crafts" and f.scripts.OnClick then f.scripts.OnClick(f) end end
+  assert(ck.lastBest and #ck.lastBest>=2, "best tab rendered: "..tostring(ck.lastBest and #ck.lastBest))
+  assert(ck.lastBest[1].left:find("Pricey Thing") and ck.lastBest[1].tail:find("Indicator"), "row with a confidence dot")
+  for _,f in pairs(frames) do if f._text=="Cheapest to level" and f.scripts.OnClick then f.scripts.OnClick(f) end end
+  assert(ck.DB().settings.bestMode=="level", "mode remembered")
+  assert(FA.Money(-30)=="-30c" and FA.Money(-12345)=="-1g 23s", "losses read as losses: "..FA.Money(-30))
+  ck.DB().settings.bestMode=nil
+  c.recipes["Cheap Thing"]=nil c.recipes["Pricey Thing"]=nil
+  -- Auctionator after a Booty Bay scan: its price is the goblin one, so your own house's wins
+  do
+    local oA2, oZ2 = _G.Auctionator, GetMinimapZoneText
+    local aucP = {[991005]=2500, [991006]=900, [991007]=300}
+    _G.Auctionator={API={v1={GetAuctionPriceByItemID=function(_,id) return aucP[id] end, GetAuctionAgeByItemID=function() return 0 end}}}
+    GetMinimapZoneText=function() return "Undercity" end FA.NotePrice(991005, 450)
+    GetMinimapZoneText=function() return "Booty Bay" end
+    local oT=time; time=function() return oT()+5 end
+    FA.NotePrice(991005, 2500) FA.NotePrice(991007, 300)
+    time=oT GetMinimapZoneText=oZ2
+    local p, src = FA.AHPrice(991005)
+    assert(p==450, "goblin scan doesn't change your house's price: "..tostring(p).." "..tostring(src))
+    assert(FA.AHPrice(991006)==900, "items the goblin house didn't see still use Auctionator")
+    assert(FA.AHPrice(991007)==nil, "seen only at a goblin house: no price for your own")
+    _G.Auctionator=oA2
+  end
+  -- where to sell: the goblin house pays clearly more (after 15% vs 5%), with a steady price
+  do
+    local oZ3 = GetMinimapZoneText
+    FA.WatchItems({991010, 991011, 991012})
+    GetMinimapZoneText=function() return "Undercity" end
+    FA.NotePrice(991010, 500) FA.NoteMarket(991010, 500, 12)   -- home 4s 75c after cut
+    FA.NotePrice(991011, 500) FA.NoteMarket(991011, 500, 12)
+    FA.NotePrice(991012, 3000) FA.NoteMarket(991012, 3000, 12)
+    GetMinimapZoneText=function() return "Booty Bay" end
+    FA.NotePrice(991010, 2500) FA.NoteMarket(991010, 2500, 6)  -- goblin 21s 25c after cut: wins
+    FA.NotePrice(991011, 2500) FA.NoteMarket(991011, 2500, 1)  -- only 1 listed: shaky, no tag
+    FA.NotePrice(991012, 1000) FA.NoteMarket(991012, 1000, 8)  -- home pays more: tag only at a goblin house
+    assert(FA.HouseCompare(991012).better=="home", "at Booty Bay: your own house pays more")
+    assert(FA.HouseCompare(991010).better==nil, "at Booty Bay: no goblin tag, you're already there")
+    GetMinimapZoneText=function() return "Undercity" end
+    local c = FA.HouseCompare(991010)  -- no item info: a stack of 1, so the full 30c postage
+    assert(c and c.better=="goblin" and c.homeNet==475 and c.gobNet==2095 and c.postage==30, "goblin wins after postage: "..tostring(c and c.gobNet))
+    assert(FA.HouseTag(c)=="better at goblin AH: +16s 20c", FA.HouseTag(c))
+    local oGI, oCI=GetItemInfo, C_Item
+    C_Item=nil GetItemInfo=function(id) if id==991010 then return "Goblin Thing",nil,1,1,1,"Consumable","Food",20 end return oGI(id) end
+    assert(FA.Postage(991010)==2 and FA.HouseCompare(991010).gobNet==2123, "a stack of 20 shares one 30c slot")
+    GetItemInfo, C_Item = oGI, oCI
+    -- an item whose details haven't arrived: asked for, and lists redraw when they come in
+    local asked, redrawn = nil, 0
+    local oCI2, oPC = C_Item, FA.PricesChanged
+    C_Item={GetItemInfo=function() return nil end, RequestLoadItemDataByID=function(id) asked=id end}
+    FA.PricesChanged=function() redrawn=redrawn+1 end
+    FA.WaitForItem(991099)
+    assert(asked==991099, "asked the game for the item")
+    FA.OnItemInfo(991098) assert(redrawn==0, "items nobody waited on don't redraw")
+    FA.OnItemInfo(991099)
+    assert(redrawn==1, "redraw once it arrives: "..redrawn)
+    C_Item, FA.PricesChanged = oCI2, oPC
+    assert(FA.HouseCompare(991011).better==nil, "a shaky goblin price doesn't win")
+    assert(FA.HouseCompare(991012).better==nil, "at home, no tag for your own house")
+    local lines = table.concat(FA.HouseLines(991010), "\n")
+    assert(lines:find("Where to sell") and lines:find("Goblin Auction House: 25s each, about 20s 95c a craft after its 15%% cut and postage")
+      and lines:find("pays about 16s 20c more") and lines:find("Postage to a banker there: 30c"), lines)
+    local worth = table.concat(FA.CraftValueLines({name="Goblin Thing", itemId=991010, reagents={{id=991001,n=1}}}), "\n")
+    assert(worth:find("Where to sell"), "What it's worth includes both houses: "..worth)
+    assert(#FA.HouseLines(991001)==0, "no goblin price: no block")
+    -- the Best crafts row shows the tag in place of "sells"
+    local ck=loadedFrames["ForeverArtisan_Cooking"].ns
+    local cr=ck.CharRec()
+    cr.recipes["Goblin Thing"]={name="Goblin Thing", learned=true, itemId=991010, reagents={{id=991001,n=1}}}
+    ck.DB().settings.bestMode="profit"
+    for _,f in pairs(frames) do if f._text=="Best crafts" and f.scripts.OnClick then f.scripts.OnClick(f) end end
+    local found
+    for _,d in ipairs(ck.lastBest or {}) do if d.left:find("Goblin Thing") then found=d end end
+    assert(found and found.right:find("better at goblin AH: %+16s 20c") and not found.right:find("sells"), "row tag: "..tostring(found and found.right))
+    local _, nWhere = found.tip:gsub("Where to sell", "")
+    assert(nWhere==1, "row tooltip shows Where to sell once: "..nWhere)
+    cr.recipes["Goblin Thing"]=nil ck.DB().settings.bestMode=nil
+    GetMinimapZoneText=oZ3
+    print("WHERE TO SELL ok")
+  end
+  -- the Modules panel finds Cooking when the Archaeology and Fishing slots are empty (Styzza Artisan)
+  local oP, oN = GetProfessions, GetNumSkillLines
+  GetProfessions=function() return 7,8,nil,nil,5 end GetNumSkillLines=function() return 0 end
+  local known=FA.LearnedTrades()
+  assert(known.cooking and known.alchemy and known.leatherworking, "cooking after empty slots")
+  GetProfessions, GetNumSkillLines = oP, oN
+  print("BEST CRAFTS ok")
+end
+-- Forever names: first + last. Two "Styzza"s on one realm keep separate records.
+do
+  local FA=ForeverArtisan
+  local oG,oN,oR=UnitGUID,UnitName,GetRealmName
+  UnitName=function() return "Styzza" end GetRealmName=function() return "PvE" end
+  local t={ ["Styzza-PvE"]={ skill=50 } }
+  UnitGUID=function() return "Player-1234-0A1B2C3D" end
+  local k1=FA.CharKey(t)
+  assert(k1=="Styzza-PvE-0A1B2C3D" and t[k1].skill==50 and t["Styzza-PvE"]==nil, "first one adopts the old record: "..k1)
+  UnitGUID=function() return "Player-1234-0E0F1011" end
+  local k2=FA.CharKey(t)
+  assert(k2~=k1 and t[k2]==nil, "the second Styzza starts fresh")
+  UnitGUID=nil
+  assert(FA.CharKey({})=="Styzza-PvE", "no game ID yet: plain name-realm")
+  UnitGUID,UnitName,GetRealmName=oG,oN,oR
+  -- a character without Cooking doesn't show another character's learned recipes
+  local ck=loadedFrames["ForeverArtisan_Cooking"].ns
+  local rec=ck.CharRec()
+  rec.recipes["Old Thing"]={name="Old Thing", learned=true, itemId=1}
+  local oGP,oGS,oGN=GetProfessions,GetSkillLineInfo,GetNumSkillLines
+  GetProfessions=function() return 1,nil,nil,nil,nil end GetProfessionInfo=GetProfessionInfo or function() end
+  GetNumSkillLines=function() return 0 end
+  local skillAPI=C_TradeSkillUI C_TradeSkillUI=nil
+  assert(ck.Skill()==nil and rec.recipes["Old Thing"].learned==false, "learned flags from another character cleared")
+  rec.recipes["Old Thing"]=nil
+  GetProfessions,GetSkillLineInfo,GetNumSkillLines,C_TradeSkillUI=oGP,oGS,oGN,skillAPI
+  print("CHAR KEY ok")
 end
 print("CRAFTS OK")
 print("SUITE OK")

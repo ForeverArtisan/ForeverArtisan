@@ -565,6 +565,8 @@ function ns.ToggleWindow()
   if not f then Build() end
   if f:IsShown() then f:Hide() else f:Show(); ShowTab(view.tab) end
 end
+function ForeverArtisanContactsToggle() ns.ToggleWindow() end   -- for the key binding
+BINDING_NAME_FOREVERARTISAN_CONTACTS_OPEN = "ForeverArtisan: open Trade Contacts"
 
 function ns.OpenSearch(q)
   if not ns.DB() then return end

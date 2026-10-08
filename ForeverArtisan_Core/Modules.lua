@@ -78,6 +78,10 @@ local function comingSoon()
   return out
 end
 
+local SKILL_LINE_NAMES = { [171] = "alchemy", [164] = "blacksmithing", [185] = "cooking", [333] = "enchanting",
+  [202] = "engineering", [129] = "first aid", [356] = "fishing", [182] = "herbalism", [165] = "leatherworking",
+  [186] = "mining", [393] = "skinning", [197] = "tailoring" }
+
 -- The professions this character knows: lowercase name -> { rank, max }. Read from the skill list,
 -- so it works with every module on or off.
 local function learnedTrades()
@@ -96,14 +100,24 @@ local function learnedTrades()
   if GetProfessions and GetProfessionInfo then
     local ok, a, b, c, d, e, f = pcall(GetProfessions)
     if ok then
-      for _, idx in ipairs({ a, b, c, d, e, f }) do
-        local ok2, name, _, rank, maxr = pcall(GetProfessionInfo, idx)
-        if ok2 then add(name, rank, maxr) end
+      -- pairs: a slot you lack (Archaeology, Fishing) is nil, and ipairs would stop there
+      for _, idx in pairs({ a, b, c, d, e, f }) do
+        local ok2, name, _, rank, maxr, _, _, line = pcall(GetProfessionInfo, idx)
+        if ok2 then
+          add(name, rank, maxr)
+          -- the skill line ID names it too, in case the game's name differs from the module's
+          local byLine = SKILL_LINE_NAMES[tonumber(line) or 0]
+          if byLine and not (FA.IsSecret and (FA.IsSecret(rank) or FA.IsSecret(maxr))) then
+            out[byLine] = out[byLine] or { rank = tonumber(rank), max = tonumber(maxr) }
+          end
+        end
       end
     end
   end
   return out
 end
+
+FA.LearnedTrades = learnedTrades -- for the tests
 
 local function scan()
   wipe(modules)
@@ -470,9 +484,9 @@ local welcomeFrame
 local WELCOME_TEXT =
   "Like many players, I'm treating Forever as a chance to rediscover the game. The magic of WoW "
   .. "is that first journey, and this addon is built to support that experience.\n\n"
-  .. "While ForeverArtisan lists every recipe, where to get each one comes from your own play. It remembers "
-  .. "where you've been, not where you're going: the trainers you meet, what you gather, the recipes "
-  .. "you find. Want to look ahead? Crowdsourced sites have that covered.\n\n"
+  .. "While ForeverArtisan lists every recipe, where to get each one comes from your own play. It learns "
+  .. "from where you've been (the trainers you meet, what you gather, the recipes you find) to help you "
+  .. "get where you're going. Want to look further ahead on your journey? Crowdsourced sites have that covered.\n\n"
   .. "Feedback and ideas:"
 
 local function showWelcome()
@@ -546,6 +560,9 @@ local NEWS = {
     .. "on a shopping list for a waypoint to the trainer or vendor. \"Dropped by\" now works with auto loot." },
   { "0.9.15", "Recipe tooltips show what a craft is worth: materials, sale price and profit after the Auction House cut. "
     .. "Profession gear: the Fishing tab shows your pole's bonus and line, and gathering tabs point out better gear in your bags." },
+  { "0.9.16", "Best crafts: a new tab ranks your recipes by profit or cheapest leveling, and says when a goblin Auction House "
+    .. "pays more (works best with Auctionator). Fishing keys take controller buttons, and new key bindings open the panel, "
+    .. "Fishing and Trade Contacts. Characters with the same first name no longer share data." },
 }
 
 local function verNum(v)
@@ -606,7 +623,13 @@ end
 
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
-ev:SetScript("OnEvent", function()
+-- learn or drop a trade with the panel open: move it to the right group right away
+pcall(ev.RegisterEvent, ev, "SKILL_LINES_CHANGED")
+ev:SetScript("OnEvent", function(_, event)
+  if event == "SKILL_LINES_CHANGED" then
+    if panel and panel:IsShown() then pcall(refreshPanel) end
+    return
+  end
   pcall(registerOptions)
   pcall(checkVersions)
   -- the welcome notice, once per account (again when the message changes)
@@ -692,6 +715,8 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     print(PREFIX .. "Auction House prices on item tooltips: " .. (FA.PriceTipsOn and FA.PriceTipsOn() and "on" or "off")
       .. ((type(_G.Auctionator) == "table" and _G.Auctionator.API) and " (Auctionator shows its own, so ForeverArtisan stays quiet)" or "")
       .. ". /fa prices on | off")
+  elseif lower == "ahtest" then
+    if FA.AHTestReport then FA.AHTestReport((rest or ""):lower()) end
   elseif lower == "help" then
     help()
   elseif lower == "modules" then
@@ -729,6 +754,8 @@ end
 ---------------------------------------------------------------- public
 
 FA.modules, FA.open, FA.isEnabled = scan, togglePanel, isEnabled
+function ForeverArtisanTogglePanel() togglePanel() end   -- for the key binding
+BINDING_NAME_FOREVERARTISAN_PANEL = "ForeverArtisan: open the panel (/fa)"
 
 -- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
 ForeverArtisan.GuardEvents(ev)

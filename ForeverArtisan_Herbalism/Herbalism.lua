@@ -48,8 +48,8 @@ ns.Today = Today
 ---------------------------------------------------------------- skill
 -- Saved data is shared by every character on the account, so the skill cache is per character.
 local function CharRec()
-  local key = (UnitName("player") or "?") .. "-" .. ((GetRealmName and GetRealmName()) or "?")
   db.chars = db.chars or {}
+  local key = ForeverArtisan.CharKey(db.chars)
   db.chars[key] = db.chars[key] or {}
   return db.chars[key]
 end

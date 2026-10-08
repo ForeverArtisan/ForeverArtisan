@@ -235,7 +235,7 @@ end
 local function CookingRecipes()
   local cdb = ForeverArtisanCookingDB
   if type(cdb) == "table" and type(cdb.chars) == "table" then
-    local key = (UnitName("player") or "?") .. "-" .. ((GetRealmName and GetRealmName()) or "?")
+    local key = ForeverArtisan.CharKey(cdb.chars)
     local c = cdb.chars[key]
     if c and c.recipes and next(c.recipes) then
       local out = {}

@@ -32,6 +32,23 @@ FA.BUG_LINE = "Seeing an error? Tell us at " .. FA.BUG_URL
 -- skipped, and a hidden-value error inside a handler is dropped quietly. Any other error still shows as usual.
 FA.secretSkips = 0
 function FA.IsSecret(v) return (issecretvalue ~= nil and v ~= nil and issecretvalue(v)) and true or false end
+
+-- Which character this is, for per-character saved data. Forever characters have a first and a
+-- last name, and UnitName gives only the first, so "Styzza-Realm" can be three different characters.
+-- The key adds the end of the character's game ID, which never changes and never repeats.
+-- Pass the table of characters to move an old "name-realm" record to the new key (once).
+function FA.CharKey(t)
+  local name = UnitName and UnitName("player") or "?"
+  local realm = GetRealmName and GetRealmName() or "?"
+  if type(name) ~= "string" or FA.IsSecret(name) then name = "?" end
+  if type(realm) ~= "string" or FA.IsSecret(realm) then realm = "?" end
+  local old = name .. "-" .. realm
+  local guid = UnitGUID and UnitGUID("player")
+  if type(guid) ~= "string" or FA.IsSecret(guid) or guid == "" then return old end
+  local key = old .. "-" .. (guid:match("([^%-]+)$") or guid)
+  if type(t) == "table" and t[key] == nil and t[old] ~= nil then t[key] = t[old]; t[old] = nil end
+  return key
+end
 function FA.AnySecret(...)
   if not issecretvalue then return false end
   for i = 1, select("#", ...) do

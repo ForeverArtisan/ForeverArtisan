@@ -448,14 +448,158 @@ local function RefreshGuidePage(p)
   end
   view.guideOff = math.min(view.guideOff, math.max(0, #data - BOOK_ROWS))
   Fill(p.rows, data, view.guideOff)
-  p.empty:SetText(#data > 0 and "" or (not ns.HasRecipes() and "Open your Cooking window once so I can read your recipes.")
+  p.empty:SetText(#data > 0 and "" or (not ns.Knows() and "This character hasn't learned Cooking.")
+    or (not ns.HasRecipes() and "Open your Cooking window once so I can read your recipes.")
     or ((view.bookShow == "learned") and "You haven't learned any yet. Pick All to see every recipe.")
     or "You know every recipe in the list. Pick All to see them.")
   p.open:ShowIf(ns.Knows() and not ns.HasRecipes())
 end
 
+---------------------------------------------------------------- page 5: Best crafts
+-- Your learned recipes ranked three ways. Prices: Auctionator's scan or your own Auction House
+-- visits; the dot says how much to trust each price. Never searches, posts or buys.
+local BEST_ROWS = 14
+local BEST_MODES = {
+  { "profit", "Most profit", 100, "Recipes you know, ranked by profit per craft after the Auction House's cut." },
+  { "level", "Cheapest to level", 140, "Recipes that still give skill-ups, cheapest per point first." },
+  { "both", "Profit + skill-ups", 140, "Crafts that level you and pay for themselves." },
+}
+local DOT = {
+  good = "|TInterface\\COMMON\\Indicator-Green:14|t",
+  ok = "|TInterface\\COMMON\\Indicator-Yellow:14|t",
+  shaky = "|TInterface\\COMMON\\Indicator-Gray:14|t",
+}
+local CONF_WORD = { good = "steady price", ok = "price looks fair, check it", shaky = "shaky price: old, few listed or swinging" }
+
+local function BestMode() return S().bestMode or "profit" end
+
+local function ConfLines(c)
+  if not c then return "" end
+  local t = { (c.level == "good" and GREEN or c.level == "ok" and YELLOW or GRAY) .. CONF_WORD[c.level] .. "|r" }
+  local bits = {}
+  if c.listed then bits[#bits + 1] = c.listed .. " listed" end
+  if c.age then bits[#bits + 1] = "seen " .. FA.AgeText(c.age) end
+  if c.low and c.high and c.high > c.low then bits[#bits + 1] = "this week " .. FA.Money(c.low) .. " to " .. FA.Money(c.high) end
+  if #bits > 0 then t[#t + 1] = GRAY .. table.concat(bits, "  ·  ") .. "|r" end
+  return table.concat(t, "\n")
+end
+
+local GOLD_TAG = FA.GOLD
+local function BestData()
+  local mode = BestMode()
+  local base, bonus, cap = ns.Skill()
+  local skill = base and (base + (bonus or 0))
+  -- at your rank's cap nothing gives skill-ups until you train the next rank
+  local capped = base and cap and cap > 0 and base >= cap
+  local rows = FA.BestCrafts(ns.CharRec().recipes, function(r) return capped and 0 or ns.Chance(r, skill) end, mode)
+  local data = {}
+  for _, row in ipairs(rows) do
+    local c = row.conf or {}
+    if not (S().bestHideShaky and c.level == "shaky") then
+      local r = row.r
+      local col = ns.ColorFor(r, skill)
+      local right
+      if mode == "level" then
+        right = row.perPoint > 0 and (FA.Money(math.floor(row.perPoint + 0.5)) .. " a point")
+          or (GREEN .. "earns " .. FA.Money(math.floor(-row.perPoint + 0.5)) .. " a point|r")
+      else
+        -- a clearly better house replaces the "sells" price with where to sell
+        local tag = FA.HouseTag and FA.HouseTag(FA.HouseCompare(r.itemId, r.makes))
+        right = (row.profit >= 0 and (GREEN .. "+" .. FA.Money(row.profit)) or (RED .. FA.Money(row.profit))) .. "|r"
+          .. (tag and (GOLD_TAG .. "  " .. tag .. "|r") or (GRAY .. "  sells " .. FA.Money(row.sale or row.vend or 0) .. "|r"))
+      end
+      data[#data + 1] = { id = r.itemId, icon = Icon(r.itemId), recipe = r,
+        left = (ns.COLOR_CODE[col] or "") .. r.name .. ((r.makes or 1) > 1 and (" x" .. r.makes) or "") .. "|r",
+        right = right, tail = DOT[c.level or "shaky"],
+        tip = ConfLines(c) .. "\n\n" .. ReagentTip(r) }  -- ReagentTip ends with "What it's worth" and "Where to sell"
+    end
+  end
+  return data
+end
+
+local function BuildBestPage(p)
+  p.modeBtns = {}
+  local prev
+  for _, m in ipairs(BEST_MODES) do
+    local b = Button(p, m[2], m[3], function()
+      S().bestMode = m[1]; view.bestOff = 0; ns.OnChange()
+    end)
+    if prev then b:SetPoint("LEFT", prev, "RIGHT", 6, 0) else b:SetPoint("TOPLEFT", 20, -4) end
+    b.value, b.label = m[1], m[2]
+    p.modeBtns[#p.modeBtns + 1] = b
+    prev = b
+  end
+  p.explain = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -32); p.explain:SetWidth(430)
+  p.source = Text(p, "GameFontDisableSmall", "TOPLEFT", 20, -48); p.source:SetWidth(430)
+  p.rows = MakeRows(p, BEST_ROWS, -80, false)
+  for _, row in ipairs(p.rows) do
+    row:SetScript("OnClick", function(self)
+      local d = self.data
+      if not (d and d.recipe) then return end
+      -- at the Auction House: put the name in the search box (you press Search); else open the recipe
+      if FA.AuctionHouseOpen and FA.AuctionHouseOpen() and FA.SearchAH then FA.SearchAH(d.recipe.name)
+      else OpenOnRecipe(d.recipe) end
+    end)
+  end
+  p.empty = Text(p, "GameFontDisable", "TOP", 0, -150, p, "TOP"); p.empty:SetJustifyH("CENTER"); p.empty:SetWidth(400)
+  p.hide = K.Check(p, "Hide shaky prices", 16, -(80 + BEST_ROWS * 24 + 4),
+    function() return S().bestHideShaky end, function(v) S().bestHideShaky = v or nil; view.bestOff = 0 end)
+  local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 16, p, "BOTTOMLEFT"); help:SetWidth(430)
+  help:SetText(GOLD_TAG .. "Gold:|r a goblin Auction House (Booty Bay, Gadgetzan, Everlook) pays that much more a craft. Hover for both houses. Dots: green steady, yellow check it, gray shaky. Click to open the recipe (at the Auction House: search it).")
+  Wheel(p, "bestOff", function() return (p.count or 0) - BEST_ROWS end)
+end
+
+local function RefreshBestPage(p)
+  local mode = BestMode()
+  for _, b in ipairs(p.modeBtns) do
+    if b.value == mode then
+      if b.LockHighlight then b:LockHighlight() end
+      b:SetText(GREEN .. b.label .. "|r")
+    else
+      if b.UnlockHighlight then b:UnlockHighlight() end
+      b:SetText(b.label)
+    end
+  end
+  for _, m in ipairs(BEST_MODES) do if m[1] == mode then p.explain:SetText(m[4]) end end
+  p.source:SetText(table.concat(FA.PriceSourceLines(), "\n"))
+  local data = ns.Knows() and BestData() or {}
+  p.count = #data
+  ns.lastBest = data -- for the test suite
+  view.bestOff = math.min(view.bestOff or 0, math.max(0, #data - BEST_ROWS))
+  Fill(p.rows, data, view.bestOff)
+  if p.hide.Sync then p.hide:Sync() end
+  p.empty:SetText(#data > 0 and "" or (not ns.Knows() and "This character hasn't learned Cooking.")
+    or (not ns.HasRecipes() and "Open your Cooking window once so I can read your recipes.")
+    or (mode ~= "profit" and (function() local b, _, c = ns.Skill(); return b and c and c > 0 and b >= c end)()
+      and "You're at this rank's cap: train the next rank and skill-up crafts show here again.")
+    or (mode == "level" and "Nothing that still gives skill-ups has prices yet. Visit the Auction House, or scan with Auctionator.")
+    or (mode == "both" and "None of your skill-up recipes pays for itself at today's prices.")
+    or "No prices yet for what you craft. Visit the Auction House, or scan with Auctionator.")
+end
+
+-- the items your recipes use and make get a short price history (Core), on every character
+local function WatchMine()
+  local db = ns.DB and ns.DB()
+  if not (db and db.chars and FA.WatchItems) then return end
+  local ids = {}
+  for _, c in pairs(db.chars) do
+    for _, r in pairs(c.recipes or {}) do
+      if r.itemId then ids[#ids + 1] = r.itemId end
+      for _, g in ipairs(r.reagents or {}) do if g.id then ids[#ids + 1] = g.id end end
+    end
+  end
+  FA.WatchItems(ids)
+end
+ns.WatchMine = WatchMine
+do
+  local w = CreateFrame("Frame")
+  for _, e in ipairs({ "PLAYER_LOGIN", "AUCTION_HOUSE_SHOW" }) do pcall(w.RegisterEvent, w, e) end
+  w:SetScript("OnEvent", function() pcall(WatchMine) end)
+end
+
 ---------------------------------------------------------------- frame
-local REFRESH = { main = RefreshMainPage, progress = RefreshProgressPage, log = RefreshLogPage, guide = RefreshGuidePage }
+local REFRESH = { main = RefreshMainPage, progress = RefreshProgressPage, log = RefreshLogPage, guide = RefreshGuidePage,
+  best = RefreshBestPage }
 
 local function ShowTab(name)
   view.tab = name
@@ -465,12 +609,13 @@ local function ShowTab(name)
 end
 
 local function Build()
-  local order = { { "main", "Cooking" }, { "progress", "Progress" }, { "log", "Cook log" }, { "guide", "Recipe book" } }
+  local order = { { "main", "Cooking" }, { "progress", "Progress" }, { "log", "Cook log" }, { "guide", "Recipe book" }, { "best", "Best crafts" } }
   f = K.Window({ name = "ForeverArtisanCookingFrame", title = "Cooking", tabs = order, pages = pages, tabButtons = tabs, onTab = ShowTab })
   BuildMainPage(pages.main)
   BuildProgressPage(pages.progress)
   BuildLogPage(pages.log)
   BuildGuidePage(pages.guide)
+  BuildBestPage(pages.best)
   -- drag the corner to make the window taller: the Progress tab shows more of the plan and list
   K.Tall(f, "height", 900, function(extra)
     if LayoutProgress(pages.progress, extra) and view.tab == "progress" then ns.OnChange() end
@@ -495,5 +640,5 @@ function ns.OnChange()
 end
 -- new Auction House prices refresh the shopping list while it's open
 if FA.PriceWatchers then
-  table.insert(FA.PriceWatchers, function() if view.tab == "progress" then ns.OnChange() end end)
+  table.insert(FA.PriceWatchers, function() if view.tab == "progress" or view.tab == "best" then ns.OnChange() end end)
 end

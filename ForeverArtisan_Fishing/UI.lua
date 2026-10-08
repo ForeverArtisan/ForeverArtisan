@@ -39,17 +39,28 @@ local function Capture(field)
     cap.title:SetPoint("CENTER", 0, 30)
     cap.sub = cap:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     cap.sub:SetPoint("TOP", cap.title, "BOTTOM", 0, -12)
-    cap.sub:SetText("Press any key or mouse button (Shift / Ctrl / Alt combos work). Esc, left- or right-click cancels.")
+    cap.sub:SetText("Press any key, mouse button or controller button (Shift / Ctrl / Alt combos work). Esc, left- or right-click cancels.")
     cap:EnableMouse(true)
     cap:RegisterForClicks("AnyUp")
     local function Done(key)
       cap:EnableKeyboard(false); cap:Hide()
+      if cap.EnableGamePadButton then pcall(cap.EnableGamePadButton, cap, false) end
       if key then ns.SetKey(cap.field, key) else ns.OnChange() end
     end
     cap:SetScript("OnKeyDown", function(_, key)
       if key == "LSHIFT" or key == "RSHIFT" or key == "LCTRL" or key == "RCTRL" or key == "LALT" or key == "RALT" then return end
       if key == "ESCAPE" then Done(nil); return end
       Done(Mods() .. key)
+    end)
+    -- controller buttons (PAD1, PADLSHOULDER, PADDUP...). Needs controller support turned on in the
+    -- game's options. A button set up as a Shift / Ctrl / Alt stand-in is a modifier, like LSHIFT above.
+    cap:SetScript("OnGamePadButtonDown", function(_, button)
+      if type(button) ~= "string" then return end
+      for _, cv in ipairs({ "GamePadEmulateShift", "GamePadEmulateCtrl", "GamePadEmulateAlt" }) do
+        local ok, v = pcall(GetCVar, cv)
+        if ok and v == button then return end
+      end
+      Done(Mods() .. button)
     end)
     cap:SetScript("OnClick", function(_, button)
       if MOUSE[button] then Done(Mods() .. MOUSE[button]) else Done(nil) end
@@ -62,8 +73,11 @@ local function Capture(field)
   cap.title:SetText("Set " .. LABEL[field])
   cap:Show()
   cap:EnableKeyboard(true)
+  if cap.EnableGamePadButton then pcall(cap.EnableGamePadButton, cap, true) end
   if cap.SetPropagateKeyboardInput then pcall(cap.SetPropagateKeyboardInput, cap, false) end
+  if cap.SetPropagateGamePadInput then pcall(cap.SetPropagateGamePadInput, cap, false) end
 end
+ns.CaptureKey = Capture -- for the tests
 
 local function KeyButton(parent, x, y, field, _, w)
   local kb = Button(parent, "", w or 150, function() Capture(field) end)
@@ -196,7 +210,7 @@ local function BuildFishingPage(p)
     Check(p, "Put a lure on automatically", 16, -104, function() return S().autoLure end, function(v) S().autoLure = v end),
     Check(p, "Boost splash sound while fishing (music and ambience off)", 16, -128,
       function() return S().soundBoost end, function(v) S().soundBoost = v end, ApplyFishing),
-    Check(p, "Same key reels in (mouse on the bobber, press again on the splash)", 16, -152,
+    Check(p, "Same key reels in (press it again on the splash)", 16, -152,
       function() return S().reelSameKey end, function(v) S().reelSameKey = v end, ApplyFishing),
     Check(p, "Chat line for each catch", 16, -176, function() return S().verbose end, function(v) S().verbose = v end),
     Check(p, "Show lure bar on screen", 16, -200, function() return S().hud end, function(v) S().hud = v end),
@@ -791,6 +805,7 @@ function ns.ToggleUI()
   if not f then Build() end
   if f:IsShown() then f:Hide() else f:Show(); ns.OnChange() end
 end
+function ForeverArtisanFishingToggle() ns.ToggleUI() end   -- for the key binding
 
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "PLAYER_LOGIN", "PLAYER_EQUIPMENT_CHANGED", "BAG_UPDATE_DELAYED", "ZONE_CHANGED",

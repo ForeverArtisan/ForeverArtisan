@@ -7,4 +7,7 @@
 	<Binding name="FOREVERARTISAN_FISHING_SNAPCAMERA" category="ADDONS">
 		ForeverArtisanFishingSnapCamera()
 	</Binding>
+	<Binding name="FOREVERARTISAN_FISHING_OPEN" category="ADDONS">
+		ForeverArtisanFishingToggle()
+	</Binding>
 </Bindings>

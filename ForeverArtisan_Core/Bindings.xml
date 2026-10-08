@@ -1,0 +1,6 @@
+<!-- Copyright (c) 2026 ForeverArtisan. All rights reserved. -->
+<Bindings>
+	<Binding name="FOREVERARTISAN_PANEL" category="ADDONS">
+		ForeverArtisanTogglePanel()
+	</Binding>
+</Bindings>

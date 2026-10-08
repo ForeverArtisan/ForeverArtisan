@@ -3,7 +3,7 @@
 ## IconTexture: Interface\Icons\Spell_Fire_Fire
 ## Notes: Your camp items per profession, the camp cooldown, campfire kits, and a reminder when yours is ready at a fire.
 ## Author: ForeverArtisan
-## Version: 0.9.15
+## Version: 0.9.16
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

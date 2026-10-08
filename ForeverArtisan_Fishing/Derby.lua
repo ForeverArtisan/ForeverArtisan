@@ -252,7 +252,7 @@ function ns.SnapCamera()
   if SetView then pcall(SetView, MARK_VIEW); pcall(SetView, MARK_VIEW) end   -- twice = no camera glide
 end
 ForeverArtisanFishingSnapCamera = ns.SnapCamera   -- for the key binding
-BINDING_NAME_FOREVERARTISAN_FISHING_SNAPCAMERA = "Snap to fishing camera"
+BINDING_NAME_FOREVERARTISAN_FISHING_SNAPCAMERA = "ForeverArtisan: snap to fishing camera"
 
 -- calibration: dim the screen a little and wait for one click on the bobber
 local cal

@@ -50,8 +50,8 @@ end
 
 ---------------------------------------------------------------- per character
 local function CharRec()
-  local key = (UnitName("player") or "?") .. "-" .. ((GetRealmName and GetRealmName()) or "?")
   db.chars = db.chars or {}
+  local key = ForeverArtisan.CharKey(db.chars)
   local c = db.chars[key]
   if not c then c = { recipes = {} }; db.chars[key] = c end
   c.recipes = c.recipes or {}
@@ -95,7 +95,12 @@ local function Skill()
   local c = CharRec()
   if r then c.skill = r; if mx and mx > 0 then c.skillMax = mx end; return r, m, mx or c.skillMax end
   -- the game's list loaded without this profession: not learned (or unlearned), so drop the old value
-  if ForeverArtisan.ProfessionListLoaded and ForeverArtisan.ProfessionListLoaded() then c.skill = nil; return nil end
+  if ForeverArtisan.ProfessionListLoaded and ForeverArtisan.ProfessionListLoaded() then
+    c.skill = nil
+    -- recipes marked learned here came from another character (or an old save): not this one's
+    for _, r in pairs(c.recipes or {}) do r.learned = false end
+    return nil
+  end
   return c.skill, nil, c.skillMax
 end
 ns.Skill = Skill

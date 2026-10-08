@@ -13,8 +13,10 @@ local LURE_MIN_LEFT = 5       -- treat a lure with less than this many seconds l
 local RAW_CAP = 5000          -- max raw catch entries kept
 
 BINDING_HEADER_FOREVERARTISAN_FISHING = "ForeverArtisan: Fishing"
-_G["BINDING_NAME_CLICK ForeverArtisanFishingCastButton:LeftButton"] = "Cast / apply lure"
-_G["BINDING_NAME_CLICK ForeverArtisanFishingSwapButton:LeftButton"] = "Swap pole / weapons"
+-- Forever's Key Bindings list shows these under "AddOns" without our header, so each name says whose it is
+_G["BINDING_NAME_CLICK ForeverArtisanFishingCastButton:LeftButton"] = "ForeverArtisan: cast / apply lure"
+_G["BINDING_NAME_CLICK ForeverArtisanFishingSwapButton:LeftButton"] = "ForeverArtisan: swap pole / weapons"
+BINDING_NAME_FOREVERARTISAN_FISHING_OPEN = "ForeverArtisan: open Fishing"
 
 -- Known lures (itemID -> skill bonus). Unknown lures are picked up by tooltip text.
 local KNOWN_LURES = {
@@ -204,11 +206,17 @@ ns.reelOK = GetCVar and GetCVar("SoftTargetInteract") ~= nil
 -- (no aiming). If it doesn't (Classic clients often don't), we use "Interact with Mouseover":
 -- rest the mouse on the bobber and press the key instead of right-clicking it.
 local softSeen = false
+local farOut = false   -- controller: the game never targeted the bobber (landed past its reach)
 local castToken = 0
 local function ReelCommand()
   return (ns.reelOK and softSeen) and "INTERACTTARGET" or "INTERACTMOUSEOVER"
 end
-ns.ReelMode = function() return (ns.reelOK and softSeen) and "target" or "mouseover" end
+local function IsPad(k) return type(k) == "string" and k:find("PAD") ~= nil end
+ns.ReelMode = function()
+  if ns.reelOK and softSeen then return "target" end
+  if farOut and db and db.settings.reelSameKey and IsPad(db.settings.key) then return "recast" end
+  return "mouseover"
+end
 
 local function UpdateMode()
   if InCombatLockdown() then pendingMode = true; return end
@@ -218,9 +226,10 @@ local function UpdateMode()
   local s = db.settings
   local key, reel = s.key, s.reelKey
   if key and key ~= "" then
-    if channeling and s.reelSameKey then
+    if channeling and s.reelSameKey and not (farOut and not softSeen and IsPad(key)) then
       SetOverrideBinding(owner, true, key, ReelCommand())
     else
+      -- not fishing yet, or (controller) the bobber landed past the game's reach: the button casts again
       SetOverrideBindingClick(owner, true, key, "ForeverArtisanFishingCastButton", "LeftButton")
     end
   end
@@ -256,6 +265,36 @@ end
 
 local function Diag() db.diag = db.diag or {}; return db.diag end
 
+-- Our own on-screen warning (the game's error area can be hidden by other addons): one yellow
+-- line above the middle of the screen that fades after a few seconds.
+local warnFrame
+local function FarWarn(show)
+  if not show then
+    if warnFrame then warnFrame:Hide() end
+    return
+  end
+  if not warnFrame then
+    warnFrame = CreateFrame("Frame", "ForeverArtisanFishingFarWarn", UIParent)
+    warnFrame:SetSize(600, 40)
+    warnFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 160)
+    warnFrame:SetFrameStrata("HIGH")
+    warnFrame:EnableMouse(false)
+    warnFrame.text = warnFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    warnFrame.text:SetPoint("CENTER")
+    warnFrame.text:SetTextColor(1, 0.82, 0)
+    warnFrame.text:SetText("Bobber out of reach: put the white dot (or cursor) on it, or recast")
+  end
+  warnFrame:Show()
+  if warnFrame.SetAlpha then warnFrame:SetAlpha(1) end
+  warnFrame.until_ = (GetTime and GetTime() or 0) + 4
+  warnFrame:SetScript("OnUpdate", function(self)
+    local left = self.until_ - (GetTime and GetTime() or 0)
+    if left <= 0 then self:Hide(); self:SetScript("OnUpdate", nil)
+    elseif left < 1 and self.SetAlpha then self:SetAlpha(left) end
+  end)
+end
+ns.FarWarn = FarWarn
+
 -- is the game's soft interact target our bobber (not a mailbox or an NPC)?
 -- Fishing pools (schools) are game objects too, and the game may soft-target the pool
 -- instead of your bobber. Only a named bobber counts; any other named object doesn't.
@@ -270,23 +309,62 @@ local function SoftIsBobber(guid)
 end
 
 local function StartChannel()
-  channeling, softSeen = true, false
+  channeling, softSeen, farOut = true, false, false
   castToken = castToken + 1
   local tok = castToken
   local d = Diag(); d.channels = (d.channels or 0) + 1
+  -- the soft-target settings may not have gone on at login (gear still loading): make sure now
+  if ns.EnvMissing and ns.EnvMissing() then ns.UpdateEnv() end
   d.softCVar = GetCVar and GetCVar("SoftTargetInteract") or "missing"
   UpdateMode()
-  -- if the game already soft-targets something (the bobber), switch to Interact with Target
+  -- once the game soft-targets the bobber, switch to Interact with Target (no aiming).
+  -- The bobber can land, or come into view, a moment after the cast: keep looking for a few seconds.
   if C_Timer then
-    C_Timer.After(0.8, function()
-      if tok == castToken and channeling and UnitExists and UnitExists("softinteract")
-         and SoftIsBobber(UnitGUID and UnitGUID("softinteract")) then
-        softSeen = true; d.softHits = (d.softHits or 0) + 1
+    -- About 2 seconds without the bobber means it isn't coming: count the miss, and on a controller
+    -- let the fishing button cast again instead. Keep looking anyway, in case it turns up later.
+    local tipShown = ns.farTipShown
+    local function Look(n)
+      if tok ~= castToken or not channeling or softSeen then return end
+      if UnitExists and UnitExists("softinteract") and SoftIsBobber(UnitGUID and UnitGUID("softinteract")) then
+        softSeen, farOut = true, false; d.softHits = (d.softHits or 0) + 1
+        if n > 5 then d.softLate = (d.softLate or 0) + 1; FarWarn(false) end
         local sn = UnitName and UnitName("softinteract")
         d.lastSoft = (sn and not ForeverArtisan.IsSecret(sn)) and sn or "?"
         UpdateMode()
+        return
       end
-    end)
+      if n == 5 then
+        local other = UnitExists and UnitExists("softinteract") and UnitName and UnitName("softinteract")
+        if other and not ForeverArtisan.IsSecret(other) then
+          d.softOther = d.softOther or {}
+          d.softOther[other] = (d.softOther[other] or 0) + 1
+        else
+          d.softNone = (d.softNone or 0) + 1
+        end
+        d.missCVars = tostring(GetCVar and GetCVar("SoftTargetInteract")) .. "/" .. tostring(GetCVar and GetCVar("SoftTargetInteractArc"))
+          .. "/" .. tostring(GetCVar and GetCVar("SoftTargetInteractRange"))
+        local s = db.settings
+        -- controller: say so on screen, like the game's own warnings, so you know to aim this one
+        local reelKey = (s.reelKey and s.reelKey ~= "") and s.reelKey or (s.reelSameKey and s.key)
+        if IsPad(reelKey) then
+          FarWarn(true)
+          d.farWarn = (d.farWarn or 0) + 1
+        end
+        -- recast-on-miss is off for now: with the key on "cast", pointing the cursor at the bobber
+        -- recasts too. Hidden setting padRecast turns it on for testing a cursor-aware version.
+        if s.padRecast and s.reelSameKey and IsPad(s.key) then
+          farOut = true
+          UpdateMode()
+          if not tipShown then
+            ns.farTipShown, tipShown = true, true
+            say(("The game didn't target your bobber (too far out, or something in the way). Press %s to cast again, or point the cursor at it."):format(ns.KeyLabel(s.key)))
+          end
+          if ns.OnChange then ns.OnChange() end
+        end
+      end
+      if n < 100 then C_Timer.After(0.3, function() Look(n + 1) end) end
+    end
+    C_Timer.After(0.5, function() Look(0) end)
     -- safety: never leave the key stuck on reel-in
     C_Timer.After(30, function() if tok == castToken and channeling then channeling = false; UpdateMode() end end)
   end
@@ -294,7 +372,8 @@ end
 
 local function StopChannel()
   if not channeling then return end
-  channeling, softSeen = false, false
+  channeling, softSeen, farOut = false, false, false
+  FarWarn(false)
   UpdateMode()
 end
 
@@ -304,7 +383,10 @@ end
 local function WantedCVars()
   local s, w = db.settings, {}
   if ns.reelOK and (s.reelSameKey or (s.reelKey and s.reelKey ~= "")) then
-    w.SoftTargetInteract, w.SoftTargetInteractArc, w.SoftTargetInteractRange = "3", "2", "30"
+    -- softArc / softRange: hidden settings for testing how far and wide the game looks for the bobber
+    w.SoftTargetInteract = "3"
+    w.SoftTargetInteractArc = tostring(s.softArc or 2)
+    w.SoftTargetInteractRange = tostring(s.softRange or 30)
   end
   if s.soundBoost then
     w.Sound_EnableSFX, w.Sound_SFXVolume, w.Sound_MusicVolume, w.Sound_AmbienceVolume = "1", "1.0", "0", "0"
@@ -316,6 +398,16 @@ local function RestoreEnv()
   if not db.envSaved then return end
   for k, v in pairs(db.envSaved) do pcall(SetCVar, k, v) end
   db.envSaved = nil
+end
+
+-- true when the pole is on but our fishing settings aren't (for example, gear still loading at login)
+function ns.EnvMissing()
+  if not PoleEquipped() then return false end
+  for k, v in pairs(WantedCVars()) do
+    local cur = GetCVar(k)
+    if cur ~= nil and tostring(cur) ~= v then return true end
+  end
+  return false
 end
 
 function ns.UpdateEnv()
@@ -378,7 +470,7 @@ end
 function ns.CharRec()
   if not db then return nil end
   db.byChar = db.byChar or {}
-  local key = (UnitName("player") or "?") .. "-" .. ((GetRealmName and GetRealmName()) or "")
+  local key = ForeverArtisan.CharKey(db.byChar)
   local c = db.byChar[key]
   if not c then c = { gear = {} }; db.byChar[key] = c end
   c.gear = c.gear or {}
@@ -475,7 +567,7 @@ function ns.SetKey(field, key)
     if field == "reelKey" and key == s.key then
       -- reel on the fishing key = the "same key reels in" option
       s.reelKey, s.reelSameKey = "", true
-      say(("Reel-in key: %s, same as your fishing key. Cast, put your mouse on the bobber, and press it again on the splash."):format(KeyLabel(key)))
+      say(("Reel-in key: %s, same as your fishing key. Cast, then press it again on the splash. If it doesn't catch, rest your mouse on the bobber first."):format(KeyLabel(key)))
       UpdateMode(); ns.UpdateEnv(); if ns.OnChange then ns.OnChange() end
       return
     end
@@ -503,7 +595,9 @@ function ns.KeyNow()
   if not PoleEquipped() then return "pole off: your keys work normally" end
   if InCombatLockdown() then return "in combat: fishing key equips weapons" end
   if channeling and s.reelSameKey then
-    return ns.ReelMode() == "target" and "bobber out: fishing key reels in"
+    local m = ns.ReelMode()
+    return m == "target" and "bobber out: fishing key reels in"
+      or m == "recast" and "bobber not targeted (too far, or something in the way): fishing key casts again, or point the cursor at it"
       or "bobber out: point at the bobber and press your fishing key"
   end
   return "ready: fishing key casts (or puts a lure on first)"
@@ -732,6 +826,10 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
       ns.TrackGear() -- a pole or weapons you log in wearing count as "last worn"
     end
     if e ~= "PLAYER_REGEN_ENABLED" then ns.UpdateEnv() end
+    -- at login the pole may not read as equipped yet: try again once gear has loaded
+    if e == "PLAYER_ENTERING_WORLD" and C_Timer then
+      C_Timer.After(3, function() if ns.EnvMissing() and not InCombatLockdown() then ns.UpdateEnv() end end)
+    end
     if e ~= "PLAYER_REGEN_ENABLED" or pendingMode then UpdateMode() end
     if e ~= "PLAYER_REGEN_ENABLED" then UpdateModeSoon() end
     if e ~= "PLAYER_REGEN_ENABLED" or ns.gearPending then ns.UpdateGear() end

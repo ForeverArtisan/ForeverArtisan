@@ -80,6 +80,17 @@ Look for overlapping text, rows running off the edge, and anything cut off.
 - [ ] Search with "Only not visited" says when it hid a match; results are nearest first
 - [ ] Right-clicking a contact twice forgets it
 
+## 7b. Best crafts, Where to sell, controller (0.9.16)
+- [ ] Best crafts tab in every crafting module: three modes, a dot per row, the source line ("Auctionator, full scan ..." or "your own Auction House visits"); a mode is remembered; "Hide shaky prices" hides gray dots
+- [ ] Click a row away from the AH: the recipe opens; at the AH: the name fills the search box only
+- [ ] A character without the profession says so; at a rank's cap the skill-up modes explain the cap; Basic Campfire never shows
+- [ ] Away from a goblin AH: gold "better at goblin AH: +X" in place of "sells" when it clearly pays more; hover shows "Where to sell" once, with postage (a stack of 20 ≈ 2c a craft)
+- [ ] At Booty Bay: no goblin tags; "What it's worth" still uses your own house's price after an Auctionator scan there
+- [ ] Two characters with the same first name keep separate recipes, logs and skills
+- [ ] `/fa` panel: a trade learned with the panel open moves to "Your trades"; Cooking shows on a character without Fishing
+- [ ] Controller (controller support on): the Fishing key box takes a controller button; LT / LB alone don't count, LT + A does; casting works; reeling works without aiming when the "Right now" line says the fishing key reels in, otherwise point the cursor
+- [ ] Key Bindings > AddOns: every entry starts with "ForeverArtisan:"; "open the panel", "open Fishing" and "open Trade Contacts" open and close their windows (full restart: new Bindings.xml files)
+
 ## 8. Publish
 - [ ] Commit, tag `v<version>` (exactly the TOC version), Push origin
 - [ ] GitHub Actions run is green; the GitHub Release has the zip
