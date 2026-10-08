@@ -520,11 +520,27 @@ do
     local wf=_G.ForeverArtisanFishingFarWarn
     assert(wf and wf._shown and wf.text._text:find("out of reach"), "controller miss shows the on-screen warning")
     assert(fns.ReelMode()=="recast", "controller key casts again on a far bobber: "..fns.ReelMode())
+    assert(wf.text._text:find("cast again"), "forced recast says so: "..tostring(wf.text._text))
     -- the bobber turns up later after all: back to reeling in
     soft=true tick() tick()
     assert(fns.ReelMode()=="target", "a late bobber still switches to reel-in")
     assert(not wf._shown, "the warning clears when the bobber turns up late")
     soft=false
+    evf.scripts.OnEvent(evf, "UNIT_SPELLCAST_CHANNEL_STOP", "player", nil, 7620)
+    -- no forcing: Gamepad UI off -> the button casts again; Gamepad UI on -> it stays interact (white dot)
+    ForeverArtisanFishingDB.settings.padRecast=nil
+    local style="0"
+    local oCV2=GetCVar
+    GetCVar=function(k) if k=="InputDeviceInterfaceStyle" then return style end return oCV2(k) end
+    evf.scripts.OnEvent(evf, "UNIT_SPELLCAST_CHANNEL_START", "player", nil, 7620)
+    for _=1,8 do tick() end
+    assert(fns.ReelMode()=="recast" and wf.text._text:find("cast again"), "Gamepad UI off: recast")
+    evf.scripts.OnEvent(evf, "UNIT_SPELLCAST_CHANNEL_STOP", "player", nil, 7620)
+    style="1"
+    evf.scripts.OnEvent(evf, "UNIT_SPELLCAST_CHANNEL_START", "player", nil, 7620)
+    for _=1,8 do tick() end
+    assert(fns.ReelMode()=="mouseover" and wf.text._text:find("white dot"), "Gamepad UI on: aim the dot, "..fns.ReelMode())
+    GetCVar=oCV2
     evf.scripts.OnEvent(evf, "UNIT_SPELLCAST_CHANNEL_STOP", "player", nil, 7620)
     evf.scripts.OnEvent(evf, "UNIT_SPELLCAST_CHANNEL_START", "player", nil, 7620)
     tick() tick()
@@ -536,6 +552,12 @@ do
     fns.RestoreEnv() fns.UpdateEnv()
     print("CONTROLLER REEL ok")
   end
+  -- hidden /fa fish padsnap: saves controller settings, addons and frames for comparing Gamepad UI on/off
+  ConsoleGetAllCommands=function() return {{command="GamePadEnable"},{command="SmartNavigationCursorAppearance"},{command="cameraZoomSpeed"}} end
+  SlashCmdList.FAFISH("padsnap on")
+  local ps=ForeverArtisanFishingDB.padSnap and ForeverArtisanFishingDB.padSnap.on
+  assert(ps and ps.cvars.GamePadEnable and ps.cvars.SmartNavigationCursorAppearance and ps.cvars.cameraZoomSpeed, "padsnap saves every setting")
+  ForeverArtisanFishingDB.padSnap=nil ConsoleGetAllCommands=nil
   print("CONTROLLER KEYS ok")
 end
 -- the four new crafting modules: Tailoring makes its own bolts, Blacksmithing points ore to the Mining log,
@@ -972,7 +994,7 @@ do
   fire("PLAYER_LOGIN")
   local txt=table.concat(out,"\n")
   print=P
-  assert(txt:find("What's new") and txt:find("tooltips") and txt:find("worth") and txt:find("Best crafts") and not txt:find("Drag the window"), "update prints the last three releases: "..txt)
+  assert(txt:find("What's new") and txt:find("worth") and txt:find("Best crafts") and txt:find("Gamepad UI") and not txt:find("Dropped by"), "update prints the last three releases: "..txt)
   assert(txt:find("foreverartisan.app/bug", 1, true), "news ends with the bug line")
   assert(ForeverArtisanSettings.lastVersion==ForeverArtisan.Version(), "remembers the new version")
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
@@ -982,7 +1004,7 @@ do
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
   run("FOREVERARTISAN","new")
   print=P
-  assert(table.concat(out,"\n"):find("0.9.16"), "/fa new prints it")
+  assert(table.concat(out,"\n"):find("0.9.17"), "/fa new prints it")
   print("NEWS ok")
 end
 -- hidden ("secret") values: events carrying them are skipped, their errors dropped, other errors still raised

@@ -1,5 +1,9 @@
 # ForeverArtisan changelog
 
+## 0.9.17 (2026-10-08)
+- Controller fishing without the Gamepad UI: with Options > Gamepad (Alpha) > Enable Gamepad UI off, a controller has nothing to aim with, so when your bobber lands out of reach the fishing button now casts again, and the note says "Bobber out of reach: press A to cast again". With the Gamepad UI on, the button stays as it is so the white dot works, and the note says "put the white dot on it, or recast". Keyboard and mouse fishing doesn't change.
+- Tested with Xbox-style (GameSir) and PlayStation 5 controllers.
+
 ## 0.9.16 (2026-10-07)
 - Controller fishing: the Fishing key, Reel-in key and Swap key boxes now take controller buttons. Click the box, then press a button on your controller (a button you use as Shift, Ctrl or Alt works as a modifier, like Shift + A). Controller support has to be turned on in the game's options. Players asked for this one most.
 - Reel-in without aiming more often: after a cast, ForeverArtisan now keeps looking for your bobber for a few seconds (it used to check once), so a bobber that lands late still gets picked up and the reel-in key works without pointing at it. The soft-targeting setting it turns on while you fish is also put back on at your first cast if it didn't take at login. When the game doesn't pick the bobber, point at it (mouse or controller cursor) as before.

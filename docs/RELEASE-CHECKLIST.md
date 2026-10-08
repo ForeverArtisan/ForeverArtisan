@@ -89,6 +89,7 @@ Look for overlapping text, rows running off the edge, and anything cut off.
 - [ ] Two characters with the same first name keep separate recipes, logs and skills
 - [ ] `/fa` panel: a trade learned with the panel open moves to "Your trades"; Cooking shows on a character without Fishing
 - [ ] Controller (controller support on): the Fishing key box takes a controller button; LT / LB alone don't count, LT + A does; casting works; reeling works without aiming when the "Right now" line says the fishing key reels in, otherwise point the cursor
+- [ ] Controller far cast (0.9.17): Gamepad UI off, the note says "press <button> to cast again" and the button recasts; Gamepad UI on, the note mentions the white dot and dot + button reels in. Check on a PlayStation and an Xbox-style pad
 - [ ] Key Bindings > AddOns: every entry starts with "ForeverArtisan:"; "open the panel", "open Fishing" and "open Trade Contacts" open and close their windows (full restart: new Bindings.xml files)
 
 ## 8. Publish

@@ -563,6 +563,8 @@ local NEWS = {
   { "0.9.16", "Best crafts: a new tab ranks your recipes by profit or cheapest leveling, and says when a goblin Auction House "
     .. "pays more (works best with Auctionator). Fishing keys take controller buttons, and new key bindings open the panel, "
     .. "Fishing and Trade Contacts. Characters with the same first name no longer share data." },
+  { "0.9.17", "Controller fishing without the Gamepad UI: when a cast lands out of reach, the same button casts again. "
+    .. "With the Gamepad UI on, put the white dot on a far bobber. Tested on PlayStation 5 and Xbox-style controllers." },
 }
 
 local function verNum(v)

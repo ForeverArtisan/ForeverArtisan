@@ -212,6 +212,13 @@ local function ReelCommand()
   return (ns.reelOK and softSeen) and "INTERACTTARGET" or "INTERACTMOUSEOVER"
 end
 local function IsPad(k) return type(k) == "string" and k:find("PAD") ~= nil end
+-- Options > Gamepad (Alpha) > Enable Gamepad UI. With it on there's a white dot to aim with;
+-- with it off a controller has nothing to point at the bobber.
+local function GamepadUI()
+  local ok, v = pcall(GetCVar, "InputDeviceInterfaceStyle")
+  return ok and tostring(v) == "1"
+end
+ns.GamepadUI = GamepadUI
 ns.ReelMode = function()
   if ns.reelOK and softSeen then return "target" end
   if farOut and db and db.settings.reelSameKey and IsPad(db.settings.key) then return "recast" end
@@ -268,7 +275,7 @@ local function Diag() db.diag = db.diag or {}; return db.diag end
 -- Our own on-screen warning (the game's error area can be hidden by other addons): one yellow
 -- line above the middle of the screen that fades after a few seconds.
 local warnFrame
-local function FarWarn(show)
+local function FarWarn(show, text)
   if not show then
     if warnFrame then warnFrame:Hide() end
     return
@@ -282,8 +289,8 @@ local function FarWarn(show)
     warnFrame.text = warnFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     warnFrame.text:SetPoint("CENTER")
     warnFrame.text:SetTextColor(1, 0.82, 0)
-    warnFrame.text:SetText("Bobber out of reach: put the white dot (or cursor) on it, or recast")
   end
+  warnFrame.text:SetText(text or "Bobber out of reach: put the white dot (or cursor) on it, or recast")
   warnFrame:Show()
   if warnFrame.SetAlpha then warnFrame:SetAlpha(1) end
   warnFrame.until_ = (GetTime and GetTime() or 0) + 4
@@ -322,7 +329,6 @@ local function StartChannel()
   if C_Timer then
     -- About 2 seconds without the bobber means it isn't coming: count the miss, and on a controller
     -- let the fishing button cast again instead. Keep looking anyway, in case it turns up later.
-    local tipShown = ns.farTipShown
     local function Look(n)
       if tok ~= castToken or not channeling or softSeen then return end
       if UnitExists and UnitExists("softinteract") and SoftIsBobber(UnitGUID and UnitGUID("softinteract")) then
@@ -346,19 +352,22 @@ local function StartChannel()
         local s = db.settings
         -- controller: say so on screen, like the game's own warnings, so you know to aim this one
         local reelKey = (s.reelKey and s.reelKey ~= "") and s.reelKey or (s.reelSameKey and s.key)
+        -- With the Gamepad UI on, the white dot aims, so the button stays "interact".
+        -- With it off a controller can't aim at all, so one-button fishing casts again instead.
+        -- (padRecast = true / false forces it on / off for testing.)
+        local recast = s.reelSameKey and IsPad(s.key)
+        if s.padRecast == false then recast = false
+        elseif s.padRecast ~= true and GamepadUI() then recast = false end
         if IsPad(reelKey) then
-          FarWarn(true)
+          local label = ns.KeyLabel(recast and s.key or reelKey)
+          FarWarn(true, recast and ("Bobber out of reach: press %s to cast again"):format(label)
+            or GamepadUI() and "Bobber out of reach: put the white dot on it, or recast"
+            or "Bobber out of reach: recast")
           d.farWarn = (d.farWarn or 0) + 1
         end
-        -- recast-on-miss is off for now: with the key on "cast", pointing the cursor at the bobber
-        -- recasts too. Hidden setting padRecast turns it on for testing a cursor-aware version.
-        if s.padRecast and s.reelSameKey and IsPad(s.key) then
+        if recast then
           farOut = true
           UpdateMode()
-          if not tipShown then
-            ns.farTipShown, tipShown = true, true
-            say(("The game didn't target your bobber (too far out, or something in the way). Press %s to cast again, or point the cursor at it."):format(ns.KeyLabel(s.key)))
-          end
           if ns.OnChange then ns.OnChange() end
         end
       end
@@ -597,7 +606,7 @@ function ns.KeyNow()
   if channeling and s.reelSameKey then
     local m = ns.ReelMode()
     return m == "target" and "bobber out: fishing key reels in"
-      or m == "recast" and "bobber not targeted (too far, or something in the way): fishing key casts again, or point the cursor at it"
+      or m == "recast" and "bobber out of reach: fishing key casts again"
       or "bobber out: point at the bobber and press your fishing key"
   end
   return "ready: fishing key casts (or puts a lure on first)"
@@ -944,6 +953,42 @@ SlashCmdList.FAFISH = function(msg)
     local st, sec = ns.DerbyStatus()
     say(st == "live" and ("Derby is LIVE, ends in " .. ns.DerbyClock(sec) .. ".")
       or ("Next derby: " .. ns.DerbyWhen() .. ", in " .. ns.DerbyClock(sec) .. "."))
+  elseif cmd == "padsnap" then
+    -- hidden: save every controller-related setting, addon and frame, to find what the
+    -- "Enable Gamepad UI (Alpha)" checkbox changes. Run once with it on and once off, then /reload.
+    local label = (rest ~= "" and rest:lower()) or "snap"
+    local snap = { cvars = {}, addons = {}, frames = {}, t = time and time() }
+    local list = ConsoleGetAllCommands and ConsoleGetAllCommands()
+    for _, c in ipairs(list or {}) do
+      local n = c.command and c.command:lower() or ""
+      if n ~= "" then  -- every setting: the checkbox may not have "gamepad" in its name
+        local ok, v = pcall(GetCVar, c.command)
+        snap.cvars[c.command] = ok and tostring(v) or "?"
+      end
+    end
+    local NumAddOns = (C_AddOns and C_AddOns.GetNumAddOns) or GetNumAddOns
+    local Info = (C_AddOns and C_AddOns.GetAddOnInfo) or GetAddOnInfo
+    local Loaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or IsAddOnLoaded
+    for i = 1, (NumAddOns and NumAddOns() or 0) do
+      local name = Info(i)
+      if type(name) == "string" and (name:lower():find("gamepad") or name:lower():find("navig")) then
+        snap.addons[name] = Loaded(name) and "loaded" or "not loaded"
+      end
+    end
+    for k, v in pairs(_G) do
+      if type(k) == "string" and type(v) == "table" and (k:lower():find("gamepad") or k:find("SmartNav"))
+         and type(v.IsShown) == "function" then
+        local ok, shown = pcall(v.IsShown, v)
+        if ok then snap.frames[k] = shown and "shown" or "hidden" end
+      end
+    end
+    db.padSnap = db.padSnap or {}
+    db.padSnap[label] = snap
+    local nc, na, nf = 0, 0, 0
+    for _ in pairs(snap.cvars) do nc = nc + 1 end
+    for _ in pairs(snap.addons) do na = na + 1 end
+    for _ in pairs(snap.frames) do nf = nf + 1 end
+    say(("Saved snapshot \"%s\": %d settings, %d addons, %d frames. /reload so it's written to disk."):format(label, nc, na, nf))
   elseif cmd == "marker" and ns.CalibrateMarker then
     if rest == "off" or rest == "on" then
       s.showMarker = (rest == "on"); if ns.UpdateMarker then ns.UpdateMarker() end
