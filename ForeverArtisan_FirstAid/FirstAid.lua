@@ -23,6 +23,8 @@ local function ItemName(id, fallback)
   if not id then return fallback or "?" end
   local f = (C_Item and C_Item.GetItemInfo) or GetItemInfo
   local n = f and f(id)
+  -- not loaded yet: ask the game for it; the list redraws when it arrives
+  if not n and ForeverArtisan.WaitForItem then ForeverArtisan.WaitForItem(id) end
   return n or fallback or ("item:" .. id)
 end
 ns.ItemName = ItemName

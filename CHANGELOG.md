@@ -1,5 +1,9 @@
 # ForeverArtisan changelog
 
+## 0.9.18 (unreleased)
+- Shopping lists and plans no longer show "item:2450" in place of a material's name. When the game hasn't sent an item's name yet, ForeverArtisan asks for it and the list redraws with the real name a moment later.
+- Fishing: the capped message now reads "capped: train".
+
 ## 0.9.17 (2026-10-08)
 - Controller fishing without the Gamepad UI: with Options > Gamepad (Alpha) > Enable Gamepad UI off, a controller has nothing to aim with, so when your bobber lands out of reach the fishing button now casts again, and the note says "Bobber out of reach: press A to cast again". With the Gamepad UI on, the button stays as it is so the white dot works, and the note says "put the white dot on it, or recast". Keyboard and mouse fishing doesn't change.
 - Tested with Xbox-style (GameSir) and PlayStation 5 controllers.

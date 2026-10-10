@@ -1747,5 +1747,20 @@ do
   GetProfessions,GetSkillLineInfo,GetNumSkillLines,C_TradeSkillUI=oGP,oGS,oGN,skillAPI
   print("CHAR KEY ok")
 end
+-- 0.9.18: names that load late
+do
+  local FA=ForeverArtisan
+  -- a name the game hasn't loaded yet asks for it, so the list redraws with the real name
+  local asked
+  local oldW, oldInfo, oldC = FA.WaitForItem, GetItemInfo, C_Item and C_Item.GetItemInfo
+  FA.WaitForItem=function(id) asked=id end
+  GetItemInfo=function() return nil end
+  if C_Item then C_Item.GetItemInfo=nil end
+  local fns=loadedFrames["ForeverArtisan_FirstAid"].ns
+  assert(fns.ItemName(2450)=="item:2450" and asked==2450, "missing name requested")
+  FA.WaitForItem, GetItemInfo = oldW, oldInfo
+  if C_Item then C_Item.GetItemInfo=oldC end
+  print("0.9.18 ok")
+end
 print("CRAFTS OK")
 print("SUITE OK")

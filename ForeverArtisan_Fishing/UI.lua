@@ -297,7 +297,7 @@ local function RefreshFishingPage(p)
       or (i.notLearned and (YELLOW .. "not learned yet|r" .. GRAY .. " (any Fishing trainer teaches it)|r"))
       or (GRAY .. "unknown (fills in at your next skill-up)|r"),
     (i.mod and i.mod > 0) and (GREEN .. " (+" .. i.mod .. " lure)|r") or "",
-    i.capped and (RED .. "  capped, train!|r") or ""))
+    i.capped and (RED .. "  capped: train|r") or ""))
   local zone, sub = ns.Where()
   p.s3:SetText(("Spot: %s%s|r  %s(%s)|r"):format(GOLD, sub, GRAY, zone))
   local id = ns.PickLure()
@@ -759,7 +759,7 @@ local function BuildHUD()
       local i = ns.SkillInfo()
       local dst, dsec = ns.DerbyStatus and ns.DerbyStatus()
       if dst == "live" then self.cap:SetText(GREEN .. "Derby live: " .. ns.DerbyClock(dsec) .. " left|r")
-      elseif i.capped then self.cap:SetText(RED .. "Fishing capped at " .. i.max .. ". Train!|r")
+      elseif i.capped then self.cap:SetText(RED .. "Fishing capped at " .. i.max .. ": train|r")
       elseif i.rank and i.max then self.cap:SetText(GRAY .. "Fishing " .. i.rank .. " / " .. i.max .. "|r")
       else self.cap:SetText("") end
     end
