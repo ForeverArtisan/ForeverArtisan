@@ -3,7 +3,7 @@
 ## IconTexture: Interface\Icons\INV_Misc_Food_15
 ## Notes: What to cook next for skill-ups, a plan and shopping list to reach your target skill, a cook log, and ingredient tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.17
+## Version: 0.9.18
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

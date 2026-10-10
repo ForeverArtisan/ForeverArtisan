@@ -1,6 +1,6 @@
 # ForeverArtisan changelog
 
-## 0.9.18 (unreleased)
+## 0.9.18 (2026-10-10)
 - Shopping lists and plans no longer show "item:2450" in place of a material's name. When the game hasn't sent an item's name yet, ForeverArtisan asks for it and the list redraws with the real name a moment later.
 - Fishing: the capped message now reads "capped: train".
 
