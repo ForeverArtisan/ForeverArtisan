@@ -1888,14 +1888,18 @@ do
   assert(found["Newbie Cook"], "a new NPC with a trainer title but no flags is kept")
   assert(not found["Victor Ward"], "a beta trainer wins over QuestieDB")
   assert(db.settings.questieNoted, "one-time note about Questie")
-  -- your out-of-date record (hidden after two game updates) doesn't keep QuestieDB's copy out
+  -- your out-of-date record (met before two game updates): it still shows in Nearest trainer,
+  -- marked "before update", so there's one row for that trainer, not a QuestieDB copy too
   local oldBuilds=db.builds
   db.builds={"1","2","3"}
   db.entries["service:9001"]={kind="service",npcId=9001,name="Grumbo",title="Journeyman Tailor",zone="Orgrimmar",build="1"}
   cns.OnContactsChanged()
-  local q=false
-  for _, npc in ipairs(cns.Contacts()) do if npc.n=="Grumbo" and npc.questie then q=true end end
-  assert(q, "stale record: QuestieDB copy shows")
+  local q, mine=false, false
+  for _, npc in ipairs(cns.Contacts()) do if npc.n=="Grumbo" then if npc.questie then q=true else mine=true end end end
+  assert(mine and not q, "stale record: your own row, no QuestieDB copy")
+  local nearOld=false
+  for _, h in ipairs(cns.NearestTrainerHits("Tailoring")) do if h.npc.n=="Grumbo" and not h.npc.questie and h.npc.age>=2 then nearOld=true end end
+  assert(nearOld, "Nearest trainer keeps trainers met before recent updates")
   db.entries["service:9001"].build="3"
   cns.OnContactsChanged()
   for _, npc in ipairs(cns.Contacts()) do assert(not (npc.n=="Grumbo" and npc.questie), "current record wins over QuestieDB") end
@@ -2091,6 +2095,66 @@ do
   assert(not said("Syndicator") and ForeverArtisanSettings.addonWarned.Syndicator==nil, "readable again: quiet, and re-armed")
   Syndicator=nil
   print("0.9.19 addon check ok")
+end
+-- 0.9.19.1: fishing with auto loot that skips the loot window: the catch comes from the chat line
+do
+  local db=loadedFrames["ForeverArtisan_Fishing"].ns.DB()
+  local function total() local c=0 for _,z in pairs(db.zones) do c=c+(z.catches or 0) end return c end
+  local function items(id) local n=0 for _,z in pairs(db.zones) do local it=z.items[id] if it then n=n+it.n end end return n end
+  local oldT=GetTime; local clock=5000; GetTime=function() return clock end
+  local fish="You receive loot: |cffffffff|Hitem:6291|h[Raw Brilliant Smallfish]|h|r."
+  local c0, f0, r0 = total(), items(6291), #db.raw
+  fire("UNIT_SPELLCAST_SUCCEEDED","player","guid",7620)
+  fire("UNIT_SPELLCAST_CHANNEL_START","player","guid",7620)
+  clock=clock+10
+  fire("UNIT_SPELLCAST_CHANNEL_STOP","player","guid",7620)
+  fire("CHAT_MSG_LOOT", fish)
+  assert(total()==c0+1 and items(6291)==f0+1 and #db.raw==r0+1, "auto-looted catch counted from chat")
+  clock=clock+0.5
+  fire("CHAT_MSG_LOOT", "You receive loot: |cffffffff|Hitem:6358|h[Oily Blackmouth]|h|rx2.")
+  assert(total()==c0+1 and items(6358)>=2 and #db.raw[#db.raw].items==2, "a second line joins the same catch")
+  -- mob loot later, no cast: not a fish
+  clock=clock+60
+  fire("CHAT_MSG_LOOT", "You receive loot: |cffffffff|Hitem:2589|h[Linen Cloth]|h|r.")
+  assert(total()==c0+1 and items(2589)==0, "loot away from fishing isn't a catch")
+  -- loot window path, then its chat line: counted once
+  local saved={GetNumLootItems,GetLootSlotLink,GetLootSlotInfo,IsFishingLoot}
+  GetNumLootItems=function() return 1 end
+  GetLootSlotLink=function() return "|cffffffff|Hitem:6291|h[Raw Brilliant Smallfish]|h|r" end
+  GetLootSlotInfo=function() return 0,"Raw Brilliant Smallfish",1,nil,1 end
+  IsFishingLoot=function() return true end
+  fire("UNIT_SPELLCAST_SUCCEEDED","player","guid",7620)
+  fire("UNIT_SPELLCAST_CHANNEL_START","player","guid",7620)
+  clock=clock+5
+  fire("LOOT_OPENED")
+  fire("UNIT_SPELLCAST_CHANNEL_STOP","player","guid",7620)
+  fire("CHAT_MSG_LOOT", fish)
+  assert(total()==c0+2, "loot window catch not counted twice")
+  GetNumLootItems,GetLootSlotLink,GetLootSlotInfo,IsFishingLoot=saved[1],saved[2],saved[3],saved[4]
+  -- a cast that got away, then a mob: nothing
+  clock=clock+30
+  fire("UNIT_SPELLCAST_SUCCEEDED","player","guid",7620)
+  fire("UI_ERROR_MESSAGE", 0, ERR_FISH_ESCAPED or "Fish escaped!")
+  fire("CHAT_MSG_LOOT", fish)
+  assert(total()==c0+2, "escaped cast: no catch")
+  GetTime=oldT
+  print("0.9.19.1 auto-loot fishing ok")
+end
+-- 0.9.20: a trainer with no job title (Cook Torka) still counts for its trade
+do
+  local cdb=ForeverArtisanContactsDB
+  local cns=loadedFrames["ForeverArtisan_Contacts"].ns
+  cdb.entries["trainer:777001"]={kind="trainer",npcId=777001,name="Cook Torka",zone="Durotar",mapID=1411,x=50,y=50,
+    skills={{name="Journeyman Cook",skillReq="Cooking 50",priceCopper=500},{name="Spiced Wolf Meat",skillReq="Cooking 10"},{name="Boiled Clams",skillReq="Cooking 50"}}}
+  cns.OnContactsChanged()
+  local found=false
+  for _,h in ipairs(cns.NearestTrainerHits("Cooking")) do if h.npc.n=="Cook Torka" then found=true end end
+  assert(found, "untitled trainer listed under Cooking from what it teaches")
+  local fa=false
+  for _,h in ipairs(cns.NearestTrainerHits("First Aid")) do if h.npc.n=="Cook Torka" then fa=true end end
+  assert(not fa, "and not under other trades")
+  cdb.entries["trainer:777001"]=nil; cns.OnContactsChanged()
+  print("0.9.20 untitled trainer ok")
 end
 print("CRAFTS OK")
 print("SUITE OK")

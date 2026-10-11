@@ -33,6 +33,8 @@ local db
 local lureCache = {}          -- itemID -> bonus or false
 local lastLureAt = -100
 local lastLootAt = -100
+local castAt                  -- GetTime() of the last Fishing cast that hasn't logged a catch yet
+local lastEntry, lastEntryAt  -- the newest catch, so a second "You receive loot" line joins it
 local warnedNoLure = false
 
 local say = ForeverArtisan.Printer("Fishing")
@@ -379,8 +381,10 @@ local function StartChannel()
   end
 end
 
+local channelStopAt = -100
 local function StopChannel()
   if not channeling then return end
+  channelStopAt = GetTime()
   channeling, softSeen, farOut = false, false, false
   FarWarn(false)
   UpdateMode()
@@ -702,10 +706,30 @@ end
 
 local function Today() return date("%Y-%m-%d") end
 
-local function LogCatch()
+-- what's in the loot window: { { id, n, name, quality, link } }, or empty when auto loot already took it
+local function SlotItems()
+  local out = {}
+  local ok, num = pcall(GetNumLootItems)
+  for i = 1, (ok and tonumber(num)) or 0 do
+    local okL, link = pcall(GetLootSlotLink, i)
+    if okL and type(link) == "string" and not (ForeverArtisan.IsSecret and ForeverArtisan.IsSecret(link)) then
+      local id = tonumber(link:match("item:(%d+)"))
+      if id then
+        local _, name, qty, _, quality = GetLootSlotInfo(i)
+        out[#out + 1] = { id = id, n = qty or 1, name = name, q = quality, link = link }
+      end
+    end
+  end
+  return out
+end
+
+-- items: from the loot window, or one "You receive loot" line when auto loot skipped the window
+local function LogCatch(items, fromChat)
   local now = GetTime()
   if now - lastLootAt < 1 then return end
-  lastLootAt = now
+  items = items or SlotItems()
+  if #items == 0 then return end
+  lastLootAt, castAt = now, nil
   local zone, sub, mapID, x, y = Where()
   local z = ZoneRec()
   local rank, mod = FishingSkill()
@@ -714,12 +738,9 @@ local function LogCatch()
   local entry = { d = Today(), t = time(), zone = zone, sub = sub, mapID = mapID, x = x, y = y,
                   skill = rank, mod = mod, lure = lure, gt = ("%02d:%02d"):format(h, m), items = {} }
   local got = {}
-  for i = 1, GetNumLootItems() do
-    local link = GetLootSlotLink(i)
-    local id = link and tonumber(link:match("item:(%d+)"))
-    if id then
-      local _, name, qty, _, quality = GetLootSlotInfo(i)
-      qty = qty or 1
+  for _, li in ipairs(items) do
+    local id, name, qty, quality, link = li.id, li.name, li.n or 1, li.q, li.link
+    do
       entry.items[#entry.items + 1] = { id = id, n = qty }
       local it = z.items[id]
       if not it then it = { name = name, q = quality, n = 0, hauls = 0 }; z.items[id] = it end
@@ -736,6 +757,8 @@ local function LogCatch()
   if #entry.items == 0 then return end
   z.catches = z.catches + 1
   z.lastSeen = Today()
+  -- only a catch read from chat takes more chat lines; the loot window already listed everything
+  lastEntry, lastEntryAt = fromChat and { entry = entry, z = z } or nil, now
   local raw = db.raw
   raw[#raw + 1] = entry
   -- trim the oldest 10% at once instead of shifting the whole log on every catch
@@ -748,6 +771,27 @@ local function LogCatch()
   if ns.OnCatch then ns.OnCatch(entry) end
   if ns.OnDerbyCatch then ns.OnDerbyCatch(entry) end
   if ns.OnChange then ns.OnChange() end
+end
+
+-- Auto loot on Forever can skip the loot window entirely: then the catch comes from the
+-- "You receive loot" line right after a Fishing cast. A second line a moment later (a fish and a
+-- chest, say) joins the same catch.
+local function OnChatLoot(msg, guid)
+  local li = ForeverArtisan.ParseSelfLoot and ForeverArtisan.ParseSelfLoot(msg, guid)
+  if not li then return end
+  local now = GetTime()
+  -- still fishing, or the cast just ended (the loot line comes right after): a mob's loot later isn't a fish
+  if castAt and now - castAt < 30 and (channeling or now - channelStopAt < 3) then
+    LogCatch({ { id = li.id, n = li.qty, name = li.name, link = li.link } }, true)
+  elseif lastEntry and now - lastEntryAt < 2 then
+    lastEntryAt = now
+    lastEntry.entry.items[#lastEntry.entry.items + 1] = { id = li.id, n = li.qty }
+    local it = lastEntry.z.items[li.id]
+    if not it then it = { name = li.name, n = 0, hauls = 0 }; lastEntry.z.items[li.id] = it end
+    it.n, it.hauls, it.name, it.lastSeen = it.n + li.qty, it.hauls + 1, li.name or it.name, Today()
+    if ns.OnCatch then ns.OnCatch({ items = { { id = li.id, n = li.qty } } }) end
+    if ns.OnChange then ns.OnChange() end
+  end
 end
 
 ---------------------------------------------------------------- pole durability
@@ -787,12 +831,12 @@ for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "PLAYER_EQUIPMENT_
   "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "LOOT_OPENED",
   "UI_ERROR_MESSAGE", "UI_INFO_MESSAGE", "CHAT_MSG_SKILL", "GET_ITEM_INFO_RECEIVED",
   "PLAYER_LOGOUT", "BAG_UPDATE_DELAYED",
-  "PLAYER_SOFT_INTERACT_CHANGED", "LOOT_CLOSED", "UPDATE_INVENTORY_DURABILITY", "UPDATE_BINDINGS" }) do Reg(e) end
+  "PLAYER_SOFT_INTERACT_CHANGED", "LOOT_CLOSED", "UPDATE_INVENTORY_DURABILITY", "UPDATE_BINDINGS", "CHAT_MSG_LOOT" }) do Reg(e) end
 for _, e in ipairs({ "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_CHANNEL_STOP" }) do RegPlayer(e) end
 
 local ESCAPED = { [ERR_FISH_ESCAPED or "Fish escaped!"] = true, [ERR_FISH_NOT_HOOKED or "No fish are hooked."] = true }
 
-ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
+ev:SetScript("OnEvent", function(_, e, a1, a2, a3, ...)
   if e == "ADDON_LOADED" and a1 == ADDON then
     ForeverArtisan.Migrate("ForeverArtisanFishingDB", "MatsFishDB")
     ForeverArtisanFishingDB = ForeverArtisanFishingDB or {}
@@ -864,6 +908,7 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
       if e == "UNIT_SPELLCAST_CHANNEL_START" then
         if not channeling then StartChannel() end
       else
+        channelStopAt = GetTime()
         StopChannel()
       end
     end
@@ -881,9 +926,12 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     if a1 and (a1 == mh or a1 == oh or a1 == pole) then ns.UpdateGear() end
   elseif e == "LOOT_OPENED" then
     if IsFishingLoot and IsFishingLoot() then LogCatch() end
+  elseif e == "CHAT_MSG_LOOT" then
+    OnChatLoot(a1, (select(9, ...)))
   elseif e == "UNIT_SPELLCAST_SUCCEEDED" and a1 == "player" then
     if FISHING_IDS[a3] or SpellName(a3) == FISHING then
       local z = ZoneRec(); z.casts = z.casts + 1
+      castAt = GetTime()
       if not channeling then StartChannel() end
     end
   elseif e == "CHAT_MSG_SKILL" then
@@ -899,7 +947,7 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     CheckPole()
   elseif e == "UI_ERROR_MESSAGE" or e == "UI_INFO_MESSAGE" then
     local msg = type(a2) == "string" and a2 or a1
-    if ESCAPED[msg] then local z = ZoneRec(); z.escaped = z.escaped + 1 end
+    if ESCAPED[msg] then local z = ZoneRec(); z.escaped = z.escaped + 1; castAt = nil end
     if type(msg) == "string" and msg:lower():find("fishing pole") then CheckPole(true) end
   end
 end)

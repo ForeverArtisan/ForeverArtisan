@@ -128,7 +128,7 @@ local function Rebuild()
   if fromQuestie then
     local mapName = {}
     for _, q in ipairs(fromQuestie) do
-      if not current[q.id] and not current[q.n] and not seeded[q.id] and not seeded[q.n] and ns.SeedFits(q) then
+      if not full[q.id] and not full[q.n] and not current[q.id] and not current[q.n] and not seeded[q.id] and not seeded[q.n] and ns.SeedFits(q) then
         if mapName[q.m] == nil then
           local ok, info = pcall(C_Map.GetMapInfo, q.m)
           mapName[q.m] = ok and info and info.name or false

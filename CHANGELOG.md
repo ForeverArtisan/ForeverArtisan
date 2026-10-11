@@ -1,6 +1,13 @@
 # ForeverArtisan changelog
 
-## 0.9.19 (unreleased)
+## 0.9.20 (2026-10-11)
+- Fishing: catches count again when auto loot takes the fish before the loot window shows (it does on some characters). The Catch log, goals and catch rates read the "You receive loot" line right after a cast instead. Loot from anything else isn't counted as a catch.
+- Nearest trainer lists trainers you met before recent game updates again, marked "(before update)". During the beta, with several game updates a week, they were hidden after two updates and whole towns dropped out of the list. Your own record also shows in place of the copy from the beta list or Questie, so each trainer appears once.
+- Trainers with no job title under their name (like Cook Torka in Durotar) now show in Nearest trainer and the Contacts tab's Trade filter. Talk to them once and ForeverArtisan reads the trade from what they teach.
+- The `/fa` panel's "Works best with" list now includes TomTom, for waypoint arrows (ForeverArtisan has always used it when installed).
+- The menu buttons in Trade Contacts (Zone, Trade, Nearest trainer) show an arrow instead of the letter "v".
+
+## 0.9.19 (2026-10-10)
 - This update adds new files: fully restart WoW after updating, /reload isn't enough.
 - Trade Contacts now comes with the profession trainers we met on the Forever beta (35 so far, all 12 professions), so "Train now", "Learn from", Nearest trainer and search work before you've met anyone. They're marked "beta" (in plans: "seen on the Forever beta") until you talk to them; then your own record takes over. You only see trainers for your faction and the neutral towns. Right-click one twice on the Contacts tab to hide it; `/fa contacts seeds off` hides them all, `seeds reset` brings them back.
 - Nearest trainer no longer lists cloth quartermasters as Tailoring trainers.

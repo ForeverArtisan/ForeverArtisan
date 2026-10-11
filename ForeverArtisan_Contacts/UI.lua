@@ -226,6 +226,23 @@ local function TradesOf(npc)
   for _, tr in ipairs(TRADES) do
     for _, w in ipairs(tr[2]) do if t:find(w, 1, true) then out[tr[1]] = true; break end end
   end
+  -- a trainer with no job title (some Forever NPCs, like Cook Torka): what they teach says the trade.
+  -- Their skill requirements read "Cooking 50", so the most common profession there wins.
+  if not next(out) and npc.k == "trainer" then
+    local count, best, bestN = {}, nil, 0
+    for _, it in ipairs(npc.items or {}) do
+      local prof = type(it.sk) == "string" and it.sk:match("^(.-)%s+%d+$")
+      if prof then
+        for _, tr in ipairs(TRADES) do
+          if tr[1] == prof then
+            count[prof] = (count[prof] or 0) + 1
+            if count[prof] > bestN then best, bestN = prof, count[prof] end
+          end
+        end
+      end
+    end
+    if best then out[best] = true end
+  end
   if not next(out) then
     if t:find("suppl", 1, true) or t:find("goods", 1, true) or t:find("sundries", 1, true) or t:find("reagent", 1, true)
       or t:find("provision", 1, true) or t:find("import", 1, true) or t:find("wares", 1, true) then
@@ -298,6 +315,10 @@ end
 
 -- A button that opens a small list of choices under it (no Blizzard dropdown needed).
 local openMenu
+-- menu arrows on picker buttons (the game's own arrow art, not a letter v)
+local ARROW_DOWN = "|TInterface\\Buttons\\Arrow-Down-Up:14:14:0:-3|t"
+local ARROW_UP = "|TInterface\\Buttons\\Arrow-Up-Up:14:14:0:3|t"
+
 local function Picker(p, x, w, label, options, get, set, menuW)
   local mw = menuW or w -- the menu can be wider than its button
   local b = Button(p, "", w, nil)
@@ -343,7 +364,7 @@ local function Picker(p, x, w, label, options, get, set, menuW)
     -- the pick can drop out of the list when the other picker narrows it; still name it
     text = text or ({ here = "Where I am", crafting = "All crafting", [GOODS] = "Trade goods" })[cur]
       or (cur == "all" and (label == "Zone" and "All zones" or "Everyone")) or cur
-    b:SetText(label .. ": " .. text .. "  v")
+    b:SetText(label .. ": " .. text .. "  " .. ARROW_DOWN)
   end
   return b
 end
@@ -417,8 +438,9 @@ local function MyClass() return UnitClass and UnitClass("player") end
 
 local function TrainerHits(kind)
   local hits, mine = {}, MyClass()
+  -- trainers you met before recent game updates still count: a trainer rarely moves, and the row
+  -- says "(before update)". Hiding them left whole towns out of the list during the beta.
   local function consider(npc, seen)
-    if (npc.age or 0) >= ns.HIDE_AFTER then return end
     local cls = ns.ClassTrainer and ns.ClassTrainer(npc.t)
     local ok
     if kind == "class" then ok = cls ~= nil and mine ~= nil and cls == mine:lower()
@@ -464,7 +486,7 @@ local function AddNearest(p)
   local b = Picker(p, 16, 200, "Nearest trainer", NearestOptions, function() return nil end, GoNearest, 420)
   b:ClearAllPoints(); b:SetPoint("TOPLEFT", 16, -442)
   b.menu:ClearAllPoints(); b.menu:SetPoint("BOTTOMLEFT", b, "TOPLEFT", 0, 2) -- opens upward
-  b.Sync = function() b:SetText("Nearest trainer  v") end
+  b.Sync = function() b:SetText("Nearest trainer  " .. ARROW_UP) end -- its menu opens upward
   b.Sync()
   FA.UI.Tip(b, function()
     GameTooltip:AddLine("Nearest trainer")

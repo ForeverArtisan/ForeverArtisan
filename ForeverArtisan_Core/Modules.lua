@@ -303,7 +303,8 @@ local function refreshPanel()
       .. show("Auctionator", type(_G.Auctionator) == "table", true)
       .. GREY .. "  ·  |r" .. show("Questie", st ~= "missing" and st ~= "incompatible", st ~= "off")
       .. GREY .. "  ·  |r" .. show("Syndicator", FA.SyndicatorStatus and FA.SyndicatorStatus() ~= "missing", not (FA.SyndicatorStatus and FA.SyndicatorStatus() == "off"))
-      .. GREY .. "  ·  |r" .. show("GatherMate2", gs ~= "missing", gs ~= "off"))
+      .. "\n" .. show("GatherMate2", gs ~= "missing", gs ~= "off")
+      .. GREY .. "  ·  |r" .. show("TomTom", type(rawget(_G, "TomTom")) == "table", true))
   end
 
   -- "Coming soon" grid under the installed modules
@@ -327,7 +328,7 @@ local function refreshPanel()
     end
   end
   local gridRows = math.ceil(#soon / SOON_COLS)
-  panel:SetHeight(math.max(362, -top + 20 + gridRows * SOON_H + 222))
+  panel:SetHeight(math.max(380, -top + 20 + gridRows * SOON_H + 240))
 end
 
 local function buildPanel()
@@ -420,7 +421,7 @@ local function buildPanel()
   FA.UI.Tip(townHover, function() if FA.TownNamesTip then FA.TownNamesTip(GameTooltip) end end)
   -- other addons ForeverArtisan reads when you have them (named in game only)
   local works = CreateFrame("Button", nil, panel)
-  works:SetPoint("BOTTOMLEFT", 16, 150); works:SetSize(428, 38)
+  works:SetPoint("BOTTOMLEFT", 16, 150); works:SetSize(428, 56)
   works.text = works:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   works.text:SetPoint("LEFT"); works.text:SetJustifyH("LEFT"); works.text:SetSpacing(4)
   works:SetScript("OnClick", function()
@@ -465,6 +466,11 @@ local function buildPanel()
       or (gs == "off") and "Turned off: /fa gather on."
       or (gs == "incompatible") and "This version of GatherMate2 doesn't share its spots the way ForeverArtisan reads them."
       or "Herbalism and Mining show where to find herbs and ores you haven't logged yet. Click a Pick next row for a waypoint. /fa gather off turns it off.", 1, 1, 1, true)
+    local hasT = type(rawget(_G, "TomTom")) == "table"
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("TomTom" .. (hasT and " (installed)" or " (not installed)"), 1, 0.82, 0)
+    GameTooltip:AddLine(hasT and "Every waypoint (trainers, vendors, herb and ore spots) shows as an arrow on your screen."
+      or "Waypoints show as an arrow on your screen. Without it, ForeverArtisan uses the game's own map pin.", 1, 1, 1, true)
   end)
   panel.works = works
 
@@ -734,7 +740,8 @@ local function help()
   print("  Works best with: Auctionator (" .. (hasA and "installed" or "not installed") .. ") for current prices, Questie ("
     .. (hasQ and "installed" or "not installed") .. ") for trainers and recipe sources, Syndicator ("
     .. (hasS and "installed" or "not installed") .. ") for what your alts hold, GatherMate2 ("
-    .. (hasG and "installed" or "not installed") .. ") for herb and ore spots. All optional.")
+    .. (hasG and "installed" or "not installed") .. ") for herb and ore spots, TomTom ("
+    .. (type(rawget(_G, "TomTom")) == "table" and "installed" or "not installed") .. ") for waypoint arrows. All optional.")
   print("  /fa minimap [angle | reset | contacts]  - show/hide or move the minimap buttons")
   if FA.Vendors then print("  /fa <item, vendor or town>  - search your Trade Contacts") end
   print("  /fa enable <module>  |  /fa disable <module>")
