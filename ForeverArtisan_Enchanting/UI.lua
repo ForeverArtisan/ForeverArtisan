@@ -159,7 +159,8 @@ local function RefreshMainPage(p)
     p.learnFrom = npc
     if npc then
       p.find:SetText(GOLD .. "Learn from: " .. npc.n .. ", " .. (npc.s or npc.z or "?") .. "|r"
-        .. (npc.seenOnly and (GRAY .. "  (seen, talk to them)|r") or ""))
+        .. (npc.seenOnly and (GRAY .. "  (seen, talk to them)|r") or "")
+        .. (npc.seed and (GRAY .. "  (seen on the Forever beta)|r") or ""))
     else
       p.find:SetText(GRAY .. "Ask a city guard for " .. (("Enchanting"):find("^[AEIOU]") and "an" or "a") .. " Enchanting trainer.|r")
     end
@@ -301,12 +302,16 @@ local function RefreshProgressPage(p)
     if not e.train then
     local done = e.have >= e.need
     local cost = (not done and not e.craft and e.price) and (GRAY .. "  ·  " .. FA.Money(e.price * (e.need - e.have)) .. "|r") or ""
+    -- what your other characters hold (Syndicator), when it could save you buying
+    local altNote, altTip = "", nil
+    if not done and FA.AltShopText then altNote, altTip = FA.AltShopText(e.id, e.need - e.have, e.craft) end
     shop[#shop + 1] = { id = e.id, icon = Icon(e.id), name = e.name,
       left = (done and GREEN or "") .. e.name .. (done and "|r" or "") .. (e.tool and (GRAY .. "  (tool)|r") or ""),
       right = ("%s%d / %d|r"):format(done and GREEN or YELLOW, math.min(e.have, e.need), e.need)
-        .. (e.craft and (GOLD .. "  ·  craft " .. e.craft .. "|r") or "") .. cost,
+        .. (e.craft and (GOLD .. "  ·  craft " .. e.craft .. "|r") or "") .. altNote .. cost,
       tip = " \n" .. GOLD .. "Shopping list|r\n" .. e.source
-        .. ((not e.craft and FA.VendorNPC and FA.VendorNPC(e.id, e.name)) and "\n|cff80c0ffClick for a waypoint to the vendor (at the Auction House: search it)|r" or "") .. ((not e.craft and FA.RowPriceLine and FA.RowPriceLine(e.id, e.name)) and ("\n" .. FA.RowPriceLine(e.id, e.name)) or "") }
+        .. ((not e.craft and FA.VendorNPC and FA.VendorNPC(e.id, e.name)) and "\n|cff80c0ffClick for a waypoint to the vendor (at the Auction House: search it)|r" or "") .. ((not e.craft and FA.RowPriceLine and FA.RowPriceLine(e.id, e.name)) and ("\n" .. FA.RowPriceLine(e.id, e.name)) or "")
+        .. (altTip and ("\n" .. altTip) or "") }
     end
   end
   p.shopCount = #shop

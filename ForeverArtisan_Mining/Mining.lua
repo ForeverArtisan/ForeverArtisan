@@ -239,6 +239,8 @@ function ns.PickNext()
   for _, n in ipairs(ns.NODES) do
     local c = ns.NodeColor(n[3], skill)
     local rec = { id = n[1], name = n[2], req = n[3], color = c, where = ns.NodeZoneText(n[2]) }
+    -- nodes you haven't logged: the zones GatherMate2 knows, when it's installed
+    if not rec.where and c ~= "gray" and ForeverArtisan.GatherZoneText then rec.gm = ForeverArtisan.GatherZoneText("mine", n[2], 1) end
     if c == "orange" or c == "yellow" or c == "green" then
       now[#now + 1] = rec
     elseif c == "red" and #soon < 3 then
@@ -712,7 +714,8 @@ SlashCmdList.FAMINING = function(msg)
     say(("Skill %d. Nodes that still give skill-ups:"):format(skill))
     for i = 1, math.min(6, #now) do
       local n = now[i]
-      say(("  %s%s|r (%d)  %s"):format(ns.COLOR_CODE[n.color], n.name, n.req, n.where or (GRAY .. "not logged yet|r")))
+      say(("  %s%s|r (%d)  %s"):format(ns.COLOR_CODE[n.color], n.name, n.req, n.where
+        or (n.gm and (n.gm .. GRAY .. " (GatherMate2)|r")) or (GRAY .. "not logged yet|r")))
     end
     for _, n in ipairs(soon) do say(("  %sunlocks at %d:|r %s"):format(GRAY, n.req, n.name)) end
   elseif cmd == "zone" then

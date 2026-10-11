@@ -286,6 +286,26 @@ local function refreshPanel()
     panel.contacts:SetText("")
   end
 
+  if panel.works then
+    local CHECK = "|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t "
+    -- installed and used: check mark + name. Installed but off: name (off). Missing: gray name.
+    local broken = {}
+    for _, a in ipairs(FA.AddonHealth and FA.AddonHealth() or {}) do if a.state == "broken" then broken[a.name] = true end end
+    local function show(name, installed, on)
+      if broken[name] then return name .. RED .. " (can't read)|r" end
+      if not installed then return GREY .. name .. "|r" end -- gray = not installed (the tooltip says so)
+      if not on then return name .. GREY .. " (off)|r" end
+      return CHECK .. name
+    end
+    local st = FA.QuestieStatus and FA.QuestieStatus() or "missing"
+    local gs = FA.GatherStatus and FA.GatherStatus() or "missing"
+    panel.works.text:SetText(GOLD .. "Works best with|r" .. GREY .. "  (hover for what each adds)|r\n"
+      .. show("Auctionator", type(_G.Auctionator) == "table", true)
+      .. GREY .. "  ·  |r" .. show("Questie", st ~= "missing" and st ~= "incompatible", st ~= "off")
+      .. GREY .. "  ·  |r" .. show("Syndicator", FA.SyndicatorStatus and FA.SyndicatorStatus() ~= "missing", not (FA.SyndicatorStatus and FA.SyndicatorStatus() == "off"))
+      .. GREY .. "  ·  |r" .. show("GatherMate2", gs ~= "missing", gs ~= "off"))
+  end
+
   -- "Coming soon" grid under the installed modules
   local shown = math.min(#modules, #panel.rows)
   local top = (shown > 0) and (y - 10) or -110
@@ -307,7 +327,7 @@ local function refreshPanel()
     end
   end
   local gridRows = math.ceil(#soon / SOON_COLS)
-  panel:SetHeight(math.max(320, -top + 20 + gridRows * SOON_H + 180))
+  panel:SetHeight(math.max(362, -top + 20 + gridRows * SOON_H + 222))
 end
 
 local function buildPanel()
@@ -398,6 +418,56 @@ local function buildPanel()
   panel.town = townHover:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   panel.town:SetPoint("BOTTOMLEFT"); panel.town:SetWidth(428); panel.town:SetJustifyH("LEFT")
   FA.UI.Tip(townHover, function() if FA.TownNamesTip then FA.TownNamesTip(GameTooltip) end end)
+  -- other addons ForeverArtisan reads when you have them (named in game only)
+  local works = CreateFrame("Button", nil, panel)
+  works:SetPoint("BOTTOMLEFT", 16, 150); works:SetSize(428, 38)
+  works.text = works:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  works.text:SetPoint("LEFT"); works.text:SetJustifyH("LEFT"); works.text:SetSpacing(4)
+  works:SetScript("OnClick", function()
+    -- a click turns Questie's trainers on or off, when Questie is installed
+    if FA.QuestieStatus and SlashCmdList.FACONTACTS then
+      local st = FA.QuestieStatus()
+      if st == "on" or st == "reading" then SlashCmdList.FACONTACTS("questie off")
+      elseif st == "off" or st == "installed" then SlashCmdList.FACONTACTS("questie on") end
+      refreshPanel()
+    end
+  end)
+  FA.UI.Tip(works, function()
+    local hasA = type(_G.Auctionator) == "table"
+    local st, n = "missing", 0
+    if FA.QuestieStatus then st, n = FA.QuestieStatus() end
+    GameTooltip:AddLine("Works best with")
+    GameTooltip:AddLine("All optional and free on CurseForge and Wago. ForeverArtisan reads what they know; it works fine without them.", 1, 1, 1, true)
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Auctionator" .. (hasA and " (installed)" or " (not installed)"), 1, 0.82, 0)
+    GameTooltip:AddLine(hasA and "After a full scan, every price in plans, shopping lists and Best crafts is current."
+      or "One scan prices the whole Auction House. Without it, prices come from Auction House pages you browse.", 1, 1, 1, true)
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Questie" .. ((st == "missing") and " (not installed)" or (st == "off") and " (installed, turned off)" or " (installed)"), 1, 0.82, 0)
+    GameTooltip:AddLine((st == "on") and (n .. " profession trainers for your faction from its database, in search and Nearest trainer. Click to turn off.")
+      or (st == "off") and "Click to show every profession trainer from its database again."
+      or (st == "missing") and "Every profession trainer in the game in search and Nearest trainer, not just the ones you've met."
+      or "Reading its database...", 1, 1, 1, true)
+    if st ~= "missing" and st ~= "off" then
+      GameTooltip:AddLine("Also: where recipes and materials come from, in recipe books and shopping lists.", 1, 1, 1, true)
+    end
+    local ss = FA.SyndicatorStatus and FA.SyndicatorStatus() or "missing"
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Syndicator" .. ((ss == "missing") and " (not installed)" or (ss == "off") and " (installed, turned off)" or " (installed)"), 1, 0.82, 0)
+    GameTooltip:AddLine((ss == "missing") and "Comes with Baganator. Shopping lists show what your other characters hold, so you mail it over instead of buying."
+      or (ss == "off") and "Turned off: /fa alts on."
+      or "Shopping lists show what your other characters hold (bags, bank, mailbox). /fa alts off turns it off.", 1, 1, 1, true)
+    local gs = FA.GatherStatus and FA.GatherStatus() or "missing"
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("GatherMate2" .. ((gs == "missing") and " (not installed)" or (gs == "off") and " (installed, turned off)"
+      or (gs == "incompatible") and " (installed, can't read it)" or " (installed)"), 1, 0.82, 0)
+    GameTooltip:AddLine((gs == "missing") and "With its data pack, Herbalism and Mining show where to find herbs and ores you haven't logged yet, with a waypoint to the nearest one."
+      or (gs == "off") and "Turned off: /fa gather on."
+      or (gs == "incompatible") and "This version of GatherMate2 doesn't share its spots the way ForeverArtisan reads them."
+      or "Herbalism and Mining show where to find herbs and ores you haven't logged yet. Click a Pick next row for a waypoint. /fa gather off turns it off.", 1, 1, 1, true)
+  end)
+  panel.works = works
+
   -- feedback: the site can't open from the game, so the address sits in a box ready to copy
   local shape = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   shape:SetPoint("BOTTOMLEFT", 16, 120)
@@ -655,6 +725,16 @@ local function help()
   print("  /fa nameplates  - turn on friendly NPC nameplates (job titles in town need them)")
   print("  /fa titles on | off | auto  - job titles under NPC names (auto leaves them to Plater and other nameplate addons)")
   print("  /fa prices on | off  - Auction House prices on item tooltips (off while Auctionator shows its own)")
+  print("  /fa alts on | off  - what your other characters hold, on shopping lists (needs Syndicator)")
+  print("  /fa gather on | off  - herb and ore spots in Herbalism and Mining (needs GatherMate2)")
+  local hasA = type(_G.Auctionator) == "table"
+  local hasQ = type(rawget(_G, "LibQuestieDB")) == "table"
+  local hasS = type(rawget(_G, "Syndicator")) == "table"
+  local hasG = FA.GatherStatus and FA.GatherStatus() ~= "missing"
+  print("  Works best with: Auctionator (" .. (hasA and "installed" or "not installed") .. ") for current prices, Questie ("
+    .. (hasQ and "installed" or "not installed") .. ") for trainers and recipe sources, Syndicator ("
+    .. (hasS and "installed" or "not installed") .. ") for what your alts hold, GatherMate2 ("
+    .. (hasG and "installed" or "not installed") .. ") for herb and ore spots. All optional.")
   print("  /fa minimap [angle | reset | contacts]  - show/hide or move the minimap buttons")
   if FA.Vendors then print("  /fa <item, vendor or town>  - search your Trade Contacts") end
   print("  /fa enable <module>  |  /fa disable <module>")
@@ -688,6 +768,14 @@ SlashCmdList.FOREVERARTISAN = function(msg)
   elseif lower == "version" or lower == "ver" then
     print(PREFIX .. "ForeverArtisan " .. FA.Version())
     checkVersions()
+    -- the other addons it reads, when installed
+    for _, a in ipairs(FA.AddonHealth and FA.AddonHealth() or {}) do
+      if a.state ~= "missing" then
+        print(("  %s %s: %s"):format(a.name, a.version,
+          (a.state == "ok" and (GREEN .. "read OK|r")) or (a.state == "off" and (GREY .. "turned off|r"))
+          or (RED .. "can't read this version, " .. a.what .. " are off. Please report it at " .. FA.BUG_URL .. "|r")))
+      end
+    end
     if (FA.secretSkips or 0) > 0 then
       print(GREY .. ("  Hidden game values skipped this session: %d (harmless)"):format(FA.secretSkips) .. "|r")
     end
@@ -717,6 +805,27 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     print(PREFIX .. "Auction House prices on item tooltips: " .. (FA.PriceTipsOn and FA.PriceTipsOn() and "on" or "off")
       .. ((type(_G.Auctionator) == "table" and _G.Auctionator.API) and " (Auctionator shows its own, so ForeverArtisan stays quiet)" or "")
       .. ". /fa prices on | off")
+  elseif lower == "alts" then
+    local r = (rest or ""):lower()
+    ForeverArtisanSettings = ForeverArtisanSettings or {}
+    if r == "on" then ForeverArtisanSettings.altsOff = nil
+    elseif r == "off" then ForeverArtisanSettings.altsOff = true end
+    local st = FA.SyndicatorStatus and FA.SyndicatorStatus() or "missing"
+    print(PREFIX .. "What your other characters hold, on shopping lists: "
+      .. (st == "missing" and "needs Syndicator (Baganator installs it)" or st)
+      .. ". /fa alts on | off")
+    if panel and panel:IsShown() then refreshPanel() end
+  elseif lower == "gather" then
+    local r = (rest or ""):lower()
+    ForeverArtisanSettings = ForeverArtisanSettings or {}
+    if r == "on" then ForeverArtisanSettings.gatherOff = nil
+    elseif r == "off" then ForeverArtisanSettings.gatherOff = true end
+    if FA.GatherReset then FA.GatherReset() end
+    local st = FA.GatherStatus and FA.GatherStatus() or "missing"
+    print(PREFIX .. "Herb and ore spots in Herbalism and Mining: "
+      .. (st == "missing" and "needs GatherMate2 and its data pack" or st == "incompatible" and "can't read this GatherMate2" or st)
+      .. ". /fa gather on | off")
+    if panel and panel:IsShown() then refreshPanel() end
   elseif lower == "ahtest" then
     if FA.AHTestReport then FA.AHTestReport((rest or ""):lower()) end
   elseif lower == "help" then

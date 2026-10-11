@@ -232,6 +232,14 @@ function FA.RecipeWhere(recipeName, prefixes)
       end
     end
   end
+  -- nobody you've met teaches or sells it: what Questie's database knows (when installed)
+  if tag ~= "trainer" and tag ~= "vendor" and FA.QuestieRecipeSources then
+    local ok, qlines, qnpc = pcall(FA.QuestieRecipeSources, recipeName, prefixes)
+    if ok and qlines then
+      for _, l in ipairs(qlines) do lines[#lines + 1] = l end
+      tag, npc = tag or "Questie", npc or qnpc
+    end
+  end
   if #lines == 0 then
     lines[1] = "Not found yet. Keep exploring: it could be a trainer, vendor, drop or quest you haven't come across."
   end
@@ -313,8 +321,12 @@ function ForeverArtisan.TrainableRecipe(prof, name)
       local sk = it.sk and tostring(it.sk)
       if not sk or not prof or sk:find(prof, 1, true) then
         local at = sk and tonumber(sk:match("(%d+)%s*$")) or 1
-        local who = h.npc and h.npc.n and (h.npc.n .. " (" .. (h.npc.s or h.npc.z or "?") .. ")")
-        if not best or at < best.at or (at == best.at and (it.p or 0) < (best.cost or 0)) then
+        local who = h.npc and h.npc.n and (h.npc.n .. " (" .. (h.npc.s or h.npc.z or "?")
+          .. (h.npc.seed and ", seen on the Forever beta" or "") .. ")")
+        -- same skill: the cheaper one, and a trainer you've met over one from the Forever beta
+        local better = not best or at < best.at
+          or (at == best.at and ((best.npc and best.npc.seed and not h.npc.seed) or (it.p or 0) < (best.cost or 0)))
+        if better then
           best = { at = at, cost = it.p, who = who, npc = h.npc }
         end
       end

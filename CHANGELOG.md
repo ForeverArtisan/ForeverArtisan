@@ -1,5 +1,17 @@
 # ForeverArtisan changelog
 
+## 0.9.19 (unreleased)
+- This update adds new files: fully restart WoW after updating, /reload isn't enough.
+- Trade Contacts now comes with the profession trainers we met on the Forever beta (35 so far, all 12 professions), so "Train now", "Learn from", Nearest trainer and search work before you've met anyone. They're marked "beta" (in plans: "seen on the Forever beta") until you talk to them; then your own record takes over. You only see trainers for your faction and the neutral towns. Right-click one twice on the Contacts tab to hide it; `/fa contacts seeds off` hides them all, `seeds reset` brings them back.
+- Nearest trainer no longer lists cloth quartermasters as Tailoring trainers.
+- Works with Questie: when Questie is installed, Trade Contacts also finds every profession trainer in its database (for your faction), in search and Nearest trainer, marked "Questie". Your own contacts and the beta trainers come first, and the Contacts tab stays your own address book. ForeverArtisan reads Questie's database once per Questie version, then remembers the list. `/fa contacts questie off` turns it off. Without Questie nothing changes.
+- With Questie, recipe books also say where a recipe you don't have comes from (who sells it for your faction, which mob drops it, or which quest rewards it), and shopping lists name a vendor or the mobs that drop a material, all marked "from Questie". About three in four recipes in Forever have a known source. What you've seen yourself always comes first.
+- Works with Syndicator (Baganator installs it): shopping lists show what your other characters hold of a material you still need, like "8 on alts", including leather or thread you would otherwise craft. Hover for who has it in bags, bank or mailbox, and whether it covers the rest. Same realm and faction only. `/fa alts off` turns it off.
+- Works with GatherMate2 and its data pack: Herbalism's "Pick next" and Herb guide, and Mining's "Mine next" and Node guide, show the zones where an herb or ore you haven't logged yet grows, your own zone first. Hover a row for the zones and how many spots each has; click it for a waypoint to the nearest one. Your own gather log always comes first. `/fa gather off` turns it off.
+- The `/fa` panel has a "Works best with" line: Auctionator for current prices, Questie for trainers and recipe sources, Syndicator for what your alts hold, GatherMate2 for herb and ore spots. Hover it for what each adds; click it to turn Questie's trainers on or off. Without Questie, Nearest trainer says what it would add.
+- If an update to one of those addons changes what ForeverArtisan reads, that one feature turns itself off and a single chat line says so (once per version), with where to report it. `/fa version` lists each one as "read OK" or not, and the `/fa` panel marks it "can't read".
+- Fixed for future builds: the 0.9.18 fix for material names that load late is now part of every crafting profession's template, so it stays in when the professions are rebuilt.
+
 ## 0.9.18 (2026-10-10)
 - Shopping lists and plans no longer show "item:2450" in place of a material's name. When the game hasn't sent an item's name yet, ForeverArtisan asks for it and the list redraws with the real name a moment later.
 - Fishing: the capped message now reads "capped: train".

@@ -1,17 +1,19 @@
 ## Interface: 16001
 ## Title: ForeverArtisan: Trade Contacts
 ## IconTexture: Interface\AddOns\ForeverArtisan_Core\Media\contacts
-## Notes: Your crafting address book. Crafting vendors and profession trainers you talk to are saved with what they sell, prices, limited stock and location. Searchable, on item tooltips, shared by all your characters. Only NPCs you've met.
+## Notes: Your crafting address book. Crafting vendors and profession trainers you talk to are saved with what they sell, prices, limited stock and location. Comes with the profession trainers we met on the Forever beta. Searchable, on item tooltips, shared by all your characters.
 ## Author: ForeverArtisan
 ## Version: 0.9.18
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core
-## OptionalDeps: TomTom
+## OptionalDeps: TomTom, QuestieDB
 ## SavedVariables: ForeverArtisanContactsDB, ForeverArtisanLoggerDB
 ## X-FA-Slash: FACONTACTS
 ## X-FA-Alias: contacts
 
 Contacts.lua
+SeedTrainers.lua
+QuestieTrainers.lua
 Finder.lua
 UI.lua

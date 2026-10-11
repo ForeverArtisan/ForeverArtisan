@@ -23,6 +23,7 @@ local function say(msg)
   if ForeverArtisanContactsDB and ForeverArtisanContactsDB.quiet then return end
   DEFAULT_CHAT_FRAME:AddMessage(PREFIX .. msg)
 end
+ns.say = say
 
 ---------------------------------------------------------------- helpers
 
@@ -805,6 +806,18 @@ end
 
 -- forget one contact (vendor and trainer records for that NPC)
 function ns.Forget(key)
+  -- a seeded trainer (met on the Forever beta) isn't saved data: hide it instead
+  local seedId = type(key) == "string" and tonumber(key:match("^seed:(%d+)$"))
+  if seedId then
+    local st = ForeverArtisanContactsDB.settings
+    st.hiddenSeeds = st.hiddenSeeds or {}
+    st.hiddenSeeds[seedId] = true
+    local name
+    for _, sd in ipairs(ns.SEED_TRAINERS or {}) do if sd.id == seedId then name = sd.n end end
+    say("hid " .. (name or "that trainer") .. ". /fa contacts seeds reset brings the beta trainers back.")
+    if ns.OnContactsChanged then ns.OnContactsChanged() end
+    return
+  end
   local entries = ForeverArtisanContactsDB and ForeverArtisanContactsDB.entries
   local e = entries and entries[key]
   if not e then return end
@@ -993,13 +1006,15 @@ SlashCmdList.FACONTACTS = function(msg)
       if e.kind == "vendor" then v = v + 1 elseif e.kind == "trainer" then t = t + 1 end
     end
     say(("%d vendors and %d trainers saved on this account."):format(v, t))
-    DEFAULT_CHAT_FRAME:AddMessage("  Talk to a crafting vendor or profession trainer and they're saved. Only NPCs you've met show up.")
+    DEFAULT_CHAT_FRAME:AddMessage("  Talk to a crafting vendor or profession trainer and they're saved. Profession trainers we met on the Forever beta show up too, marked beta, until you meet them yourself.")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts  - open the window (search, contacts)")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa <item or vendor>  - search, e.g. /fa silk thread")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts tooltips  - 'Sold by' lines on item tooltips on/off")
     DEFAULT_CHAT_FRAME:AddMessage("  Crafting NPCs you pass are noted while friendly NPC nameplates are on (/fa nameplates). Search tab: 'Only not visited' lists the ones to talk to, nearest first")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts forget <name>  - remove one contact (or right-click it twice on the Contacts tab)")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts note <text>  - add a note to the last contact  ·  /fa contacts quiet  - chat messages on/off")
+    DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts seeds off, on or reset  - the trainers we met on the Forever beta: hide them all, show them, or bring back ones you hid")
+    DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts questie on or off  - with Questie installed, every profession trainer from its database shows in search and Nearest trainer")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts clear confirm  - forget everyone")
   elseif cmd == "tooltips" then
     local st = ForeverArtisanContactsDB.settings
@@ -1013,8 +1028,63 @@ SlashCmdList.FACONTACTS = function(msg)
         if (e.kind == "vendor" or e.kind == "trainer") and e.name and e.name:lower() == q then hits[#hits + 1] = k end
       end
     end
+    if q ~= "" and #hits == 0 then
+      for _, sd in ipairs(ns.SEED_TRAINERS or {}) do
+        if sd.n:lower() == q then hits[#hits + 1] = "seed:" .. sd.id end
+      end
+    end
     if #hits == 0 then say("no contact called '" .. rest .. "'. Use the exact name, or right-click it twice on the Contacts tab.") end
     for _, k in ipairs(hits) do ns.Forget(k) end
+  elseif cmd == "questie" then
+    local st = ForeverArtisanContactsDB.settings
+    local sub = rest:lower()
+    if sub == "off" then
+      st.questieOff = true
+      say("Questie trainers off. Trade Contacts shows your own contacts and the beta trainers.")
+    elseif sub == "on" then
+      st.questieOff = nil
+      if ns.BuildQuestieTrainers then ns.BuildQuestieTrainers() end
+      if FA.QDB and FA.QDB.BuildRecipeIndex then pcall(FA.QDB.BuildRecipeIndex) end
+      say("Questie trainers on" .. (ns.QuestieStatus and ns.QuestieStatus() == "missing" and ", but Questie isn't installed." or "."))
+    else
+      local s2, n = "missing", 0
+      if ns.QuestieStatus then s2, n = ns.QuestieStatus() end
+      local text = ({ on = ("on, %d profession trainers for your faction from its database"):format(n),
+        off = "off (/fa contacts questie on)", reading = "reading Questie's database...",
+        installed = "installed, not read yet", incompatible = "installed, but this version of its database isn't one ForeverArtisan can read yet",
+        missing = "not installed. With Questie, Trade Contacts finds every profession trainer, not just the ones you've met." })[s2]
+      say("Questie: " .. (text or s2))
+    end
+    if ns.OnContactsChanged then ns.OnContactsChanged() end
+  elseif cmd == "seeds" then
+    local st = ForeverArtisanContactsDB.settings
+    local sub = rest:lower()
+    if sub == "off" then st.seedsOff = true; say("trainers from the Forever beta hidden. Only NPCs you've met show up.")
+    elseif sub == "on" then st.seedsOff = nil; say("trainers from the Forever beta shown, marked beta, until you meet them yourself.")
+    elseif sub == "reset" then st.hiddenSeeds = nil; st.seedsOff = nil; say("all trainers from the Forever beta are back.")
+    elseif sub == "preview" then
+      -- for testing: show the beta trainers as a new player sees them, until /reload
+      ns.seedPreview = not ns.seedPreview or nil
+      say(ns.seedPreview and "preview on: the beta trainers show the way a new player sees them, in place of your own records of them. /reload or /fa contacts seeds preview to end it."
+        or "preview off: your own records are back.")
+    else
+      local n, met, hid = 0, 0, 0
+      local mine = {}
+      for _, e in pairs(ForeverArtisanContactsDB.entries) do
+        if e.kind == "trainer" or e.kind == "service" then mine[e.npcId or false] = true; mine[e.name or false] = true end
+      end
+      for _, sd in ipairs(ns.SEED_TRAINERS or {}) do
+        if not ns.SeedFits or ns.SeedFits(sd) then
+          n = n + 1
+          if mine[sd.id] or mine[sd.n] then met = met + 1 elseif st.hiddenSeeds and st.hiddenSeeds[sd.id] then hid = hid + 1 end
+        end
+      end
+      local showing = st.seedsOff and 0 or (n - met - hid)
+      say(("%d profession trainers from the Forever beta for your faction. You've met %d yourself, %d show as beta%s.")
+        :format(n, met, showing, hid > 0 and (", " .. hid .. " hidden") or "") .. (st.seedsOff and " (turned off)" or ""))
+      DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts seeds off, on or reset (brings back hidden ones)")
+    end
+    if ns.OnContactsChanged then ns.OnContactsChanged() end
   elseif cmd == "dev" then
     ForeverArtisanContactsDB.dev = not ForeverArtisanContactsDB.dev or nil
     say("dev mode " .. (ForeverArtisanContactsDB.dev and "on: profession windows are saved in full for the website." or "off."))

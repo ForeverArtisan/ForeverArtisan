@@ -26,10 +26,21 @@ local function ClickToWaypoint(rows)
   end
 end
 
+-- The Contacts tab is your address book: your own contacts and the beta trainers.
+-- QuestieDB trainers show in search and Nearest trainer only, so the book stays readable.
+local function Book()
+  local out = {}
+  for _, npc in ipairs(ns.Contacts()) do if not npc.questie then out[#out + 1] = npc end end
+  return out
+end
+
 local function Counts()
-  local v, t = 0, 0
-  for _, npc in ipairs(ns.Contacts()) do if npc.k == "vendor" then v = v + 1 elseif npc.k == "trainer" then t = t + 1 end end
-  return v, t
+  local v, t, b, q = 0, 0, 0, 0
+  for _, npc in ipairs(ns.Contacts()) do
+    if npc.questie then q = q + 1
+    elseif npc.seed then b = b + 1 elseif npc.k == "vendor" then v = v + 1 elseif npc.k == "trainer" then t = t + 1 end
+  end
+  return v, t, b, q
 end
 
 ---------------------------------------------------------------- page 1: Search
@@ -41,6 +52,9 @@ local function DistText(h)
   if h.dist >= 1e9 then return "other continent  ·  " end
   return ("%d yd  ·  "):format(math.floor(h.dist / 10 + 0.5) * 10)
 end
+-- seeded trainers (met on the Forever beta, not by you yet) carry a short tag in lists
+local function BetaTag(npc) return (npc.seed and "  ·  beta") or (npc.questie and "  ·  Questie") or "" end
+
 local function SearchData()
   local data = {}
   for _, h in ipairs(view.results) do
@@ -48,7 +62,7 @@ local function SearchData()
     if it then
       data[#data + 1] = { id = it.id, icon = it.id and Icon(it.id) or (it.train and 136235 or 134400), npc = npc,
         left = it.n .. (it.sk and (GRAY .. "  " .. it.sk .. "|r") or ""),
-        right = GRAY .. npc.n .. ", " .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "") .. "|r",
+        right = GRAY .. npc.n .. ", " .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "") .. BetaTag(npc) .. "|r",
         tail = ns.Money(it),
         tipFn = function() return npc.n .. (npc.t and (" <" .. npc.t .. ">") or "") .. "\n" .. ns.DetailText(npc, it) end }
     elseif npc.seenOnly then
@@ -64,7 +78,7 @@ local function SearchData()
           .. (h.trains and ("  ·  trains " .. h.trains) or "")
           .. (h.ranks and ("  ·  " .. table.concat((function()
                 local w = {} for _, r in ipairs(h.ranks) do w[#w + 1] = ns.RankWord(r) or r end return w end)(), ", ")) or "")
-          .. (npc.k == "service" and "  ·  visited, no list yet" or "") .. "|r",
+          .. (npc.k == "service" and "  ·  visited, no list yet" or "") .. BetaTag(npc) .. "|r",
         tipFn = function() return ns.DetailText(npc) end }
     end
   end
@@ -127,6 +141,7 @@ local function BuildSearchPage(p)
   end)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("Search items, vendors, towns or a profession. Click a row for a waypoint. Hover a checkbox to see what it does.")
+  p.help = help
   Wheel(p, "searchOff", function() return #view.results - SEARCH_ROWS end)
 end
 
@@ -145,9 +160,16 @@ local function RefreshSearchPage(p)
     p.townText:SetPoint("LEFT", p.platesBtn, "RIGHT", 6, 0); p.townText:SetWidth(94)
     p.townText:SetText(YELLOW .. "NPCs you pass aren't noted.|r")
   end
-  local v, t = Counts()
+  local v, t, b, nq = Counts()
   local q = p.box:GetText() or ""
   local hid = view.hidden or 0
+  -- under a trainer list, without Questie: say how to see every trainer (only here, only then)
+  local qs = ns.QuestieStatus and ns.QuestieStatus()
+  if p.help then
+    p.help:SetText((view.nearestLabel and qs == "missing")
+      and (YELLOW .. "Only trainers you've met or that we saw on the Forever beta. With Questie installed, every profession trainer in the game shows here.|r")
+      or "Search items, vendors, towns or a profession. Click a row for a waypoint. Hover a checkbox to see what it does.")
+  end
   if view.nearestLabel then
     p.status:SetText(view.nearestLabel .. GRAY .. "  Click one for a waypoint.|r")
   elseif view.onlyNew and hid > 0 and #data == 0 then
@@ -161,10 +183,14 @@ local function RefreshSearchPage(p)
   elseif view.onlyNew then
     p.status:SetText(#data == 0 and (GRAY .. "Nobody left to visit. Ride through a town and crafting NPCs you pass show up here.|r")
       or ("%d crafting NPC%s you've passed but not talked to, nearest first"):format(#data, #data == 1 and "" or "s"))
-  elseif v + t == 0 then
+  elseif v + t + b + nq == 0 then
     p.status:SetText(YELLOW .. "No contacts yet. Talk to a crafting vendor or profession trainer and they show up here.|r")
   elseif q == "" then
-    p.status:SetText(("%d vendors and %d trainers you've met. Type to search."):format(v, t))
+    local extra = {}
+    if b > 0 then extra[#extra + 1] = b .. " from the Forever beta" end
+    if nq > 0 then extra[#extra + 1] = nq .. " from Questie" end
+    p.status:SetText(("%d vendors and %d trainers you've met%s. Type to search."):format(v, t,
+      #extra > 0 and (", plus trainers: " .. table.concat(extra, ", ")) or ""))
   elseif #data == 0 then
     p.status:SetText(GRAY .. "Nothing matches among the NPCs you've met or passed.|r")
   else
@@ -231,7 +257,7 @@ local function ListData()
   local here = GetRealZoneText and GetRealZoneText()
   if zone == "here" then zone = here or "all" end
   local list = {}
-  for _, npc in ipairs(ns.Contacts()) do
+  for _, npc in ipairs(Book()) do
     if (zone == "all" or npc.z == zone) and PassesTrade(npc, trade) then list[#list + 1] = npc end
   end
   table.sort(list, function(a, b)
@@ -258,12 +284,13 @@ local function ListData()
       local what = (npc.k == "service" and "visited, no list yet")
         or (npc.k == "trainer" and ("%d skills"):format(#npc.items)) or ("%d items"):format(#npc.items)
       local status = (npc.age >= ns.HIDE_AFTER) and "  ·  |cffff4040hidden|r" or ""
-      local name = (npc.age > 0 and GRAY or "") .. npc.n .. (npc.age > 0 and "|r" or "")
+      local dim = npc.age > 0 or npc.seed
+      local name = (dim and GRAY or "") .. npc.n .. (dim and "|r" or "")
       data[#data + 1] = { icon = npc.k == "trainer" and 136235 or 133784, npc = npc, tipTitle = npc.n,
         left = name .. (npc.t and (GRAY .. " <" .. npc.t .. ">|r") or ""),
-        right = GRAY .. what .. "|r" .. status,
+        right = GRAY .. what .. BetaTag(npc) .. "|r" .. status,
         tipFn = function() return ns.DetailText(npc) .. (npc.age > 0 and "\n|cffff9020Not seen since a game update.|r" or "")
-          .. "\n|cff9d9d9dRight-click twice to forget this contact.|r" end }
+          .. (npc.seed and "\n|cff9d9d9dRight-click twice to hide this trainer.|r" or "\n|cff9d9d9dRight-click twice to forget this contact.|r") end }
     end
   end
   return data, #list
@@ -325,7 +352,7 @@ end
 local function ZoneOptions()
   local n, total = {}, 0
   local _, trade = ListFilters()
-  for _, npc in ipairs(ns.Contacts()) do
+  for _, npc in ipairs(Book()) do
     if npc.z and PassesTrade(npc, trade) then n[npc.z] = (n[npc.z] or 0) + 1; total = total + 1 end
   end
   local here = GetRealZoneText and GetRealZoneText()
@@ -342,7 +369,7 @@ local function TradeOptions()
   local n, crafting, everyone, classes = {}, 0, 0, 0
   local zone = ListFilters()
   if zone == "here" then zone = (GetRealZoneText and GetRealZoneText()) or "all" end
-  for _, npc in ipairs(ns.Contacts()) do
+  for _, npc in ipairs(Book()) do
     local inZone = zone == "all" or npc.z == zone
     if inZone then everyone = everyone + 1 end
     if inZone and ns.ClassTrainer and ns.ClassTrainer(npc.t) then classes = classes + 1 end
@@ -366,7 +393,7 @@ end
 -- One click: a waypoint to the closest trainer you've met (or passed) for your class or a profession.
 -- Only trainers from your own play; the menu lists only what you've found.
 local NOT_TRAINER = { "suppl", "vendor", "merchant", "goods", "wares", "reagent", "provision", "sundries",
-  "butcher", "tackle", "import", "fabric" }
+  "butcher", "tackle", "import", "fabric", "quartermaster" }
 local TRAINER_WORDS = { Alchemy = { "alchem" } } -- herbalism trainers aren't alchemy trainers
 
 local function LooksLikeTrainer(npc)
@@ -399,7 +426,7 @@ local function TrainerHits(kind)
     if ok then hits[#hits + 1] = { npc = npc, seen = seen or nil } end
   end
   for _, npc in ipairs(ns.Contacts()) do consider(npc) end
-  for _, h in ipairs(ns.Unvisited and ns.Unvisited() or {}) do consider(h.npc, true) end
+  for _, h in ipairs(ns.Unvisited and ns.Unvisited() or {}) do if not (h.npc.seed or h.npc.questie) then consider(h.npc, true) end end
   return ns.SortHits and ns.SortHits(hits) or hits
 end
 
@@ -411,7 +438,7 @@ local function NearestOptions()
     local h = hits[1]
     if not h then return end
     opts[#opts + 1] = { value = value, text = label .. " trainer: " .. GOLD .. h.npc.n .. "|r" .. GRAY .. ", " .. ns.Where(h.npc)
-      .. (h.seen and " (seen)" or "") .. (#hits > 1 and ("  +" .. (#hits - 1)) or "") .. "|r" }
+      .. (h.npc.seed and " (beta)" or h.npc.questie and " (Questie)" or h.seen and " (seen)" or "") .. (#hits > 1 and ("  +" .. (#hits - 1)) or "") .. "|r" }
   end
   if mine then add("class", mine) end
   for _, tr in ipairs(TRADES) do add(tr[1], tr[1]) end
@@ -428,7 +455,7 @@ local function GoNearest(kind)
   local label = kind == "class" and (MyClass() or "Class") or kind
   pages.search.box:SetText("")
   view.results, view.searchOff = hits, 0
-  view.nearestLabel = ("%s trainers you've met, nearest first."):format(label)
+  view.nearestLabel = ("%s trainers, nearest first."):format(label)
   ns.OnChange()
 end
 ns.NearestTrainerHits, ns.NearestOptions, ns.GoNearest = TrainerHits, NearestOptions, GoNearest
@@ -491,11 +518,14 @@ end
 local function RefreshListPage(p)
   local data, shown = ListData()
   p.count = #data
-  local total, old = #ns.Contacts(), 0
-  for _, npc in ipairs(ns.Contacts()) do if npc.age > 0 then old = old + 1 end end
+  local book = Book()
+  local total, old, seeds = #book, 0, 0
+  for _, npc in ipairs(book) do
+    if npc.seed then seeds = seeds + 1 elseif npc.age > 0 then old = old + 1 end
+  end
   p.zonePick.Sync(); p.tradePick.Sync()
   p.header:SetText(("Showing %d of %d contacts"):format(shown, total)
-    .. (old > 0 and "  ·  grey name = not seen since a game update" or ""))
+    .. (seeds > 0 and "  ·  beta = seen on the Forever beta" or (old > 0 and "  ·  grey name = not seen since a game update" or "")))
   view.listOff = math.min(view.listOff, math.max(0, #data - LIST_ROWS))
   Fill(p.rows, data, view.listOff)
   if total == 0 then p.empty:SetText("No contacts yet.\nTalk to a crafting vendor or profession trainer.")

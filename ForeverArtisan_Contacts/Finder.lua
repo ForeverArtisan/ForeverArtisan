@@ -42,16 +42,31 @@ local function Rebuild()
   local entries = DB() and DB().entries or {}
   -- A crafting NPC you talked to whose trainer or shop window never opened (a trainer who
   -- won't train you yet only shows chat) is still a contact: "visited, no list yet".
+  -- preview (/fa contacts seeds preview, until /reload): see the beta trainers the way a new player
+  -- does, by setting aside your own records of the same NPCs
+  local asSeed = {}
+  if ns.seedPreview then
+    for _, sd in ipairs(ns.SEED_TRAINERS or {}) do asSeed[sd.id] = true; asSeed[sd.n] = true end
+  end
+  local function setAside(e) return ns.seedPreview and (asSeed[e.npcId or false] or asSeed[e.name or false]) end
   local full = {}
+  local current = {} -- your records not yet hidden as out of date: only these keep QuestieDB's copy out
   for _, e in pairs(entries) do
-    if e.kind == "vendor" or e.kind == "trainer" then
+    if not setAside(e) and (e.kind == "vendor" or e.kind == "trainer" or e.kind == "service") and UpdatesSince(e) < ns.HIDE_AFTER then
+      if e.npcId then current[e.npcId] = true end
+      if e.name then current[e.name] = true end
+    end
+    if setAside(e) then -- previewing: as if never met
+    elseif e.kind == "vendor" or e.kind == "trainer" then
       if e.npcId then full[e.npcId] = true end
       if e.name then full[e.name] = true end
     end
   end
   for key, e in pairs(entries) do
+    if setAside(e) then e = {} end
     local chatOnly = e.kind == "service" and e.name and e.title and ns.IsRelevant and ns.IsRelevant(e.title)
       and not full[e.npcId or false] and not full[e.name]
+    if chatOnly then full[e.npcId or e.name] = true; full[e.name] = true end -- you talked to them: no seed copy
     if ((e.kind == "vendor" or e.kind == "trainer") and e.name) or chatOnly then
       local npc = { id = e.npcId, n = e.name, t = e.title, k = e.kind, z = e.zone, s = e.subzone, m = e.mapID, x = e.x, y = e.y,
                     seen = e.seenAt or e.lastSeen, visited = e.lastSeen, age = UpdatesSince(e), key = key, items = {} }
@@ -84,9 +99,57 @@ local function Rebuild()
       end
     end
   end
+  -- Seeded trainers (SeedTrainers.lua): profession trainers met on the Forever beta. Only the ones this
+  -- player hasn't met (their own record wins), that fit their faction and that they haven't hidden.
+  local st = Settings()
+  local seeded = {}
+  if not st.seedsOff then
+    local hidden = st.hiddenSeeds or {}
+    for _, sd in ipairs(ns.SEED_TRAINERS or {}) do
+      if not full[sd.id] and not full[sd.n] and not hidden[sd.id] and ns.SeedFits(sd) then
+        local npc = { id = sd.id, n = sd.n, t = sd.t, k = "trainer", z = sd.z, s = sd.s, m = sd.m, x = sd.x, y = sd.y,
+                      seen = sd.seen, age = 0, key = "seed:" .. sd.id, seed = true, items = {} }
+        for _, sk in ipairs(sd.skills or {}) do
+          npc.items[#npc.items + 1] = { n = sk.n, p = sk.p, sk = sk.sk, lv = sk.lv, train = true }
+        end
+        npcs[#npcs + 1] = npc
+        seeded[sd.id] = true; seeded[sd.n] = true
+        for _, it in ipairs(npc.items) do
+          local hit = { npc = npc, item = it }
+          local key = it.n:lower()
+          byName[key] = byName[key] or {}; table.insert(byName[key], hit)
+        end
+      end
+    end
+  end
+  -- QuestieDB trainers (QuestieTrainers.lua), when the player has Questie: who and where only.
+  -- Your own contacts and the beta trainers win.
+  local fromQuestie = ns.QuestieTrainers and ns.QuestieTrainers()
+  if fromQuestie then
+    local mapName = {}
+    for _, q in ipairs(fromQuestie) do
+      if not current[q.id] and not current[q.n] and not seeded[q.id] and not seeded[q.n] and ns.SeedFits(q) then
+        if mapName[q.m] == nil then
+          local ok, info = pcall(C_Map.GetMapInfo, q.m)
+          mapName[q.m] = ok and info and info.name or false
+        end
+        npcs[#npcs + 1] = { id = q.id, n = q.n, t = q.t, k = "trainer", z = mapName[q.m] or nil, m = q.m, x = q.x, y = q.y,
+                            age = 0, key = "questie:" .. q.id, questie = true, items = {} }
+      end
+    end
+  end
   table.sort(npcs, function(a, b) return (a.n or "") < (b.n or "") end)
   dirty = false
 end
+
+-- a seed fits the player's faction (neutral towns fit both)
+function ns.SeedFits(sd)
+  if sd.f == "Both" then return true end
+  local f = UnitFactionGroup and UnitFactionGroup("player")
+  if f ~= "Horde" and f ~= "Alliance" then return true end
+  return sd.f == f
+end
+ns.SEED_LABEL = "seen on the Forever beta"
 
 local function Ensure() if dirty then Rebuild() end end
 
@@ -234,7 +297,8 @@ end
 -- tooltip text for one contact (+ item)
 function ns.DetailText(npc, it)
   local lines = {}
-  lines[#lines + 1] = string.format("%s, %s  (%.1f, %.1f)", where(npc), npc.z or "", npc.x or 0, npc.y or 0)
+  local place = (npc.s and npc.z and npc.s ~= npc.z) and (npc.s .. ", " .. npc.z) or (npc.s or npc.z or "?")
+  lines[#lines + 1] = string.format("%s  (%.1f, %.1f)", place, npc.x or 0, npc.y or 0)
   if it then
     lines[#lines + 1] = it.n .. "  " .. money(it)
     if it.sk then lines[#lines + 1] = "Requires " .. it.sk end
@@ -262,7 +326,9 @@ function ns.DetailText(npc, it)
   end
   -- a profession trainer: how many recipes, and the first few by the skill they need
   if not it and npc.k == "trainer" and not (ns.ClassTrainer and ns.ClassTrainer(npc.t)) then
-    if #npc.items == 0 then
+    if #npc.items == 0 and npc.questie then
+      -- nothing to say here: the source line below explains it
+    elseif #npc.items == 0 then
       lines[#lines + 1] = GREY .. "No recipes saved yet. Open their training window again to read it.|r"
     else
       local list = {}
@@ -278,7 +344,12 @@ function ns.DetailText(npc, it)
     end
   end
   local note = ns.AgeNote(npc)
-  if note then
+  if npc.questie then
+    lines[#lines + 1] = GREY .. "From Questie's database. Open their training window once to save what they teach.|r"
+  elseif npc.seed then
+    lines[#lines + 1] = GREY .. "Seen on the Forever beta" .. (npc.seen and (", " .. date("%b %Y", npc.seen)) or "")
+      .. ". Talk to them once to make it yours.|r"
+  elseif note then
     lines[#lines + 1] = "|cffff9020" .. note .. "|r"
   else
     if npc.seen then lines[#lines + 1] = GREY .. "Last seen " .. date("%b %d", npc.seen) .. "|r" end
@@ -372,20 +443,20 @@ local function search(q)
     else
     local npcHit
     if has(npc.n) or has(npc.t) or has(npc.s) or has(npc.z) then
-      npcHit = { npc = npc }
+      npcHit = { npc = npc, seen = (npc.seed or npc.questie) or nil }
       table.insert(hits, npcHit)
     end
     local trains, ranks = 0, {}
     for _, it in ipairs(npc.items) do
       if has(it.n) then
         if it.train and rankWord(it.n) then ranks[#ranks + 1] = it.n
-        else table.insert(hits, { npc = npc, item = it }) end
+        else table.insert(hits, { npc = npc, item = it, seen = (npc.seed or npc.questie) or nil }) end
       elseif it.sk and has(it.sk) then
-        if it.train then trains = trains + 1 else table.insert(hits, { npc = npc, item = it }) end
+        if it.train then trains = trains + 1 else table.insert(hits, { npc = npc, item = it, seen = (npc.seed or npc.questie) or nil }) end
       end
     end
     if trains > 0 or #ranks > 0 then
-      if not npcHit then npcHit = { npc = npc }; table.insert(hits, npcHit) end
+      if not npcHit then npcHit = { npc = npc, seen = (npc.seed or npc.questie) or nil }; table.insert(hits, npcHit) end
       npcHit.trains = trains > 0 and trains or nil
       npcHit.ranks = #ranks > 0 and ranks or nil
     end
@@ -398,7 +469,11 @@ end
 -- every crafting NPC you've passed but not talked to, nearest first ("Only not visited")
 local function unvisited()
   Ensure()
-  return sortHits(seenHits(knownSet(), nil))
+  local out = seenHits(knownSet(), nil)
+  for _, npc in ipairs(npcs) do
+    if npc.seed and (not ns.WantedHere or ns.WantedHere(npc.t)) then out[#out + 1] = { npc = npc, seen = true } end
+  end
+  return sortHits(out)
 end
 ns.Unvisited = unvisited
 ns.SortHits = sortHits

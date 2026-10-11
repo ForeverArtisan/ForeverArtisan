@@ -3,9 +3,10 @@
 Run this in game before every build goes to the site or CurseForge/Wago. Screenshot anything off. A red Lua error is an automatic stop.
 
 ## 0. Build
-- [ ] `python tools\release.py . <version>` ran clean (syntax OK); it replaced the `-dev` version in every TOC; before launch the version is `0.9.x` (or `0.9.x-beta.N` for a rough test build, which the stores hide behind their Beta filter)
+- [ ] Release step ran clean (ask Claude to "run the release for <version>": it runs `tools/release.py` and saves the files; or `python tools\release.py . <version>` if Python is installed): syntax OK; it replaced the `-dev` version in every TOC; before launch the version is `0.9.x` (or `0.9.x-beta.N` for a rough test build, which the stores hide behind their Beta filter)
 - [ ] CHANGELOG.md top section has the version and today's date and reads right to a player
 - [ ] Fully restart WoW if a module is new (the game already runs the repo files through the junctions)
+- [ ] Seeded trainers current: if Kerry met new profession trainers, rerun `lua5.1 tools/build_seed.lua <SavedVariables>\ForeverArtisan_Contacts.lua > ForeverArtisan_Contacts\SeedTrainers.lua` (the addon project does this)
 
 ## 1. Start-up
 - [ ] Log in with no red Lua errors (also after `/reload`)
@@ -92,8 +93,19 @@ Look for overlapping text, rows running off the edge, and anything cut off.
 - [ ] Controller far cast (0.9.17): Gamepad UI off, the note says "press <button> to cast again" and the button recasts; Gamepad UI on, the note mentions the white dot and dot + button reels in. Check on a PlayStation and an Xbox-style pad
 - [ ] Key Bindings > AddOns: every entry starts with "ForeverArtisan:"; "open the panel", "open Fishing" and "open Trade Contacts" open and close their windows (full restart: new Bindings.xml files)
 
+## 7c. Works with other addons (0.9.19)
+Test once with each addon installed and once without. Named in game only, never in store or site copy.
+- [ ] `/fa` panel: "Works best with" is two lines, each installed addon has a check, missing ones are gray, hover explains all four; nothing cut off
+- [ ] Beta trainers: `/fa contacts seeds preview` shows them tagged "beta"; Nearest trainer lists them; `seeds off` / `on` work
+- [ ] Questie: one chat line ~10 s after the first login; Nearest trainer and search show "(Questie)" trainers; the Contacts tab has none; recipe book shows "from Questie" sources; `/fa contacts questie off` / `on`
+- [ ] Syndicator: a shopping list row shows "N on alts" (craft rows too); hover lists who has it; `/fa alts off` / `on`
+- [ ] GatherMate2: Pick next / Mine next and both guides show zones "(GatherMate2)" for unlogged nodes; hover lists spots; left-click sets a waypoint; `/fa gather off` / `on`
+- [ ] `/fa version` lists each installed one as "read OK"
+- [ ] Without any of them: no errors, rows say "not logged yet", Nearest trainer hints what Questie would add
+
 ## 8. Publish
 - [ ] Commit, tag `v<version>` (exactly the TOC version), Push origin
 - [ ] GitHub Actions run is green; the GitHub Release has the zip
 - [ ] CurseForge and Wago show the new file (Release for 0.9.x and 1.x, Beta only for -beta.N tags)
 - [ ] The site download link and changelog match the build
+- [ ] Shipped handoff for the site: `HANDOFF-<version>-shipped.md` in D:\ForeverArtisan.App ("vX is live" bar, changelog, no other addons named)

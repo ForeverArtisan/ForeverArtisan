@@ -96,7 +96,7 @@ local function RefreshMainPage(p)
       local now = ns.PickNext()
       local top = now[1]
       p.color:SetText(top and ("Best skill-ups right now: " .. ns.COLOR_CODE[top.color] .. top.name .. "|r"
-        .. (top.where and (GRAY .. "  (" .. top.where .. ")|r") or "")) or "")
+        .. ((top.where or top.gm) and (GRAY .. "  (" .. (top.where or (top.gm .. ", from GatherMate2")) .. ")|r") or "")) or "")
     end
   else
     p.skill:SetText("Herbalism")
@@ -131,6 +131,13 @@ local function BuildProgressPage(p)
   Header(p, -54, "Pick next")
   Text(p, "GameFontDisableSmall", "TOPLEFT", 90, -56):SetText("herbs that still give skill-ups")
   p.nextRows = MakeRows(p, 6, -72, true)
+  -- a click sets a waypoint to the nearest spot GatherMate2 knows (when it's installed)
+  for _, r in ipairs(p.nextRows) do
+    r:SetScript("OnClick", function(self)
+      local d = self.data
+      if d and d.node and FA.GatherWaypoint and FA.GatherZones and FA.GatherZones("herb", d.node) then FA.GatherWaypoint("herb", d.node) end
+    end)
+  end
   p.soon = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -233); p.soon:SetWidth(430)
 
   Header(p, -250, "Goals")
@@ -172,7 +179,8 @@ local function RefreshProgressPage(p)
   for _, h in ipairs(now) do
     data[#data + 1] = { id = h.id, icon = Icon(h.id),
       left = ns.COLOR_CODE[h.color] .. h.name .. "|r  " .. GRAY .. h.req .. "|r",
-      right = h.where or (GRAY .. "not logged yet|r"),
+      right = h.where or (h.gm and (h.gm .. GRAY .. "  (GatherMate2)|r")) or (GRAY .. "not logged yet|r"),
+      node = h.name, tipFn = FA.GatherTip and function() return (FA.GatherTip("herb", h.name)) end,
       act = "Goal", onAct = function() ns.AddGoal(h.id, Amount(), h.name) end }
   end
   Fill(p.nextRows, data, 0)
@@ -271,8 +279,17 @@ local function GuideData()
     local where = ns.ZoneText(h[1])
     data[#data + 1] = { id = h[1], icon = Icon(h[1]), name = h[2],
       left = ns.COLOR_CODE[c] .. h[2] .. "|r",
+      -- not logged yet: the zones GatherMate2 knows, when it's installed
+      gm = not where and FA.GatherZoneText and FA.GatherZoneText("herb", h[2], 1, true) or nil,
+      node = h[2],
       right = GRAY .. h[3] .. "|r   " .. (where or (GRAY .. "not logged|r")),
-      tip = (skill and (ns.COLOR_WORD[c] .. ".\n") or "") .. "Right-click: add as a goal." }
+      tip = "Right-click: add as a goal." }
+    local d = data[#data]
+    if d.gm then
+      d.right = GRAY .. h[3] .. "|r   " .. d.gm .. GRAY .. "  (GatherMate2)|r"
+      d.tip = nil
+      d.tipFn = function() return (FA.GatherTip("herb", d.node) or "") .. "\nRight-click: add as a goal." end
+    end
   end
   return data
 end
@@ -284,7 +301,8 @@ local function BuildGuidePage(p)
   for _, r in ipairs(p.rows) do
     r:SetScript("OnClick", function(self, button)
       local d = self.data
-      if d and button == "RightButton" then ns.AddGoal(d.id, Amount(), d.name) end
+      if d and button == "RightButton" then ns.AddGoal(d.id, Amount(), d.name)
+      elseif d and d.node and FA.GatherWaypoint and FA.GatherZones and FA.GatherZones("herb", d.node) then FA.GatherWaypoint("herb", d.node) end
     end)
   end
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)

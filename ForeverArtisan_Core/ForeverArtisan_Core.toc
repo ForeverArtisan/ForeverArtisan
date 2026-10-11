@@ -15,6 +15,10 @@ VendorItems.lua
 Prices.lua
 Gear.lua
 Modules.lua
+QuestieDB.lua
+Alts.lua
+GatherSpots.lua
+AddonCheck.lua
 RecipeFinds.lua
 NameplateTitles.lua
 Minimap.lua

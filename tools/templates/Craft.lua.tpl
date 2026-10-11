@@ -28,6 +28,8 @@ local function ItemName(id, fallback)
   if not id then return fallback or "?" end
   local f = (C_Item and C_Item.GetItemInfo) or GetItemInfo
   local n = f and f(id)
+  -- not loaded yet: ask the game for it; the list redraws when it arrives
+  if not n and ForeverArtisan.WaitForItem then ForeverArtisan.WaitForItem(id) end
   return n or fallback or ("item:" .. id)
 end
 ns.ItemName = ItemName
@@ -440,6 +442,8 @@ function ns.SourceFor(id, name)
   if w then return "Fish: " .. w .. ", from your Fishing log" end
   local drop = ForeverArtisan.MaterialWhere and ForeverArtisan.MaterialWhere(id)
   if drop then return drop end
+  local qs = ForeverArtisan.QuestieMaterial and ForeverArtisan.QuestieMaterial(id)
+  if qs then return qs end
   local class, sub = ItemKind(id)
   name = name or ""
   local herbAt = ForeverArtisan.HerbSkill and ForeverArtisan.HerbSkill(id)
@@ -724,7 +728,7 @@ local function TrainerFor(rankName)
   for _, key in ipairs({ PROF .. " (" .. rankName .. ")", rankName .. " " .. PROF }) do
     local hits = V.hitsForLink(nil, key)
     local h = hits and hits[1]
-    if h then return h.npc.n .. ", " .. (h.npc.s or h.npc.z or "?") end
+    if h then return h.npc.n .. ", " .. (h.npc.s or h.npc.z or "?"), h.npc.seed end
   end
 end
 ns.TrainerFor = TrainerFor
@@ -737,9 +741,11 @@ function ns.SkillInfo()
   info.capped = max and rank >= max and max < 300
   info.faction = Faction()
   local next = max and RANK_AT[max]
-  local met = next and TrainerFor(next[1])
+  local met, seed
+  if next then met, seed = TrainerFor(next[1]) end
   if met then
-    info.advice = ("%s: %s, from your Trade Contacts (needs %d, level %d)."):format(next[1], met, next[2], next[3])
+    info.advice = ("%s: %s, %s (needs %d, level %d)."):format(next[1], met,
+      seed and "seen on the Forever beta" or "from your Trade Contacts", next[2], next[3])
   else
     info.advice = max and ADVICE[info.faction][max]
   end

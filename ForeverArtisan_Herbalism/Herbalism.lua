@@ -227,6 +227,8 @@ function ns.PickNext()
   for _, h in ipairs(ns.HERBS) do
     local c = ns.HerbColor(h[3], skill)
     local rec = { id = h[1], name = h[2], req = h[3], color = c, where = ns.ZoneText(h[1]) }
+    -- herbs you haven't logged: the zones GatherMate2 knows, when it's installed
+    if not rec.where and c ~= "gray" and ForeverArtisan.GatherZoneText then rec.gm = ForeverArtisan.GatherZoneText("herb", h[2], 1) end
     if c == "orange" or c == "yellow" or c == "green" then
       now[#now + 1] = rec
     elseif c == "red" and #soon < 3 then
@@ -650,7 +652,8 @@ SlashCmdList.FAHERB = function(msg)
     say(("Skill %d. Herbs that still give skill-ups:"):format(skill))
     for i = 1, math.min(6, #now) do
       local h = now[i]
-      say(("  %s%s|r (%d)  %s"):format(ns.COLOR_CODE[h.color], h.name, h.req, h.where or (GRAY .. "not logged yet|r")))
+      say(("  %s%s|r (%d)  %s"):format(ns.COLOR_CODE[h.color], h.name, h.req, h.where
+        or (h.gm and (h.gm .. GRAY .. " (GatherMate2)|r")) or (GRAY .. "not logged yet|r")))
     end
     for _, h in ipairs(soon) do say(("  %sunlocks at %d:|r %s"):format(GRAY, h.req, h.name)) end
   elseif cmd == "zone" then

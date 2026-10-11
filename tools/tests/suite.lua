@@ -107,6 +107,8 @@ local function run(cmd, arg)
   if not ok then print("SLASH ERROR",cmd,arg,err) os.exit(1) end
 end
 for k in pairs(SlashCmdList) do io.write(k," ") end print()
+-- the older tests use their own made-up contacts: keep the beta trainers out until the 0.9.19 tests
+ForeverArtisanContactsDB.settings.seedsOff=true; loadedFrames["ForeverArtisan_Contacts"].ns.OnContactsChanged()
 run("FOREVERARTISAN",""); run("FOREVERARTISAN","help"); run("FOREVERARTISAN","silk"); run("FASEARCH","tailoring")
 local cns=loadedFrames["ForeverArtisan_Contacts"].ns
 local r=cns.Search("silk"); print("SEARCH silk", #r, r[1] and (r[1].item and r[1].item.n or r[1].npc.n))
@@ -800,7 +802,7 @@ do
   local st=cns.Pages.search.status:GetText() or ""
   local r1=cns.Pages.search.rows[1].data
   print("NEAREST LIST", st, r1 and r1.right)
-  assert(st:find("Druid trainers you've met, nearest first"), "nearest list status")
+  assert(st:find("Druid trainers, nearest first"), "nearest list status")
   assert(r1 and (r1.npc.n=="Turak Runetotem" or r1.npc.n=="Kym Wildmane") and r1.right:find("yd") or r1.right:find("other continent"), "rows show distance")
 end
 -- /fa <profession>: key, alias, the person's name or a clear start all reach the module
@@ -1761,6 +1763,334 @@ do
   FA.WaitForItem, GetItemInfo = oldW, oldInfo
   if C_Item then C_Item.GetItemInfo=oldC end
   print("0.9.18 ok")
+end
+-- 0.9.19: seeded trainers (profession trainers met on the Forever beta)
+do
+  local db=ForeverArtisanContactsDB
+  local cns=loadedFrames["ForeverArtisan_Contacts"].ns
+  local saved=db.entries
+  db.entries={}; db.settings.seedsOff=nil; db.settings.hiddenSeeds=nil; db.scouted={}
+  cns.OnContactsChanged()
+  assert(#(cns.SEED_TRAINERS or {}) > 0, "seed file loaded")
+  -- nothing in the seed names a character or realm
+  for _, sd in ipairs(cns.SEED_TRAINERS) do
+    assert(sd.seenBy==nil and sd.build==nil and sd.reaction==nil, "seed keeps only what players need")
+    assert(sd.f=="Horde" or sd.f=="Alliance" or sd.f=="Both", "every seed has a faction")
+  end
+  local f=io.open(ROOT.."/ForeverArtisan_Contacts/SeedTrainers.lua"):read("*a")
+  assert(not f:find("seenBy") and not f:find("Classic Beta") and not f:find("%-%u%l+ PvE"), "no character or realm names in the seed file")
+  -- a fresh install: Victor Ward (Undercity) teaches Bolt of Woolen Cloth, marked as a seed
+  local victor
+  for _, npc in ipairs(cns.Contacts()) do if npc.n=="Victor Ward" then victor=npc end end
+  assert(victor and victor.seed and victor.key:find("^seed:"), "seeded trainer in contacts")
+  local hits=ForeverArtisan.Vendors.hitsForLink(nil,"Bolt of Woolen Cloth")
+  local found
+  for _, h in ipairs(hits) do if h.npc.n=="Victor Ward" then found=h end end
+  assert(found and found.npc.seed, "seeded trainer answers recipe lookups")
+  local t=ForeverArtisan.TrainableRecipe("Tailoring","Bolt of Woolen Cloth")
+  assert(t and t.npc.seed and t.who:find("seen on the Forever beta"), "plans label a seeded trainer")
+  assert(cns.DetailText(victor):find("Seen on the Forever beta"), "detail says where it came from")
+  -- your own visit replaces the seed: one Victor Ward, not seeded
+  db.entries["trainer:"..victor.id]={kind="trainer",npcId=victor.id,name="Victor Ward",title="Journeyman Tailor",zone="Undercity",
+    subzone="Magic Quarter",mapID=1458,x=70,y=30,skills={{name="Bolt of Woolen Cloth",skillReq="Tailoring 55",priceCopper=100}}}
+  cns.OnContactsChanged()
+  local n, seeded = 0, false
+  for _, npc in ipairs(cns.Contacts()) do if npc.n=="Victor Ward" then n=n+1; seeded=npc.seed or seeded end end
+  assert(n==1 and not seeded, "your own record replaces the seed")
+  db.entries={}
+  cns.OnContactsChanged()
+  -- faction: an Alliance player doesn't get Horde trainers, but keeps the neutral Booty Bay one
+  local oldF=UnitFactionGroup
+  UnitFactionGroup=function() return "Alliance" end
+  cns.OnContactsChanged()
+  local horde, bb = false, false
+  for _, npc in ipairs(cns.Contacts()) do
+    if npc.n=="Victor Ward" then horde=true end
+    if npc.n=="Myizz Luckycatch" then bb=true end
+  end
+  assert(not horde and bb, "faction filter keeps neutral towns only")
+  UnitFactionGroup=oldF
+  cns.OnContactsChanged()
+  -- hide one (right-click twice), turn them all off, reset
+  cns.Forget("seed:"..victor.id)
+  for _, npc in ipairs(cns.Contacts()) do assert(npc.n~="Victor Ward", "hidden seed stays hidden") end
+  run("FACONTACTS","seeds off")
+  assert(#cns.Contacts()==0, "seeds off: only NPCs you've met")
+  run("FACONTACTS","seeds reset")
+  local back=false
+  for _, npc in ipairs(cns.Contacts()) do if npc.n=="Victor Ward" then back=true end end
+  assert(back, "reset brings hidden seeds back")
+  -- "Only not visited" lists seeds once, and Nearest trainer doesn't count them twice
+  local un=0
+  for _, h in ipairs(cns.Unvisited()) do if h.npc.n=="Victor Ward" then un=un+1 end end
+  assert(un==1, "seed listed once as not visited")
+  local th=0
+  for _, h in ipairs(cns.NearestTrainerHits("Tailoring")) do if h.npc.n=="Victor Ward" then th=th+1 end end
+  assert(th==1, "nearest trainer lists a seed once")
+  -- preview: your own record of a seeded trainer steps aside until preview ends
+  db.entries={["trainer:"..victor.id]={kind="trainer",npcId=victor.id,name="Victor Ward",title="Journeyman Tailor",zone="Undercity",
+    skills={{name="Bolt of Woolen Cloth",skillReq="Tailoring 55",priceCopper=100}}}}
+  cns.OnContactsChanged()
+  run("FACONTACTS","seeds preview")
+  local pv
+  for _, npc in ipairs(cns.Contacts()) do if npc.n=="Victor Ward" then assert(not pv, "one row in preview"); pv=npc end end
+  assert(pv and pv.seed, "preview shows the seed in place of your record")
+  run("FACONTACTS","seeds preview")
+  for _, npc in ipairs(cns.Contacts()) do if npc.n=="Victor Ward" then assert(not npc.seed, "preview off: your record back") end end
+  run("FACONTACTS","seeds")
+  db.entries=saved; db.settings.seedsOff=true
+  cns.OnContactsChanged()
+  print("0.9.19 seeds ok")
+end
+-- 0.9.19: trainers from QuestieDB (stubbed LibQuestieDB)
+do
+  local FA=ForeverArtisan
+  local db=ForeverArtisanContactsDB
+  local cns=loadedFrames["ForeverArtisan_Contacts"].ns
+  local saved, oldTimer = db.entries, C_Timer
+  C_Timer={After=function(_,fn) fn() end, NewTicker=function() return {Cancel=function() end} end}
+  db.entries={}; db.settings.seedsOff=nil; db.settings.questieOff=nil; db.settings.questieNoted=nil; db.questieCache=nil
+  local npcs={
+    [9001]={name="Grumbo",sub="Journeyman Tailor",flags=19,fr="H",sp={[1637]={{60,50}}}},
+    [9002]={name="Ally Tailor",sub="Expert Tailor",flags=19,fr="A",sp={[1519]={{43,74}}}},
+    [9003]={name="Quartie",sub="Horde Cloth Quartermaster",flags=19,fr="H",sp={[1637]={{1,1}}}},
+    [9004]={name="Newbie Cook",sub="Cook",fr="AH",sp={[1637]={{2,2}}}},
+    [9005]={name="Gruff Guard",sub="Orgrimmar Grunt",flags=0,fr="H",sp={[1637]={{3,3}}}},
+    [11048]={name="Victor Ward",sub="Journeyman Tailor",flags=19,fr="H",sp={[1497]={{70,29}}}},
+    [7940]={name="Darnall",sub="Cloth Merchant",flags=4,fr="AH",sp={[493]={{51,51}}}},
+    [9100]={name="Ally Seller",sub="Trade Goods",flags=4,fr="A",sp={[1519]={{50,50}}}},
+    [4831]={name="Gelihast",flags=0,sp={[719]={{30,40}}}},
+  }
+  local items={
+    [14469]={name="Pattern: Runecloth Robe",class=9,vendors={7940,9100}},
+    [273141]={name="Blueprint: Fishing Rack",class=9,npcDrops={4831}},
+    [16083]={name="Expert Fishing - The Bass and You",class=9,questRewards={555}},
+    [3182]={name="Spider's Silk",class=7,npcDrops={4831}},
+    [2589]={name="Linen Cloth",class=7,npcDrops={}},
+  }
+  for k=1,20 do items[2589].npcDrops[k]=4831 end
+  local function field(k) return function(id) local n=npcs[id]; return n and n[k] end end
+  LibQuestieDB={ contractVersion=3, RequireContract=function(v) return v>=1 and v<=3 end,
+    Npc={ GetAllIds=function() local t={} for id in pairs(npcs) do t[#t+1]=id end table.sort(t) return t end,
+      name=field("name"), subName=field("sub"), npcFlags=field("flags"), friendlyToFaction=field("fr"), spawns=field("sp") },
+    Item={ GetAllIds=function() local t={} for id in pairs(items) do t[#t+1]=id end table.sort(t) return t end,
+      name=function(id) return items[id] and items[id].name end, class=function(id) return items[id] and items[id].class end,
+      vendors=function(id) return items[id] and items[id].vendors end, npcDrops=function(id) return items[id] and items[id].npcDrops end,
+      questRewards=function(id) return items[id] and items[id].questRewards end },
+    Quest={ name=function(q) return q==555 and "Nat Pagle, Angler Extreme" or nil end },
+    Support={ Get=function() return { private={ areaIdToUiMapId="return {[1637]=1454,[1519]=1453,[1497]=1458,[493]=1450,[719]=221}" } } end } }
+  cns.QuestieReset(); cns.BuildQuestieTrainers()
+  local found={}
+  for _, npc in ipairs(cns.Contacts()) do if npc.questie then found[npc.n]=npc end end
+  assert(found["Grumbo"] and found["Grumbo"].m==1454 and found["Grumbo"].x==60, "Horde tailor from QuestieDB, on the game's map")
+  assert(not found["Ally Tailor"], "other faction left out")
+  assert(not found["Quartie"] and not found["Gruff Guard"], "quartermasters and guards aren't trainers")
+  assert(found["Newbie Cook"], "a new NPC with a trainer title but no flags is kept")
+  assert(not found["Victor Ward"], "a beta trainer wins over QuestieDB")
+  assert(db.settings.questieNoted, "one-time note about Questie")
+  -- your out-of-date record (hidden after two game updates) doesn't keep QuestieDB's copy out
+  local oldBuilds=db.builds
+  db.builds={"1","2","3"}
+  db.entries["service:9001"]={kind="service",npcId=9001,name="Grumbo",title="Journeyman Tailor",zone="Orgrimmar",build="1"}
+  cns.OnContactsChanged()
+  local q=false
+  for _, npc in ipairs(cns.Contacts()) do if npc.n=="Grumbo" and npc.questie then q=true end end
+  assert(q, "stale record: QuestieDB copy shows")
+  db.entries["service:9001"].build="3"
+  cns.OnContactsChanged()
+  for _, npc in ipairs(cns.Contacts()) do assert(not (npc.n=="Grumbo" and npc.questie), "current record wins over QuestieDB") end
+  db.entries["service:9001"]=nil; db.builds=oldBuilds
+  cns.OnContactsChanged()
+  local near=false
+  for _, h in ipairs(cns.NearestTrainerHits("Tailoring")) do if h.npc.n=="Grumbo" then near=true end end
+  assert(near, "Nearest trainer includes QuestieDB trainers")
+  assert(cns.DetailText(found["Grumbo"]):find("From Questie's database"), "detail says where it came from")
+  -- saved per QuestieDB version: the next login reads the list, not the database
+  assert(db.questieCache and #db.questieCache.list==4, "cache holds every trainer QuestieDB knows (both factions)")
+  local inv
+  LibQuestieDB.InvalidateCache=function(dt) inv=dt end
+  local reads=0
+  local oldIds=LibQuestieDB.Npc.GetAllIds
+  LibQuestieDB.Npc.GetAllIds=function() reads=reads+1 return oldIds() end
+  cns.QuestieReset(); db.questieCache={version="?",contract=3,list={{id=9001,n="Grumbo",t="Journeyman Tailor",prof="Tailoring",f="Horde",m=1454,x=60,y=50}}}
+  cns.BuildQuestieTrainers()
+  assert(reads==0, "cached list used")
+  cns.QuestieReset(); db.questieCache=nil; cns.BuildQuestieTrainers()
+  assert(inv=="Npc", "QuestieDB's cache released after the one-time read")
+  -- off switch
+  run("FACONTACTS","questie off")
+  for _, npc in ipairs(cns.Contacts()) do assert(not npc.questie, "questie off hides them") end
+  run("FACONTACTS","questie on"); run("FACONTACTS","questie")
+  local back=false
+  for _, npc in ipairs(cns.Contacts()) do if npc.questie then back=true end end
+  assert(back, "questie on brings them back")
+  -- recipe books and shopping lists: where a recipe or material comes from
+  FA.QDB.Reset(); FA.QDB.BuildRecipeIndex()
+  local rl, rtag, rnpc = FA.RecipeWhere("Runecloth Robe", {"Pattern: "})
+  local rtxt = table.concat(rl, " | ")
+  print("QUESTIE RECIPE", rtxt, rtag)
+  assert(rtxt:find("Sold by: Darnall") and rtxt:find("from Questie") and not rtxt:find("Ally Seller"), "recipe vendor for your faction")
+  assert(rtag=="Questie" and rnpc and rnpc.n=="Darnall" and rnpc.m==1450, "waypoint to the vendor")
+  rl = FA.RecipeWhere("Fishing Rack", {"Blueprint: "})
+  assert(table.concat(rl," "):find("Drops from: Gelihast"), "recipe drop from Questie")
+  rl = FA.RecipeWhere("Expert Fishing - The Bass and You", {"Pattern: "})
+  assert(table.concat(rl," "):find("Quest reward: Nat Pagle, Angler Extreme"), "quest reward from Questie")
+  assert(FA.QuestieMaterial(3182):find("Drops from: Gelihast"), "material drop")
+  assert(FA.QuestieMaterial(2589)==nil, "long drop lists left to the built-in answer")
+  -- a recipe you've seen at a vendor yourself: your contact, not Questie
+  db.entries["vendor:7940"]={kind="vendor",npcId=7940,name="Darnall",title="Cloth Merchant",zone="Moonglade",mapID=1450,x=51,y=51,
+    items={{name="Pattern: Runecloth Robe",itemId=14469,priceCopper=5000}}}
+  cns.OnContactsChanged()
+  rl = FA.RecipeWhere("Runecloth Robe", {"Pattern: "})
+  assert(not table.concat(rl," "):find("from Questie"), "your own vendor wins")
+  db.entries["vendor:7940"]=nil; cns.OnContactsChanged()
+  -- off switch covers recipes too
+  run("FACONTACTS","questie off")
+  assert(FA.QuestieRecipeSources("Runecloth Robe",{"Pattern: "})==nil and FA.QuestieMaterial(3182)==nil, "questie off: no recipe or material lines")
+  run("FACONTACTS","questie on")
+  print("0.9.19 questie items ok")
+  -- a QuestieDB we can't read: the feature stays off, no errors
+  LibQuestieDB.RequireContract=function() return false end
+  cns.QuestieReset(); db.questieCache=nil; cns.BuildQuestieTrainers(); cns.OnContactsChanged()
+  for _, npc in ipairs(cns.Contacts()) do assert(not npc.questie, "incompatible QuestieDB ignored") end
+  run("FACONTACTS","questie")
+  LibQuestieDB=nil; cns.QuestieReset(); cns.OnContactsChanged()
+  run("FACONTACTS","questie")
+  -- the /fa panel names what it works with
+  run("FOREVERARTISAN","")
+  local pnl=_G.ForeverArtisanPanel
+  local wt=pnl and pnl.works and pnl.works.text and (pnl.works.text._text or (pnl.works.text.GetText and pnl.works.text:GetText()))
+  print("WORKS LINE", wt)
+  assert(wt and wt:find("Works best with") and wt:find("Questie") and wt:find("Syndicator") and not wt:find("ReadyCheck"), "panel shows the works-with line, nothing checked without the addons")
+  C_Timer=oldTimer
+  db.entries=saved; db.settings.seedsOff=true
+  cns.OnContactsChanged()
+  print("0.9.19 questie ok")
+end
+-- 0.9.19: what your alts hold (stubbed Syndicator)
+do
+  local FA=ForeverArtisan
+  local oldName=UnitName
+  UnitName=function() return "Tester" end
+  Syndicator={ API={ IsReady=function() return true end,
+    GetInventoryInfoByItemID=function(id) if id==2589 then return { characters={
+      {character="Tester",bags=3,bank=0,mail=0}, {character="Altie",bags=5,bank=4,mail=0}, {character="Banky",bags=0,bank=0,mail=2} }, guilds={} } end
+      return { characters={}, guilds={} } end } }
+  local total, list = FA.AltStock(2589)
+  assert(total==11 and list[1].name=="Altie" and list[1].n==9, "alts counted, you left out, most first")
+  local note, tip = FA.AltShopText(2589, 20)
+  assert(note:find("11 on alts") and tip:find("Altie: 5 in bags, 4 in the bank") and tip:find("Covers 11 of the 20"), "shopping row note")
+  note, tip = FA.AltShopText(2589, 5)
+  assert(tip:find("instead of buying"), "enough on alts")
+  note, tip = FA.AltShopText(2589, 5, 5)
+  assert(note:find("11 on alts") and tip:find("instead of crafting"), "craft rows show alts too")
+  assert(FA.AltShopText(2589, 0)=="" , "nothing missing: no note")
+  assert(FA.AltStock(9999)==nil, "nobody has it")
+  run("FOREVERARTISAN","alts off")
+  assert(FA.AltStock(2589)==nil and FA.SyndicatorStatus()=="off", "alts off")
+  run("FOREVERARTISAN","alts on")
+  assert(FA.AltStock(2589), "alts back on")
+  Syndicator.API.GetInventoryInfoByItemID=function() error("changed") end
+  assert(FA.AltStock(2589)==nil, "a Syndicator we can't read: quietly nothing")
+  Syndicator=nil
+  assert(FA.AltStock(2589)==nil and FA.SyndicatorStatus()=="missing", "no Syndicator")
+  UnitName=oldName
+  print("0.9.19 alts ok")
+end
+-- 0.9.19: herb and ore spots (stubbed GatherMate2)
+do
+  local FA=ForeverArtisan
+  assert(FA.GatherStatus()=="missing" and FA.GatherZones("herb","Peacebloom")==nil, "no GatherMate2: nothing")
+  local function enc(x,y) return math.floor(x*100)*1000000 + math.floor(y*100)*100 end
+  GatherMate2={ nodeIDs={["Herb Gathering"]={Peacebloom=401, Silverleaf=402, Liferoot=412}, Mining={["Copper Vein"]=201}},
+    GetIDForNode=function(self,t,n) return self.nodeIDs[t][n] end,
+    gmdbs={} }
+  -- like GatherMate2 itself: a lookup table over the main storage and a storage add-on
+  local function proxy(base, extra)
+    return setmetatable({__gm2_prefix="X", __gm2_base_storage=base, __gm2_storage_map={Data=extra}},
+      {__index=function(_,k) return extra[k] or base[k] end})
+  end
+  GatherMate2.gmdbs["Herb Gathering"]=proxy({ [1443]={[enc(20,71)]=401,[enc(50,50)]=401,[enc(30,30)]=402,[enc(60,20)]=412} },
+    { [1412]={[enc(40,40)]=401,[enc(41,41)]=401,[enc(42,42)]=401} })
+  GatherMate2.gmdbs["Mining"]=proxy({}, { [1412]={[enc(60,60)]=201} })
+  assert(FA.GatherStatus()=="on", "GatherMate2 on")
+  local oldBest, oldPos=C_Map.GetBestMapForUnit, C_Map.GetPlayerMapPosition
+  C_Map.GetBestMapForUnit=function() return 1443 end
+  C_Map.GetPlayerMapPosition=function() return {GetXY=function() return .2,.7 end} end
+  local list,total=FA.GatherZones("herb","Peacebloom")
+  assert(total==5 and list[1].m==1443 and list[1].here and list[2].n==3, "your zone first, then most spots")
+  assert(FA.GatherZoneText("herb","Peacebloom"):find("Desolace"), "zone text")
+  local tip=FA.GatherTip("herb","Peacebloom")
+  assert(tip:find("from GatherMate2") and tip:find("you're here") and tip:find("waypoint"), "tooltip")
+  assert(FA.GatherZones("mine","Copper Vein"), "mining spots")
+  assert(FA.GatherZones("herb","Black Lotus")==nil, "unknown node: nothing")
+  local oldV=FA.Vendors; local got
+  FA.Vendors={waypoint=function(n) got=n end}
+  assert(FA.GatherWaypoint("herb","Peacebloom") and got.m==1443 and math.abs(got.x-20)<0.01 and math.abs(got.y-71)<0.01, "nearest spot on your map")
+  FA.Vendors=oldV
+  -- Herbalism and Mining pick next use it, chat and windows don't error
+  local hns=loadedFrames["ForeverArtisan_Herbalism"].ns
+  local now,_,hsk=hns.PickNext()
+  assert(now[1].name=="Liferoot" and not now[1].where and now[1].gm=="Desolace", "pick next shows GatherMate2 zones")
+  -- the Progress page: the row says where, hovers list the spots, a click sets the waypoint
+  run("FAHERB",""); run("FAHERB","")
+  for i=1,#frames do local b=frames[i] if b._text=="Progress" and b.scripts.OnClick then pcall(b.scripts.OnClick,b) end end
+  local row
+  for _,t in ipairs({"Progress","Herb guide"}) do
+    for i=1,#frames do local b=frames[i] if b._text==t and b.scripts.OnClick then pcall(b.scripts.OnClick,b) end end
+  end
+  local rows=0
+  for i=1,#frames do local r=frames[i]
+    if r.data and r.data.node=="Liferoot" and r.scripts.OnClick and r.right._text:find("GatherMate2") then row=r; rows=rows+1 end
+  end
+  assert(rows>=2, "Pick next and the Herb guide both show GatherMate2 zones")
+  assert(row and row.right._text:find("GatherMate2"), "Pick next row names the zone")
+  assert(row.tipFn():find("Known spots"), "row tooltip lists the spots")
+  got=nil; FA.Vendors={waypoint=function(n) got=n end}
+  row.scripts.OnClick(row)
+  assert(got and got.n=="Liferoot" and got.m==1443, "row click sets the waypoint")
+  FA.Vendors=oldV
+  run("FAHERB","next"); run("FAMINING","next")
+  run("FOREVERARTISAN","gather off")
+  assert(FA.GatherStatus()=="off" and FA.GatherZones("herb","Peacebloom")==nil, "gather off")
+  run("FOREVERARTISAN","gather on")
+  run("FOREVERARTISAN","")
+  local pnl=_G.ForeverArtisanPanel
+  local wt=pnl.works.text._text or pnl.works.text:GetText()
+  assert(wt:find("GatherMate2"), "works-with line names GatherMate2")
+  GatherMate2.GetIDForNode=function() error("changed") end; GatherMate2.nodeIDs=nil
+  FA.GatherReset()
+  assert(FA.GatherStatus()=="incompatible" and FA.GatherZones("herb","Peacebloom")==nil, "a GatherMate2 we can't read: nothing")
+  GatherMate2=nil; FA.GatherReset()
+  assert(FA.GatherStatus()=="missing", "gone")
+  C_Map.GetBestMapForUnit, C_Map.GetPlayerMapPosition=oldBest, oldPos
+  print("0.9.19 gather ok")
+end
+-- 0.9.19: a warning when another addon updates and we can't read it any more
+do
+  local FA=ForeverArtisan
+  local P0=print; local out={}
+  local function cap() out={} print=function(...) local t={} for i=1,select("#",...) do t[#t+1]=tostring(select(i,...)) end out[#out+1]=table.concat(t," ") end end
+  local function said(w) for _,l in ipairs(out) do if l:find(w,1,true) then return true end end end
+  ForeverArtisanSettings.addonWarned=nil
+  for _,a in ipairs(FA.AddonHealth()) do assert(a.state=="missing", a.name.." missing") end
+  Syndicator={API={IsReady=function() return true end}} -- an update without the call we use
+  cap(); FA.AddonWarn(); print=P0
+  assert(said("can't read this version of Syndicator") and said("foreverartisan.app/bug"), "warns once")
+  cap(); FA.AddonWarn(); print=P0
+  assert(not said("Syndicator"), "not again for the same version")
+  cap(); run("FOREVERARTISAN","version"); print=P0
+  assert(said("Syndicator") and said("can't read this version"), "/fa version says so")
+  run("FOREVERARTISAN","")
+  if not _G.ForeverArtisanPanel._shown then run("FOREVERARTISAN","") end
+  run("FOREVERARTISAN","alts") -- redraws the open panel
+  local wt=_G.ForeverArtisanPanel.works.text._text or _G.ForeverArtisanPanel.works.text:GetText()
+  assert(wt:find("can't read"), "panel marks it")
+  Syndicator.API.GetInventoryInfoByItemID=function() return {characters={}} end
+  cap(); FA.AddonWarn(); print=P0
+  assert(not said("Syndicator") and ForeverArtisanSettings.addonWarned.Syndicator==nil, "readable again: quiet, and re-armed")
+  Syndicator=nil
+  print("0.9.19 addon check ok")
 end
 print("CRAFTS OK")
 print("SUITE OK")
