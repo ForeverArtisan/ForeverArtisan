@@ -736,15 +736,28 @@ end
 -- House), whether it's trending up or down, and the same for each material.
 local CHART_W, CHART_H, CHART_DAYS = 380, 130, 14
 
--- "up 12% this week" (green/red as good for the seller), or why there's no trend yet
-local function trendWords(t, sellerView)
+-- "up 12% this week" (green/red as good for the seller), or why there's no trend yet.
+-- withTurn adds the last move when it went the other way: "down 16% this week, up 29% since yesterday",
+-- so the words match the chart's last segment.
+local function moveWords(dir, frac, sellerView, tail)
+  local pct = math.floor(math.abs(frac) * 100 + 0.5)
+  -- for something you sell, up is good; for a material you buy, down is good
+  local good = (dir == "up") == (sellerView and true or false)
+  return (good and GREEN or RED) .. dir .. " " .. pct .. "% " .. tail .. "|r"
+end
+local function trendWords(t, sellerView, withTurn)
   if not t or not t.now then return GREY .. "no prices seen yet|r" end
   if not t.dir then return GREY .. "one day seen so far: check back after another scan|r" end
-  if t.dir == "flat" then return GREY .. "steady this week|r" end
-  local pct = math.floor(math.abs(t.change) * 100 + 0.5)
-  -- for something you sell, up is good; for a material you buy, down is good
-  local good = (t.dir == "up") == (sellerView and true or false)
-  return (good and GREEN or RED) .. t.dir .. " " .. pct .. "% this week|r"
+  local week = (t.dir == "flat") and (GREY .. "steady this week|r") or moveWords(t.dir, t.change, sellerView, "this week")
+  local flat = FA.TREND_FLAT or 0.05
+  local turn = t.step and ((t.step > flat and "up") or (t.step < -flat and "down")) or nil
+  if withTurn and turn and turn ~= t.dir then
+    local today = FA.Day and FA.Day() or 0
+    local since = (t.prevDay == (t.last or today) - 1) and "since yesterday"
+      or ("since " .. date("%b ", t.prevDay * 86400) .. tonumber(date("%d", t.prevDay * 86400)))
+    week = week .. GREY .. ", |r" .. moveWords(turn, t.step, sellerView, since)
+  end
+  return week
 end
 FA.TrendWords = trendWords
 
@@ -759,18 +772,30 @@ local function trendArrow(t)
   return t and t.dir and ARROW[t.dir] or ""
 end
 
-function showTrend(row)
+function showTrend(row, chartId)
   local p = panel.market
   local d = p.detail
+  if p.showing ~= row then d.chartId = nil end
   p.showing = row
+  if chartId ~= nil then d.chartId = (chartId ~= row.r.itemId) and chartId or nil end
   for _, w in ipairs(p.listParts) do w:Hide() end
   d:Show()
   local rec = row.r
   d.title:SetText((row.prof.color and row.prof.color(rec) or "") .. rec.name .. "|r" .. GREY .. "  " .. row.prof.name .. "|r")
-  local t = FA.PriceTrend(rec.itemId)
+  -- the chart shows the craft, or the material you clicked; the line above it says which
+  local mat
+  for _, g in ipairs(rec.reagents or {}) do if d.chartId and g.id == d.chartId then mat = g end end
+  if not mat then d.chartId = nil end
+  local t = FA.PriceTrend(mat and mat.id or rec.itemId)
   d.trend = t
-  d.sells:SetText("Sells for " .. (t.now and FA.Money(t.now) or (row.sale and FA.Money(row.sale)) or "?") .. " each  ·  " .. trendWords(t, true)
-    .. (t.listed and (GREY .. "  ·  " .. t.listed .. " listed|r") or ""))
+  if mat then
+    local now = t.now or (FA.AHPrice and FA.AHPrice(mat.id))
+    d.sells:SetText(GOLD .. "Chart: " .. (mat.name or "material") .. "|r  costs " .. (now and FA.Money(now) or "?") .. " each  ·  "
+      .. trendWords(t, false, true) .. (t.listed and (GREY .. "  ·  " .. t.listed .. " listed|r") or ""))
+  else
+    d.sells:SetText(GOLD .. "Chart: " .. rec.name .. "|r  sells for " .. (t.now and FA.Money(t.now) or (row.sale and FA.Money(row.sale)) or "?")
+      .. " each  ·  " .. trendWords(t, true, true) .. (t.listed and (GREY .. "  ·  " .. t.listed .. " listed|r") or ""))
+  end
   local byDay, hi, lo = {}, 0, nil
   for _, e in ipairs(t.days) do
     byDay[e.day] = e
@@ -822,18 +847,39 @@ function showTrend(row)
     d.hits[i].e = e
   end
   for k = nLine + 1, #d.lines do d.lines[k]:Hide() end
+  -- the week before's average: what "up/down this week" is measured against
+  if t.base and hi > 0 then
+    local by = (mode == "bar") and (CHART_H * t.base / hi) or y(t.base)
+    d.avg:ClearAllPoints(); d.avg:SetPoint("BOTTOMLEFT", d.chart, "BOTTOMLEFT", 0, by); d.avg:SetPoint("RIGHT", d.chart, "RIGHT", 0, 0)
+    d.avg:Show()
+    d.avgText:ClearAllPoints(); d.avgText:SetPoint("BOTTOMLEFT", d.chart, "BOTTOMLEFT", 4, by + 2)
+    d.avgText:SetText("week before: " .. FA.Money(math.floor(t.base + 0.5)))
+    d.avgText:Show()
+  else
+    d.avg:Hide(); d.avgText:Hide()
+  end
   d.hiText:SetText(hi > 0 and FA.Money(top) or "")
   d.loText:SetText(hi > 0 and (bot > 0 and FA.Money(bot) or "0") or "")
   d.empty:SetText(#t.days == 0 and "No prices seen for this yet. Scan the Auction House (or browse it) and the chart fills in, one point a day." or "")
-  -- materials: what each costs now and which way it's going
-  local lines = {}
+  -- materials: what each costs now and which way it's going; click one to chart it
+  local n = 0
   for _, g in ipairs(rec.reagents or {}) do
+    n = n + 1
+    local b = d.matBtns[n]
+    if not b then break end
     local mt = FA.PriceTrend(g.id)
     local now = mt.now or (FA.AHPrice and FA.AHPrice(g.id))
-    lines[#lines + 1] = ("%s%dx %s|r  %s  %s %s"):format("|cffffffff", g.n or 1, g.name or ("item " .. tostring(g.id)),
-      now and FA.Money(now) or (GREY .. "no price|r"), trendArrow(mt), trendWords(mt, false))
+    local on = (d.chartId == g.id)
+    b.id = g.id
+    b.text:SetText((on and (GOLD .. "> |r") or "") .. ("%s%dx %s|r  %s  %s %s"):format("|cffffffff", g.n or 1, g.name or ("item " .. tostring(g.id)),
+      now and FA.Money(now) or (GREY .. "no price|r"), trendArrow(mt), trendWords(mt, false)))
+    b:Show()
   end
-  d.mats:SetText(#lines > 0 and table.concat(lines, "\n") or (GREY .. "No materials listed.|r"))
+  for k = n + 1, #d.matBtns do d.matBtns[k]:Hide() end
+  n = math.min(n, #d.matBtns)
+  d.mats:SetText(n == 0 and (GREY .. "No materials listed.|r") or "")
+  d.profit:ClearAllPoints()
+  d.profit:SetPoint("TOPLEFT", d, "TOPLEFT", 16, -64 - CHART_H - 50 - math.max(1, n) * 18 - 10)
   d.profit:SetText("Profit per craft now: " .. (row.profit >= 0 and (GREEN .. "+" .. FA.Money(row.profit)) or (RED .. FA.Money(row.profit))) .. "|r"
     .. GREY .. "  (after the Auction House cut)|r")
   d.ah:SetEnabled(FA.AuctionHouseOpen and FA.AuctionHouseOpen() and true or false)
@@ -874,6 +920,9 @@ local function buildTrend(p)
   local right = c:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   right:SetPoint("TOPRIGHT", c, "BOTTOMRIGHT", 0, -3); right:SetText("today")
   d.chart = c
+  -- a faint line at the week before's average, labeled, so "up/down this week" has something to point at
+  d.avg = c:CreateTexture(nil, "BORDER"); d.avg:SetHeight(1); d.avg:SetColorTexture(0.75, 0.75, 0.75, 0.45); d.avg:Hide()
+  d.avgText = c:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); d.avgText:Hide()
   -- Line or Bars, top right; the choice is remembered
   d.canLine = type(c.CreateLine) == "function"
   local function setMode(m)
@@ -929,9 +978,22 @@ local function buildTrend(p)
   d.empty = Txt(c, "GameFontDisable", 20, -40, CHART_W - 40)
   d.empty:SetJustifyH("CENTER")
 
-  Txt(d, "GameFontNormal", 16, -64 - CHART_H - 30, nil, GOLD .. "Materials|r")
+  Txt(d, "GameFontNormal", 16, -64 - CHART_H - 30, nil, GOLD .. "Materials|r" .. GREY .. "  (click one to chart it, click again for the craft)|r")
   d.mats = Txt(d, "GameFontHighlightSmall", 16, -64 - CHART_H - 50, 428)
-  d.mats:SetSpacing(4)
+  d.matBtns = {}
+  for i = 1, 6 do
+    local b = CreateFrame("Button", nil, d)
+    b:SetSize(428, 16); b:SetPoint("TOPLEFT", 14, -64 - CHART_H - 48 - (i - 1) * 18)
+    b:SetHighlightTexture(FA.UI.HIGHLIGHT, "ADD")
+    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    b.text:SetPoint("LEFT", 2, 0); b.text:SetJustifyH("LEFT"); b.text:SetWidth(424); b.text:SetWordWrap(false)
+    b:SetScript("OnClick", function(self)
+      local row = p.showing
+      if row then showTrend(row, (d.chartId == self.id) and row.r.itemId or self.id) end
+    end)
+    b:Hide()
+    d.matBtns[i] = b
+  end
   -- below the materials, however many there are
   d.profit = d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   d.profit:SetPoint("TOPLEFT", d.mats, "BOTTOMLEFT", 0, -12); d.profit:SetWidth(428); d.profit:SetJustifyH("LEFT")
@@ -1180,6 +1242,8 @@ NEWS = {
   { "0.9.21", "The ForeverArtisan Discord is now live: " .. FA.DISCORD .. ". Send your ideas before the November 4 launch. "
     .. "The /fa panel has tabs now: Modules, Market (beta: your most profitable crafts in every profession), Contacts, Settings and Info (the Discord link is there). "
     .. "Right-click the FA minimap button for Trade Contacts; its own map-pin button is gone." },
+  { "0.9.22", "Market price charts are clearer: the line above the chart says what it shows, a faint line marks the week before's "
+    .. "average, and you can click a material to chart it. When the last day moved the other way, the words say so." },
 }
 
 local function verNum(v)

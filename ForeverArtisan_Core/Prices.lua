@@ -121,6 +121,12 @@ function FA.PriceTrend(id, neutral)
     local e = out.days[i]
     if last.day - e.day <= 7 then sum, cnt = sum + e.p, cnt + 1 end
   end
+  -- the move since the day before (the last segment of the chart), so the words can say when it
+  -- turned: "down 16% this week, up 29% since yesterday"
+  local prev = out.days[n - 1]
+  if prev and prev.p > 0 then
+    out.prevDay, out.step = prev.day, (last.p - prev.p) / prev.p
+  end
   if cnt > 0 and sum > 0 then
     out.base = sum / cnt
     out.change = (last.p - out.base) / out.base

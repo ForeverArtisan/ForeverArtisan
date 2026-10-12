@@ -1,5 +1,12 @@
 # ForeverArtisan changelog
 
+## 0.9.22 (2026-10-12)
+- Market price chart: the line above the chart says what it shows ("Chart: Sagefish Delight  sells for 7s each"), so a material's "down 17%" no longer reads like the craft's.
+- Click a material under the chart to chart it instead; click it again to go back to the craft.
+- A faint line marks the week before's average ("week before: 3s 10c"), which is what "up/down this week" compares against.
+- When the last day moved the other way from the week, the words say so: "down 16% this week, up 29% since yesterday". Before, the week could say down while the chart's last segment went up.
+- Fishing: the "Lure to use" button is wider, so a long lure name ("Best: Aquadynamic Fish Attractor (+100)") stays inside it instead of spilling over the label.
+
 ## 0.9.21 (2026-10-12)
 - The `/fa` panel has tabs: **Modules** (turn modules on or off, with the "Works best with" line as before), **Market** (beta), **Contacts** (Trade Contacts: what it knows and where each part came from: vendors and trainers you've met, trainers from the Forever beta, trainers from Questie; then Search, Contacts, Limited stock and Nearest trainer, each opening Trade Contacts right where you want it), **Settings** and **Info** (version, the Discord and site, and the three newest releases).
 - Market tab (beta), or `/fa market`: every recipe you know, in every crafting profession, in one list ranked by profit per craft after the Auction House cut, with the same confidence dots and goblin Auction House tags as each Best crafts tab. Hover a row for materials, sale price and profit. An arrow on a row means its price is up or down this week. Click a row for its price trend: a 14-day chart of what it sells for (each day's lowest price at your Auction House; Line or Bars, your pick is remembered; hover a day for its price and how many were listed), up or down against the week before, each material's price and direction, and buttons to open the recipe or search the Auction House. "Hide shaky prices" drops the guesses. Marked BETA until two weeks after launch: beta and launch-week prices swing a lot.

@@ -224,7 +224,10 @@ local function BuildFishingPage(p)
 
   Text(p, nil, "TOPLEFT", 22, -314):SetText("Lure to use:")
   local lb = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
-  lb:SetSize(212, 22); lb:SetPoint("TOPLEFT", 130, -310)
+  -- wide enough for "Best: Aquadynamic Fish Attractor (+100)"; anything longer is cut with "..." inside the button
+  lb:SetSize(300, 22); lb:SetPoint("TOPLEFT", 130, -310)
+  local lfs = lb.GetFontString and lb:GetFontString()
+  if lfs then lfs:SetWidth(288); lfs:SetWordWrap(false) end
   lb:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   lb:SetScript("OnClick", function(_, button)
     if button == "RightButton" then S().lure = nil; ns.OnChange(); return end
