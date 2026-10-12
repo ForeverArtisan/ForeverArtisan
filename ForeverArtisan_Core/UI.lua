@@ -21,7 +21,8 @@ FA.BAR    = { 0.83, 0.66, 0.31, 0.85 }  -- brand gold for bars
 FA.BAR_DONE = { 0.25, 1, 0.25, 0.85 }
 FA.BAR_CAPPED = { 1, 0.25, 0.25, 0.85 }
 FA.WEBSITE = "foreverartisan.app"
--- one line, same words everywhere it appears (What's new, /fa feedback, the welcome notice)
+FA.DISCORD = "discord.gg/egbRhRtr2J"
+-- one line, same words everywhere it appears (What's new, /fa feedback)
 FA.BUG_URL = "foreverartisan.app/bug"
 FA.BUG_LINE = "Seeing an error? Tell us at " .. FA.BUG_URL
 

@@ -62,7 +62,7 @@ local function SearchData()
     if it then
       data[#data + 1] = { id = it.id, icon = it.id and Icon(it.id) or (it.train and 136235 or 134400), npc = npc,
         left = it.n .. (it.sk and (GRAY .. "  " .. it.sk .. "|r") or ""),
-        right = GRAY .. npc.n .. ", " .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "") .. BetaTag(npc) .. "|r",
+        right = GRAY .. npc.n .. ", " .. ns.Where(npc) .. ns.AgeTag(npc, true) .. BetaTag(npc) .. "|r",
         tail = ns.Money(it),
         tipFn = function() return npc.n .. (npc.t and (" <" .. npc.t .. ">") or "") .. "\n" .. ns.DetailText(npc, it) end }
     elseif npc.seenOnly then
@@ -74,7 +74,7 @@ local function SearchData()
     else
       data[#data + 1] = { icon = npc.k == "trainer" and 136235 or 133784, npc = npc, tipTitle = npc.n,
         left = GOLD .. npc.n .. "|r" .. (npc.t and (GRAY .. " <" .. npc.t .. ">|r") or ""),
-        right = GRAY .. DistText(h) .. ns.Where(npc) .. (npc.age > 0 and " (before update)" or "")
+        right = GRAY .. DistText(h) .. ns.Where(npc) .. ns.AgeTag(npc)
           .. (h.trains and ("  ·  trains " .. h.trains) or "")
           .. (h.ranks and ("  ·  " .. table.concat((function()
                 local w = {} for _, r in ipairs(h.ranks) do w[#w + 1] = ns.RankWord(r) or r end return w end)(), ", ")) or "")
@@ -439,7 +439,7 @@ local function MyClass() return UnitClass and UnitClass("player") end
 local function TrainerHits(kind)
   local hits, mine = {}, MyClass()
   -- trainers you met before recent game updates still count: a trainer rarely moves, and the row
-  -- says "(before update)". Hiding them left whole towns out of the list during the beta.
+  -- says "(last seen Oct 2)". Hiding them left whole towns out of the list during the beta.
   local function consider(npc, seen)
     local cls = ns.ClassTrainer and ns.ClassTrainer(npc.t)
     local ok
@@ -481,6 +481,7 @@ local function GoNearest(kind)
   ns.OnChange()
 end
 ns.NearestTrainerHits, ns.NearestOptions, ns.GoNearest = TrainerHits, NearestOptions, GoNearest
+ns.ContactCounts = Counts -- vendors met, trainers met, beta trainers, Questie trainers
 
 local function AddNearest(p)
   local b = Picker(p, 16, 200, "Nearest trainer", NearestOptions, function() return nil end, GoNearest, 420)
@@ -626,6 +627,22 @@ function ns.OpenSearch(q)
   f:Show(); ShowTab("search")
   local box = pages.search.box
   if q and q ~= "" then box:SetText(q); RunSearch() else box:SetFocus() end
+end
+
+-- the /fa panel's Trade Contacts buttons: open the window on a tab, or with the Nearest trainer menu up
+function ns.OpenTab(name)
+  if not ns.DB() then return end
+  if not f then Build() end
+  f:Show(); ShowTab(pages[name] and name or "search")
+end
+function ns.OpenNearest()
+  ns.OpenTab("search")
+  local b = pages.search and pages.search.nearest
+  if b and b.menu and not b.menu:IsShown() then
+    local click = b:GetScript("OnClick")
+    if click then click(b) end
+  end
+  return b and b.menu and b.menu:IsShown()
 end
 
 ns.ShowTab = function(name) if f then ShowTab(name) end end -- for the test suite

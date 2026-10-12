@@ -11,8 +11,9 @@ Run this in game before every build goes to the site or CurseForge/Wago. Screens
 ## 1. Start-up
 - [ ] Log in with no red Lua errors (also after `/reload`)
 - [ ] `/fa version` shows the new number, and there's no "different release" warning
-- [ ] The minimap button tooltip shows the version (no BETA or DEV on a normal release)
-- [ ] The welcome notice shows once per account; "Got it" closes it for good, "Pick my professions" opens `/fa`; `/fa welcome` brings it back; the text fits
+- [ ] The minimap button tooltip shows the version (no BETA or DEV on a normal release); only one ForeverArtisan minimap button; right-click opens Trade Contacts
+- [ ] `/fa` panel tabs: Modules, Market, Contacts, Settings, Info; the tab labels fit their buttons. Market: rows from every crafting profession you know, BETA badge before launch, hover works, Hide shaky prices works; click a row: trend chart with bars per day, materials with arrows, Back returns to the list. Settings: each box matches its slash command (`/fa prices`, `/fa alts`, `/fa gather`, `/fa titles`, `/fa minimap`, `/fa contacts questie|seeds`); missing addons grayed with "Needs ...". Info: What's new shows the three newest releases, newest first, and the new release has a NEWS line. Modules: Works best with line at the bottom, check marks on installed addons. Trade Contacts: the "knows" counts match the Trade Contacts window; Search, Contacts, Limited stock and Nearest trainer each open it on that tab (Nearest trainer with its menu up). Info: version, Discord and site boxes copy, call-out until Nov 4
+- [ ] A fresh install opens the `/fa` panel once (no welcome notice); `/fa welcome` and `/fa discord` open the panel; the Discord call-out fits on one line under the copy boxes (until Nov 4)
 
 ## 2. /fa panel
 - [ ] Every module is listed and says "Running"

@@ -100,6 +100,35 @@ local function PruneHistory()
   end
 end
 
+-- An item's last 14 days at your Auction House, for the Market tab's chart:
+-- { days = { { day, p, q }, ... } oldest first, now = latest price, base = the week before's average,
+--   change = (now - base) / base, dir = "up" | "down" | "flat" | nil (nil: not enough days yet) }
+-- Each day is that day's lowest price seen (your visits, searches and full scans).
+FA.TREND_FLAT = 0.05 -- under 5% either way counts as flat
+function FA.PriceTrend(id, neutral)
+  id = tonumber(id)
+  local h = id and History(neutral)[id]
+  local out = { days = {} }
+  for d, e in pairs(h or {}) do out.days[#out.days + 1] = { day = d, p = e.p, q = e.q } end
+  table.sort(out.days, function(a, b) return a.day < b.day end)
+  local n = #out.days
+  if n == 0 then return out end
+  local last = out.days[n]
+  out.now, out.listed, out.last = last.p, last.q, last.day
+  -- the baseline: the earlier days within a week of the latest one
+  local sum, cnt = 0, 0
+  for i = 1, n - 1 do
+    local e = out.days[i]
+    if last.day - e.day <= 7 then sum, cnt = sum + e.p, cnt + 1 end
+  end
+  if cnt > 0 and sum > 0 then
+    out.base = sum / cnt
+    out.change = (last.p - out.base) / out.base
+    out.dir = (out.change > FA.TREND_FLAT and "up") or (out.change < -FA.TREND_FLAT and "down") or "flat"
+  end
+  return out
+end
+
 -- How much to trust an item's price: { level = "good" | "ok" | "shaky", age, listed, low, high }.
 -- good: seen today or yesterday, 10+ listed, and the week's low and high within 3x of each other.
 function FA.PriceConfidence(id, neutral)
@@ -696,6 +725,35 @@ function FA.BestCrafts(recipes, chanceOf, mode)
   return out
 end
 
+---------------------------------------------------------------- Market (the /fa panel's Market tab)
+-- Each crafting module registers itself: { name, recipes() -> its recipes on this character or nil,
+-- color(r) -> its difficulty color code, open(r) -> open its window on that recipe }.
+local market = {}
+function FA.RegisterMarket(p)
+  if type(p) == "table" and p.name and p.recipes then market[#market + 1] = p end
+end
+
+-- Every profession's Best crafts in one list, by profit after the cut: rows from FA.BestCrafts,
+-- each with .prof (the module). Second value: how many professions had recipes to read.
+function FA.MarketRows()
+  local out, read = {}, 0
+  for _, p in ipairs(market) do
+    local ok, recs = pcall(p.recipes)
+    if ok and recs then
+      read = read + 1
+      for _, row in ipairs(FA.BestCrafts(recs, nil, "profit")) do
+        row.prof = p
+        out[#out + 1] = row
+      end
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.profit ~= b.profit then return a.profit > b.profit end
+    return (a.r.name or "") < (b.r.name or "")
+  end)
+  return out, read
+end
+
 -- Where Best crafts' prices come from, for the line at the top of the tab.
 function FA.PriceSourceLines()
   local n = 0
@@ -705,7 +763,8 @@ function FA.PriceSourceLines()
     local sv = _G.AUCTIONATOR_SAVEDVARS
     local last = type(sv) == "table" and tonumber(sv.TimeOfLastBrowseScan)
     local when = last and FA.AgeText(math.floor((time() - last) / 86400)) or "not yet"
-    return { GRAY_LINE("Prices: Auctionator, full scan " .. when) }
+    -- Auctionator shares one price list across your characters: a scan on any of them updates it
+    return { GRAY_LINE("Prices: Auctionator, full scan " .. when .. "  (scan again on any character to update prices)") }
   end
   return { GRAY_LINE(("Prices from your own Auction House visits · %d items, some may be old"):format(n)),
     GRAY_LINE("Works best with Auctionator: one scan prices the whole Auction House.") }

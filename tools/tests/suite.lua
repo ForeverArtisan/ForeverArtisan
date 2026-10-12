@@ -13,7 +13,7 @@ local function obj()
     if k=="HookScript" then return function(s,n,fn) s.scripts[n]=fn end end
     if k=="GetScript" then return function(s,n) return s.scripts[n] end end
     if k=="SetAttribute" then return function(s,a,v) s.attrs[a]=v end end
-    if k=="CreateFontString" or k=="CreateTexture" then return function() return obj() end end
+    if k=="CreateFontString" or k=="CreateTexture" or k=="CreateLine" then return function() return obj() end end
     if k=="SetText" then return function(s,v) s._text=v end end
     if k=="GetText" then return function(s) return s._text end end
     if k=="GetPoint" then return function() return "CENTER",nil,"CENTER",0,0 end end
@@ -739,16 +739,24 @@ do
     print("BOOK FILTER ok")
   end
 end
--- welcome notice: shown once, "Got it" remembers it, /fa welcome brings it back
+-- first run: a fresh install opens the module panel once (the welcome notice is gone)
 do
-  local w=_G.ForeverArtisanWelcome
-  assert(w and w._shown, "welcome shows on first login")
-  for _,b in ipairs(frames) do if b._text=="Got it" and b.scripts.OnClick then b.scripts.OnClick(b) end end
-  assert(not w._shown and ForeverArtisanSettings.welcomeSeen==1, "Got it closes and remembers")
+  assert(not _G.ForeverArtisanWelcome, "no welcome notice")
+  local T0, keep = C_Timer, { lv = ForeverArtisanSettings.lastVersion, ws = ForeverArtisanSettings.welcomeSeen }
+  C_Timer={After=function(_,fn) fn() end, NewTicker=T0.NewTicker}
+  if _G.ForeverArtisanPanel then _G.ForeverArtisanPanel:Hide() end
+  ForeverArtisanSettings.lastVersion, ForeverArtisanSettings.welcomeSeen = nil, nil
+  fire("PLAYER_LOGIN")
+  assert(_G.ForeverArtisanPanel and _G.ForeverArtisanPanel._shown, "fresh install opens the module panel")
+  assert(ForeverArtisanSettings.welcomeSeen, "only once")
+  _G.ForeverArtisanPanel:Hide()
+  fire("PLAYER_LOGIN")
+  assert(not _G.ForeverArtisanPanel._shown, "not on the next login")
+  C_Timer = T0
+  ForeverArtisanSettings.lastVersion = keep.lv
   run("FOREVERARTISAN","welcome")
-  assert(w._shown, "/fa welcome reopens it")
-  for _,b in ipairs(frames) do if b._text=="Pick my professions" and b.scripts.OnClick then b.scripts.OnClick(b) end end
-  assert(not w._shown and _G.ForeverArtisanPanel and _G.ForeverArtisanPanel._shown, "opens the module panel")
+  assert(_G.ForeverArtisanPanel._shown, "/fa welcome opens the panel")
+  _G.ForeverArtisanPanel:Hide()
 end
 -- class trainers: saved and searchable, kept out of the crafting lists, own class only in "not visited"
 do
@@ -836,18 +844,20 @@ do
   assert(not rows[1].tail:IsShown(), "tail hidden without a price")
   print("PRICE TAIL ok")
 end
--- minimap: the anvil and the Trade Contacts book, both built (own buttons, no LibDBIcon in the test)
+-- minimap: one button (the FA); right-click opens Trade Contacts, the old map-pin button is gone
 do
-  local book=_G.ForeverArtisanContactsMinimapButton
-  print("MINIMAP", _G.ForeverArtisanMinimapButton~=nil, book~=nil)
-  assert(_G.ForeverArtisanMinimapButton and book, "both minimap buttons")
+  local mmb=_G.ForeverArtisanMinimapButton
+  assert(mmb and not _G.ForeverArtisanContactsMinimapButton, "one minimap button")
   local opened
   local oldOpen=ForeverArtisan.Vendors.open
   ForeverArtisan.Vendors.open=function() opened=true end
-  book.scripts.OnClick(book,"LeftButton")
+  mmb.scripts.OnClick(mmb,"RightButton")
   ForeverArtisan.Vendors.open=oldOpen
-  assert(opened, "book opens Trade Contacts")
-  ForeverArtisan.minimap("contacts"); ForeverArtisan.minimap("contacts")
+  assert(opened, "right-click opens Trade Contacts")
+  local P0=print; local out={}
+  print=function(...) out[#out+1]=table.concat({...}," ") end
+  ForeverArtisan.minimap("contacts"); print=P0
+  assert(out[1] and out[1]:find("Right%-click"), "/fa minimap contacts says where it went")
 end
 -- Tauren Cultivation: ready line on herb tooltips, one nudge, per-herb level learned from your own casts
 do
@@ -996,7 +1006,10 @@ do
   fire("PLAYER_LOGIN")
   local txt=table.concat(out,"\n")
   print=P
-  assert(txt:find("What's new") and txt:find("worth") and txt:find("Best crafts") and txt:find("Gamepad UI") and not txt:find("Dropped by"), "update prints the last three releases: "..txt)
+  -- the three newest up to the running version (whatever it is now)
+  local cur=ForeverArtisan.Version()
+  local _, nShown = txt:gsub("|cffd4a94e0%.9%.%d+|r", "")
+  assert(txt:find("What's new") and txt:find(cur, 1, true) and nShown==3 and not txt:find("Gamepad UI"), "update prints the last three releases: "..txt)
   assert(txt:find("foreverartisan.app/bug", 1, true), "news ends with the bug line")
   assert(ForeverArtisanSettings.lastVersion==ForeverArtisan.Version(), "remembers the new version")
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
@@ -1006,7 +1019,7 @@ do
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
   run("FOREVERARTISAN","new")
   print=P
-  assert(table.concat(out,"\n"):find("0.9.17"), "/fa new prints it")
+  assert(table.concat(out,"\n"):find("0.9.20"), "/fa new prints it")
   print("NEWS ok")
 end
 -- hidden ("secret") values: events carrying them are skipped, their errors dropped, other errors still raised
@@ -1484,7 +1497,7 @@ do
   assert(campAt and campAt<firstOther, "Camping with what you have: "..all)
   assert(panel.headings[1]._shown and panel.headings[2]._shown and panel.headings[3]._shown, "a heading per group")
   assert(panel.headings[1]._text:find("Your trades") and panel.headings[2]._text:find("Not learned"), "heading text")
-  assert(panel.contacts._text and panel.contacts._text:find("Trade Contacts"), "contacts note")
+  assert(not panel.contacts, "no keep-it-on note: turning it off asks first")
   assert(panel.site and panel.site._text=="foreverartisan.app", "site address to copy")
   -- turning Trade Contacts off asks first
   local shownPopup
@@ -1638,6 +1651,68 @@ do
   assert(ck.lastBest[1].left:find("Pricey Thing") and ck.lastBest[1].tail:find("Indicator"), "row with a confidence dot")
   for _,f in pairs(frames) do if f._text=="Cheapest to level" and f.scripts.OnClick then f.scripts.OnClick(f) end end
   assert(ck.DB().settings.bestMode=="level", "mode remembered")
+  -- Market: every profession's crafts in one list (Cooking's here), by profit, flagged beta before launch
+  local mrows, nread = FA.MarketRows()
+  assert(nread>=1 and mrows[1] and mrows[1].r.name=="Pricey Thing" and mrows[1].prof.name=="Cooking", "market ranks across professions")
+  local seenProf={}
+  for _,r in ipairs(mrows) do seenProf[r.prof.name]=true end
+  run("FOREVERARTISAN","market")
+  local pnl=_G.ForeverArtisanPanel
+  assert(pnl._shown and pnl.tab=="market", "/fa market opens the tab")
+  local mk=pnl.market
+  assert(mk.rows[1]._shown and mk.rows[1].left._text:find("Pricey Thing") and mk.rows[1].left._text:find("Cooking"), "row names the recipe and profession")
+  assert(mk.rows[1].right._text:find("%+") and mk.rows[1].dot._text:find("Indicator"), "profit and confidence dot")
+  assert(mk.clickHint._shown and mk.clickHint._text:find("Click any craft"), "the click hint above the list")
+  assert(FA.MarketStage()=="beta" and mk.badge._text:find("BETA") and mk.note._text:find("beta Auction House prices"), "beta before launch")
+  local oT=time
+  time=function(t) if t then return oT(t) end return FA.LAUNCH_AT + 3*86400 end
+  assert(FA.MarketStage()=="early", "early days after launch")
+  time=function(t) if t then return oT(t) end return FA.LAUNCH_AT + 30*86400 end
+  assert(FA.MarketStage()==nil, "no flag a month in")
+  time=oT
+  mk.hide.GetChecked=function() return true end
+  mk.hide.scripts.OnClick(mk.hide)
+  for _,r in ipairs(mk.rows) do if r._shown then assert(not r.left._text:find("Pricey Thing"), "shaky hidden") end end
+  ForeverArtisanSettings.marketHideShaky=nil
+  pnl:Hide()
+  -- trend: 14 days of a price, up or down against the week before
+  local oT2=time
+  local base=oT2()
+  local function onDay(ago, fn) time=function(t) if t then return oT2(t) end return base - ago*86400 end; fn(); time=oT2 end
+  onDay(5, function() FA.NoteMarket(991003, 200, 20) end)
+  onDay(3, function() FA.NoteMarket(991003, 220, 20) end)
+  onDay(0, function() FA.NoteMarket(991003, 300, 25) end)
+  local tr=FA.PriceTrend(991003)
+  assert(tr.now==300 and tr.dir=="up" and #tr.days>=3, "trending up: "..tostring(tr.dir).." "..tostring(tr.change))
+  assert(FA.TrendWords(tr, true):find("up %d+%% this week"), "words: "..FA.TrendWords(tr, true))
+  assert(FA.TrendWords(tr, false):find("ff4040"), "a material going up is red for the buyer")
+  assert(FA.PriceTrend(999999).dir==nil and FA.TrendWords(FA.PriceTrend(999999), true):find("no prices"), "no data, no trend")
+  ForeverArtisanSettings.marketHideShaky=nil
+  run("FOREVERARTISAN","market")
+  mk=pnl.market
+  local prow
+  for _,r in ipairs(mk.rows) do if r._shown and r.left._text:find("Pricey Thing") then prow=r end end
+  assert(prow and prow.right._text:find("Arrow%-Up"), "row shows the up arrow: "..tostring(prow and prow.right._text))
+  prow.scripts.OnClick(prow)
+  local d=mk.detail
+  assert(d._shown and not prow._shown and d.title._text:find("Pricey Thing"), "click opens the trend view")
+  assert(d.sells._text:find("up") and d.dots[14]._shown and d.lines[1]._shown and not d.bars[14]._shown, "line chart by default: today's point and a line")
+  assert(d.loText._text ~= "0" and d.hiText._text ~= "", "the line spans low to high")
+  d.barBtn.scripts.OnClick(d.barBtn)
+  assert(ForeverArtisanSettings.marketChart=="bar" and d.bars[14]._shown and not d.dots[14]._shown and not d.lines[1]._shown and d.loText._text=="0", "bars when picked")
+  d.lineBtn.scripts.OnClick(d.lineBtn)
+  assert(ForeverArtisanSettings.marketChart=="line" and d.dots[14]._shown, "back to the line")
+  assert(d.mats._text:find("Pricey|5x") or d.mats._text:find("5x"), "materials listed: "..d.mats._text)
+  -- leave the tab and come back while the trend is up (this errored in game)
+  pnl.tabs.info.scripts.OnClick(pnl.tabs.info)
+  pnl.tabs.market.scripts.OnClick(pnl.tabs.market)
+  assert(d._shown and d.title._text:find("Pricey Thing"), "trend view kept across tabs")
+  run("FOREVERARTISAN","alts") -- a redraw of the open panel
+  d.back.scripts.OnClick(d.back)
+  assert(not d._shown and prow._shown, "back to the list")
+  pnl:Hide()
+  print("MARKET TREND ok")
+  print("MARKET ok")
   assert(FA.Money(-30)=="-30c" and FA.Money(-12345)=="-1g 23s", "losses read as losses: "..FA.Money(-30))
   ck.DB().settings.bestMode=nil
   c.recipes["Cheap Thing"]=nil c.recipes["Pricey Thing"]=nil
@@ -1889,7 +1964,7 @@ do
   assert(not found["Victor Ward"], "a beta trainer wins over QuestieDB")
   assert(db.settings.questieNoted, "one-time note about Questie")
   -- your out-of-date record (met before two game updates): it still shows in Nearest trainer,
-  -- marked "before update", so there's one row for that trainer, not a QuestieDB copy too
+  -- marked "(last seen ...)", so there's one row for that trainer, not a QuestieDB copy too
   local oldBuilds=db.builds
   db.builds={"1","2","3"}
   db.entries["service:9001"]={kind="service",npcId=9001,name="Grumbo",title="Journeyman Tailor",zone="Orgrimmar",build="1"}
@@ -1900,6 +1975,14 @@ do
   local nearOld=false
   for _, h in ipairs(cns.NearestTrainerHits("Tailoring")) do if h.npc.n=="Grumbo" and not h.npc.questie and h.npc.age>=2 then nearOld=true end end
   assert(nearOld, "Nearest trainer keeps trainers met before recent updates")
+  for _, npc in ipairs(cns.Contacts()) do if npc.n=="Grumbo" and not npc.questie then
+    npc.seen=time({year=2026,month=10,day=2,hour=12})
+    assert(cns.AgeTag(npc)=="  ·  met Oct 2" and cns.AgeTag(npc,true)==" (met Oct 2)", "row tag: "..cns.AgeTag(npc))
+    local note=cns.AgeNote(npc)
+    assert(note:find("You last saw them Oct 2, 2 game updates ago") and note:find("Still listed") and not note:find("Hidden"), "tooltip note: "..note)
+    npc.seen=nil
+    assert(cns.AgeTag(npc)=="  ·  met a while ago", "no date")
+  end end
   db.entries["service:9001"].build="3"
   cns.OnContactsChanged()
   for _, npc in ipairs(cns.Contacts()) do assert(not (npc.n=="Grumbo" and npc.questie), "current record wins over QuestieDB") end
@@ -1963,9 +2046,9 @@ do
   -- the /fa panel names what it works with
   run("FOREVERARTISAN","")
   local pnl=_G.ForeverArtisanPanel
-  local wt=pnl and pnl.works and pnl.works.text and (pnl.works.text._text or (pnl.works.text.GetText and pnl.works.text:GetText()))
+  local wt=pnl and pnl.AddonsText and pnl.AddonsText()
   print("WORKS LINE", wt)
-  assert(wt and wt:find("Works best with") and wt:find("Questie") and wt:find("Syndicator") and not wt:find("ReadyCheck"), "panel shows the works-with line, nothing checked without the addons")
+  assert(wt and wt:find("Works best with") and wt:find("Questie") and wt:find("Syndicator") and not wt:find("ReadyCheck"), "works-with line, nothing checked without the addons")
   C_Timer=oldTimer
   db.entries=saved; db.settings.seedsOff=true
   cns.OnContactsChanged()
@@ -2060,8 +2143,8 @@ do
   run("FOREVERARTISAN","gather on")
   run("FOREVERARTISAN","")
   local pnl=_G.ForeverArtisanPanel
-  local wt=pnl.works.text._text or pnl.works.text:GetText()
-  assert(wt:find("GatherMate2"), "works-with line names GatherMate2")
+  local wt=pnl.AddonsText()
+  assert(wt:find("GatherMate2"), "Add-ons tab names GatherMate2")
   GatherMate2.GetIDForNode=function() error("changed") end; GatherMate2.nodeIDs=nil
   FA.GatherReset()
   assert(FA.GatherStatus()=="incompatible" and FA.GatherZones("herb","Peacebloom")==nil, "a GatherMate2 we can't read: nothing")
@@ -2088,7 +2171,7 @@ do
   run("FOREVERARTISAN","")
   if not _G.ForeverArtisanPanel._shown then run("FOREVERARTISAN","") end
   run("FOREVERARTISAN","alts") -- redraws the open panel
-  local wt=_G.ForeverArtisanPanel.works.text._text or _G.ForeverArtisanPanel.works.text:GetText()
+  local wt=_G.ForeverArtisanPanel.AddonsText()
   assert(wt:find("can't read"), "panel marks it")
   Syndicator.API.GetInventoryInfoByItemID=function() return {characters={}} end
   cap(); FA.AddonWarn(); print=P0
@@ -2155,6 +2238,88 @@ do
   assert(not fa, "and not under other trades")
   cdb.entries["trainer:777001"]=nil; cns.OnContactsChanged()
   print("0.9.20 untitled trainer ok")
+end
+-- Discord link: a copy box and a call-out on the panel, and /fa discord
+do
+  run("FOREVERARTISAN","")
+  local pnl=_G.ForeverArtisanPanel
+  assert(pnl.discord and (pnl.discord._text or pnl.discord:GetText())==ForeverArtisan.DISCORD, "panel has the Discord box")
+  local P0=print; local out={}
+  print=function(...) out[#out+1]=table.concat({...}," ") end
+  run("FOREVERARTISAN","discord"); print=P0
+  local saw=false for _,l in ipairs(out) do if l:find("discord.gg",1,true) then saw=true end end
+  assert(saw and pnl._shown and pnl.tab=="info", "/fa discord names it and opens the Info tab")
+  assert(pnl.discordNews and pnl.discordNews._text:find("now live"), "pre-launch Discord call-out")
+  print("0.9.21 discord link ok")
+end
+-- Trade Contacts buttons on the /fa panel: each opens its tab; Nearest trainer opens with the menu up
+do
+  if not _G.ForeverArtisanPanel._shown then run("FOREVERARTISAN","") end
+  local pnl=_G.ForeverArtisanPanel
+  assert(pnl._shown and #pnl.tcButtons==4, "four Trade Contacts buttons")
+  local cns=loadedFrames["ForeverArtisan_Contacts"].ns
+  local function click(label)
+    if not pnl._shown then run("FOREVERARTISAN","") end
+    for _,b in ipairs(pnl.tcButtons) do if b._text==label then b.scripts.OnClick(b) end end
+    return _G.ForeverArtisanContactsFrame
+  end
+  local cf=click("Contacts"); assert(cf and cf._shown and not pnl._shown, "Contacts opens the window")
+  cf:Hide(); click("Limited stock"); assert(cf._shown, "Limited stock opens the window")
+  cf:Hide(); click("Search"); assert(cf._shown, "Search opens the window")
+  cf:Hide()
+  local menuUp
+  local O=cns.OpenNearest; cns.OpenNearest=function() menuUp=O() end
+  click("Nearest trainer"); cns.OpenNearest=O
+  assert(cf._shown and menuUp, "Nearest trainer opens the window with its menu up")
+  cf:Hide()
+  print("0.9.21 panel contacts buttons ok")
+end
+-- the /fa panel's tabs: Modules, Trade Contacts, Info
+do
+  local pnl=_G.ForeverArtisanPanel
+  for _,k in ipairs({"modules","market","contacts","settings","info"}) do assert(pnl.pages[k] and pnl.tabs[k], "tab "..k) end
+  assert(not pnl.pages.addons, "no Add-ons tab: the works-with line covers it")
+  if not pnl._shown then run("FOREVERARTISAN","") end
+  pnl.tabs.contacts.scripts.OnClick(pnl.tabs.contacts)
+  assert(pnl.tab=="contacts" and pnl.pages.contacts._shown and not pnl.pages.modules._shown, "switches tabs")
+  -- what Trade Contacts knows, by source
+  local kt=pnl.known._text or pnl.known:GetText()
+  assert(kt:find("You've met:") and kt:find("From Questie"), "says where its contacts come from: "..kt)
+  -- Questie still being read: say so, then the count once it's done (the open panel redraws itself)
+  local FA=ForeverArtisan
+  local oQS, oC = FA.QuestieStatus, FA.Vendors.counts
+  local ready=false
+  FA.QuestieStatus=function() if ready then return "on", 77 end return "reading", 0 end
+  FA.Vendors.counts=function() return 110, 52, 0, ready and 77 or 0 end
+  FA.RefreshPanel()
+  kt=pnl.known._text
+  assert(kt:find("reading") and not kt:find("0 trainers"), "no '0 from Questie' while reading: "..kt)
+  ready=true
+  loadedFrames["ForeverArtisan_Contacts"].ns.OnContactsChanged()
+  kt=pnl.known._text
+  assert(kt:find("77 more trainers") and kt:find("129 trainers"), "count shows once read: "..kt)
+  FA.QuestieStatus, FA.Vendors.counts = oQS, oC
+  -- Settings: the slash-command switches as boxes
+  local R=pnl.settingRows
+  for _,k in ipairs({"minimap","prices","questie","seeds","alts","gather","titles"}) do assert(R[k], "setting "..k) end
+  local function click(k, on) R[k].check._checked=on; R[k].check.GetChecked=function() return on end; R[k].check.scripts.OnClick(R[k].check) end
+  click("prices", false); assert(ForeverArtisanSettings.priceTips==false and not FA.PriceTipsOn(), "prices off")
+  click("prices", true); assert(FA.PriceTipsOn(), "prices back on")
+  local hidden0=ForeverArtisanSettings.minimapHide
+  click("minimap", false); assert(ForeverArtisanSettings.minimapHide, "minimap hidden")
+  click("minimap", true); assert(not ForeverArtisanSettings.minimapHide, "minimap shown")
+  ForeverArtisanSettings.minimapHide=hidden0
+  assert(R.alts.desc._text:find("Needs Syndicator"), "a missing addon says what it needs: "..R.alts.desc._text)
+  click("titles", false); assert(not FA.TownNamesOn(), "titles off")
+  click("titles", true); assert(FA.TownNamesOn(), "titles on")
+  ForeverArtisanSettings.titlesPick=nil
+  assert(pnl.town and pnl.plates, "names in town on the Settings tab")
+  -- Info: the newest releases up to the running version
+  local nt=pnl.news._text
+  local _, nNews = nt:gsub("|cffd4a94e%d+%.%d+%.%d+|r", "")
+  assert(nt:find(ForeverArtisan.Version(), 1, true) and nNews==3 and not nt:find("0.9.17"), "three newest: "..nt)
+  run("FOREVERARTISAN","welcome"); assert(pnl.tab=="info", "/fa welcome opens Info")
+  print("0.9.21 panel tabs ok")
 end
 print("CRAFTS OK")
 print("SUITE OK")

@@ -156,6 +156,7 @@ local function Ensure() if dirty then Rebuild() end end
 function ns.OnContactsChanged()
   dirty = true
   if ns.OnChange then ns.OnChange() end
+  if FA.RefreshPanel then FA.RefreshPanel() end -- the /fa panel's Trade Contacts counts
 end
 
 function ns.Contacts() Ensure(); return npcs end
@@ -283,14 +284,31 @@ function ns.SetWaypoint(npc)
   print(PREFIX .. string.format("%s is at %.1f, %.1f in %s.", title, npc.x, npc.y, npc.z or "?"))
 end
 
--- one short freshness note, or nil when the contact is current
+-- "Oct 2" (no leading zero), or nil
+local function SeenDay(npc)
+  if not npc.seen then return nil end
+  return date("%b", npc.seen) .. " " .. tonumber(date("%d", npc.seen))
+end
+
+-- the short tag for a contact from before a game update, kept short so list rows don't cut it off:
+-- "  ·  met Oct 2" on list rows, " (met Oct 2)" on item tooltips. The row's tooltip explains it.
+function ns.AgeTag(npc, paren)
+  if not npc or (npc.age or 0) == 0 then return "" end
+  local d = SeenDay(npc)
+  local t = d and ("met " .. d) or "met a while ago"
+  return paren and (" (" .. t .. ")") or ("  ·  " .. t)
+end
+
+-- one short freshness note, or nil when the contact is current. A game update can move or change an
+-- NPC, so a record from before one is shown but marked; seeing or talking to them again clears it.
 function ns.AgeNote(npc)
-  local when = npc.seen and (" " .. date("%b %d", npc.seen)) or ""
+  local d = SeenDay(npc)
+  local when = d and ("You last saw them " .. d) or "You haven't seen them in a while"
   if npc.age >= ns.HIDE_AFTER then
-    return "Not seen through " .. npc.age .. " game updates" .. (when ~= "" and (" (last seen" .. when .. ")") or "")
-      .. ". Hidden from tooltips and search until you see them again."
+    return when .. ", " .. npc.age .. " game updates ago. Still listed here and in Nearest trainer, "
+      .. "but what they sell or teach is left out of item tooltips and item search until you see them again."
   elseif npc.age == 1 then
-    return "Last seen" .. when .. " before the last game update. May have moved or changed."
+    return when .. ", before the latest game update. They may have moved or changed; see them again to confirm."
   end
 end
 
@@ -506,7 +524,7 @@ local function addToTooltip(tt)
     local old = h.npc.age > 0
     local left = "  " .. (old and GREY or "") .. h.npc.n .. (old and "|r" or "") .. GREY .. " - " .. where(h.npc) .. "|r"
     if h.item.lim then left = left .. " |cffff8040(limited)|r" end
-    if old then left = left .. GREY .. " (before update)|r" end
+    if old then left = left .. GREY .. ns.AgeTag(h.npc, true) .. "|r" end
     local c = old and 0.6 or 1
     tt:AddDoubleLine(left, money(h.item), c, c, c, c, c, c)
   end
@@ -546,6 +564,10 @@ FA.Vendors = {
   search = search,
   hitsForLink = hitsForLink,
   open = function(q) if ns.OpenSearch then ns.OpenSearch(q) end end,
+  openTab = function(name) if ns.OpenTab then ns.OpenTab(name) end end, -- "search" | "contacts" | "stock"
+  openNearest = function() if ns.OpenNearest then ns.OpenNearest() end end,
+  -- vendors met, trainers met, trainers from the beta, trainers from Questie
+  counts = function() if ns.ContactCounts then return ns.ContactCounts() end return 0, 0, 0, 0 end,
   waypoint = function(npc) if npc then ns.SetWaypoint(npc) end end,
   scoutOn = function() return ns.ScoutOn and ns.ScoutOn() end,
   -- closest trainer you've met or passed for a profession ("Enchanting"), or nil

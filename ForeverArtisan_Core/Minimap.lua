@@ -1,26 +1,27 @@
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
--- ForeverArtisan Core: minimap buttons. The anvil opens the suite; the book opens Trade Contacts.
--- Left-click opens the hub (/fa); from there each module has an Open button.
+-- ForeverArtisan Core: the minimap button (one, the gold FA). Left-click opens the hub (/fa), where each
+-- module has an Open button and Trade Contacts has its row of buttons; right-click opens Trade Contacts.
 -- If another addon ships LibDBIcon we register with it so the button lines up with
 -- the others and respects button bags. Otherwise we draw our own round button.
 local ADDON = ...
 local GREY, GREEN = "|cff9d9d9d", "|cff40ff40"
 local PREFIX = ForeverArtisan.Prefix()
 local LDB_NAME = "ForeverArtisan"
--- our own textures (ForeverArtisan_Core\Media): the gold FA, and a gold map pin for Trade Contacts
+-- our own texture (ForeverArtisan_Core\Media): the gold FA
 local MEDIA = "Interface\\AddOns\\ForeverArtisan_Core\\Media\\"
 local ICON = MEDIA .. "minimap"
 
-local mm, cm, LDBIcon -- cm: the Trade Contacts button
-local CONTACTS_LDB = "ForeverArtisanContacts"
-local CONTACTS_ICON = MEDIA .. "contacts"
+local mm, LDBIcon
 
 local function S()
   ForeverArtisanSettings = ForeverArtisanSettings or {}
   return ForeverArtisanSettings
 end
 
-local function OnClick()
+-- left-click: the /fa panel; right-click: Trade Contacts (its own button was retired in 0.9.21)
+local function OnClick(_, button)
+  local V = ForeverArtisan and ForeverArtisan.Vendors
+  if button == "RightButton" and V and V.open then V.open() return end
   if ForeverArtisan and ForeverArtisan.open then ForeverArtisan.open() end
 end
 
@@ -37,6 +38,7 @@ local function TooltipLines(tt)
   if not any then tt:AddLine(GREY .. "No modules running yet.|r") end
   tt:AddLine(" ")
   tt:AddLine(GREEN .. "Click:|r open ForeverArtisan", 1, 1, 1)
+  if ForeverArtisan and ForeverArtisan.Vendors then tt:AddLine(GREEN .. "Right-click:|r open Trade Contacts", 1, 1, 1) end
   tt:AddLine(GREEN .. "Drag:|r move around the minimap", 1, 1, 1)
   tt:AddLine(GREY .. "/fa minimap hides it|r")
 end
@@ -47,11 +49,11 @@ local function TakenAngles()
   if LDBIcon and LDBIcon.GetButtonList then
     for _, name in ipairs(LDBIcon:GetButtonList()) do
       local b = LDBIcon:GetMinimapButton(name)
-      if b and b.db and b.db.minimapPos and name ~= LDB_NAME and name ~= CONTACTS_LDB then taken[#taken + 1] = b.db.minimapPos end
+      if b and b.db and b.db.minimapPos and name ~= LDB_NAME then taken[#taken + 1] = b.db.minimapPos end
     end
   end
   for _, child in ipairs({ Minimap:GetChildren() }) do
-    if child ~= mm and child ~= cm and child:IsShown() and child.GetCenter and child:GetCenter() then
+    if child ~= mm and child:IsShown() and child.GetCenter and child:GetCenter() then
       local cx, cy = child:GetCenter(); local mx, my = Minimap:GetCenter()
       if cx and mx and child:GetWidth() < 40 then
         local d = math.sqrt((cx - mx) ^ 2 + (cy - my) ^ 2)
@@ -136,41 +138,6 @@ local function CarryOverFishingSpot()
   if fs.minimapHide ~= nil then s.minimapHide = fs.minimapHide end
 end
 
--- Trade Contacts: its own button, one click to the search (only while Trade Contacts is on)
-local function ContactsClick(_, button)
-  local V = ForeverArtisan and ForeverArtisan.Vendors
-  if V and V.open then V.open() end
-end
-local function ContactsTip(tt)
-  tt:AddLine("ForeverArtisan: Trade Contacts")
-  tt:AddLine("Every crafting vendor and trainer you've met. Search them, find the nearest trainer, get a waypoint.", 1, 1, 1, true)
-  tt:AddLine(" ")
-  tt:AddLine(GREEN .. "Click:|r open Trade Contacts", 1, 1, 1)
-  tt:AddLine(GREEN .. "Drag:|r move around the minimap", 1, 1, 1)
-  tt:AddLine(GREY .. "/fa minimap contacts hides it|r")
-end
-
-local function BuildContacts()
-  if cm or not (ForeverArtisan and ForeverArtisan.Vendors) then return end
-  local s = S()
-  if LDBIcon then
-    local LDB = LibStub("LibDataBroker-1.1", true)
-    local obj = LDB:NewDataObject(CONTACTS_LDB, {
-      type = "launcher", text = "Trade Contacts", icon = CONTACTS_ICON,
-      OnClick = ContactsClick, OnTooltipShow = ContactsTip,
-    })
-    s.contactsIcon = s.contactsIcon or {}
-    if s.contactsIcon.minimapPos == nil then s.contactsIcon.minimapPos = s.contactsAngle or FreeAngle() end
-    s.contactsIcon.hide = s.contactsHide and true or false
-    LDBIcon:Register(CONTACTS_LDB, obj, s.contactsIcon)
-    cm = LDBIcon:GetMinimapButton(CONTACTS_LDB)
-  else
-    if not s.contactsAngle then s.contactsAngle = FreeAngle() end
-    cm = BuildOwnButton({ frameName = "ForeverArtisanContactsMinimapButton", icon = CONTACTS_ICON, onClick = ContactsClick,
-      tooltip = ContactsTip, angleKey = "contactsAngle", hideKey = "contactsHide" })
-  end
-end
-
 local function Build()
   if not Minimap or mm then return end
   CarryOverFishingSpot()
@@ -199,20 +166,13 @@ end
 -- /fa minimap          -> show / hide
 -- /fa minimap <0-359>  -> move to that angle (0 = right, 90 = top, 180 = left, 270 = bottom)
 -- /fa minimap reset    -> pick the emptiest spot again
--- /fa minimap contacts -> show / hide the Trade Contacts button
+-- /fa minimap contacts -> Trade Contacts has no button of its own any more; says where it went
 local function Command(arg)
   arg = (arg or ""):lower()
   local s = S()
   if arg == "contacts" then
-    s.contactsHide = not s.contactsHide
-    if LDBIcon and s.contactsIcon then
-      s.contactsIcon.hide = s.contactsHide
-      if s.contactsHide then LDBIcon:Hide(CONTACTS_LDB) else LDBIcon:Show(CONTACTS_LDB) end
-    elseif cm then
-      cm:SetShown(not s.contactsHide)
-    end
-    print(PREFIX .. (s.contactsHide and "Trade Contacts minimap button hidden. /fa minimap contacts brings it back."
-      or "Trade Contacts minimap button shown. Drag it to move it."))
+    print(PREFIX .. "Trade Contacts no longer has its own minimap button. Right-click the FA button, "
+      .. "or use the Trade Contacts buttons at the bottom of the /fa panel.")
     return
   end
   local angle = tonumber(arg)
@@ -245,7 +205,7 @@ ForeverArtisan.minimap = Command
 
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
-ev:SetScript("OnEvent", function() pcall(Build); pcall(BuildContacts) end)
+ev:SetScript("OnEvent", function() pcall(Build) end)
 
 -- hidden values: skip events that carry them, and drop their errors quietly (Core UI.lua)
 ForeverArtisan.GuardEvents(ev)

@@ -217,6 +217,7 @@ end
 
 ---------------------------------------------------------------- panel
 
+local NEWS -- release headlines, filled in under "what's new"; the Info tab shows the newest three
 local ROW_H = 30 -- compact: every profession has a module now, so notes live in the hover tooltip
 local panel
 
@@ -232,11 +233,19 @@ local function statusText(m)
   return GOLD .. "Reload to apply|r"
 end
 
+-- the "Works best with" line as text, for the test suite
+local function addonsText()
+  return panel and panel.works and panel.works.text:GetText() or ""
+end
+
+local refreshSettings -- the Settings tab (defined with it, below)
+local refreshMarket -- the Market tab (defined with it, below)
+local showTrend -- its price-trend view (defined after it)
 local function refreshPanel()
   if not panel then return end
   scan()
-  -- rows flow down the panel under a heading for each group
-  local y, prev = -34, nil
+  -- rows flow down the Modules tab under a heading for each group
+  local y, prev = -6, nil
   for _, h in ipairs(panel.headings) do h:Hide() end
   for i, row in ipairs(panel.rows) do
     local m = modules[i]
@@ -268,23 +277,34 @@ local function refreshPanel()
   end
   panel.empty:SetShown(#modules == 0)
   panel.reload:SetShown(pending)
-  panel.searchBtn:SetShown(FA.Vendors ~= nil)
+
+  -- Trade Contacts tab: what it knows and where it came from, and its buttons only while it runs
+  for _, b in ipairs(panel.tcButtons) do b:SetShown(FA.Vendors ~= nil); b.desc:SetShown(FA.Vendors ~= nil) end
+  if FA.Vendors and FA.Vendors.counts then
+    local v, t, b, q = FA.Vendors.counts()
+    local qs = FA.QuestieStatus and FA.QuestieStatus() or "missing"
+    local lines = { ("You've met: |cffffffff%d vendors and %d trainers|r"):format(v, t) }
+    if b > 0 then lines[#lines + 1] = ("From the Forever beta: |cffffffff%d more trainers|r you haven't met"):format(b) end
+    lines[#lines + 1] = (qs == "missing") and (GREY .. "From Questie: not installed. With it, every profession trainer in the game is included.|r")
+      or (qs == "off") and (GREY .. "From Questie: turned off|r")
+      -- it reads Questie's database a few seconds after login (longer after a Questie update)
+      or (qs == "reading" or qs == "installed") and (GREY .. "From Questie: reading its trainers, a moment...|r")
+      or ("From Questie: |cffffffff%d more trainers|r for your faction you haven't met"):format(q)
+    -- each trainer counts once: one you've met is left out of the beta and Questie numbers
+    if b + q > 0 then lines[#lines + 1] = ("All together: |cffffffff%d trainers|r"):format(t + b + q) end
+    panel.known:SetText(table.concat(lines, "\n"))
+  else
+    -- (turning it off already asks first and says what's lost; this is the reminder while it's off)
+    panel.known:SetText(GOLD .. "Trade Contacts is off, so vendors and trainers you meet aren't saved. Turn it on in the Modules tab.|r")
+  end
   -- names in town: a status line, and a button when the friendly nameplates they need are off
   if FA.TownStatus then
     local text, off = FA.TownStatus()
     panel.town:SetText(text)
     panel.plates:SetShown(off)
   end
-  -- vendors and trainers are only saved while Trade Contacts runs, for every profession
-  local tc
-  for _, m in ipairs(modules) do if m.key == "contacts" then tc = m end end
-  if tc and tc.loaded then
-    panel.contacts:SetText(GREY .. "Keep Trade Contacts on. It saves every vendor and trainer you meet, for all professions, even ones turned off here. Shopping lists and recipe books use them.|r")
-  elseif tc then
-    panel.contacts:SetText(GOLD .. "Trade Contacts is off, so vendors and trainers you meet aren't saved. Turn it on so shopping lists and recipe books know where to buy and train.|r")
-  else
-    panel.contacts:SetText("")
-  end
+  refreshSettings()
+  if panel.tab == "market" then refreshMarket() end
 
   if panel.works then
     local CHECK = "|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t "
@@ -309,7 +329,7 @@ local function refreshPanel()
 
   -- "Coming soon" grid under the installed modules
   local shown = math.min(#modules, #panel.rows)
-  local top = (shown > 0) and (y - 10) or -110
+  local top = (shown > 0) and (y - 10) or -60
   local soon = comingSoon()
   panel.soonHeader:ClearAllPoints()
   panel.soonHeader:SetPoint("TOPLEFT", 18, top)
@@ -327,22 +347,62 @@ local function refreshPanel()
       fs:Hide()
     end
   end
-  local gridRows = math.ceil(#soon / SOON_COLS)
-  panel:SetHeight(math.max(380, -top + 20 + gridRows * SOON_H + 240))
+  -- the Modules tab sets the height (the longest); the other tabs fit in it
+  local gridRows = #soon > 0 and math.ceil(#soon / SOON_COLS) or 0
+  local listEnd = #soon > 0 and (-top + 20 + gridRows * SOON_H) or -top
+  panel:SetHeight(math.max(600, 58 + listEnd + 112)) -- room for the works-with line and Reload UI
 end
 
-local function buildPanel()
-  panel = FA.UI.Frame({ name = "ForeverArtisanPanel", title = "Modules", width = 460, height = 360, strata = "DIALOG",
-    getPos = function() return ForeverArtisanSettings and ForeverArtisanSettings.panelPos end,
-    setPos = function(pos) ForeverArtisanSettings = ForeverArtisanSettings or {}; ForeverArtisanSettings.panelPos = pos end,
-    defaultPos = { "CENTER", 0, 0 } })
+-- Trade Contacts calls this when its contacts change (a new NPC, Questie's trainers read), so the open
+-- panel's counts stay current
+function FA.RefreshPanel()
+  if panel and panel:IsShown() then pcall(refreshPanel) end
+end
 
+local TABS = { { "modules", "Modules" }, { "market", "Market" }, { "contacts", "Contacts" }, { "settings", "Settings" }, { "info", "Info" } }
 
+local function selectTab(name)
+  if not (panel and panel.pages[name]) then name = "modules" end
+  panel.tab = name
+  FA.UI.SelectTab(panel.pages, panel.tabs, name)
+  if name == "market" and panel.market then refreshMarket() end
+end
+
+-- the game can't open links: each address sits in a box, click it and Ctrl+C
+local function CopyBox(parent, text, w, title, tip)
+  local box = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+  box:SetSize(w, 20)
+  box:SetAutoFocus(false); box:SetText(text)
+  box:SetScript("OnTextChanged", function(self, user) if user then self:SetText(text); self:HighlightText() end end)
+  box:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+  box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  box:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+  FA.UI.Tip(box, function()
+    GameTooltip:AddLine(title)
+    GameTooltip:AddLine(tip .. " Click the box, press Ctrl+C, then paste it in your browser.", 1, 1, 1, true)
+  end)
+  return box
+end
+
+local function Txt(parent, font, x, y, w, text)
+  local fs = parent:CreateFontString(nil, "OVERLAY", font)
+  fs:SetPoint("TOPLEFT", x, y)
+  if w then fs:SetWidth(w) end
+  fs:SetJustifyH("LEFT")
+  if text then fs:SetText(text) end
+  return fs
+end
+
+local function Head(parent, y, text)
+  return Txt(parent, "GameFontNormal", 16, y, nil, GOLD .. text .. "|r")
+end
+
+local function buildModulesTab(p)
   panel.rows = {}
   for i = 1, 16 do
-    local row = CreateFrame("Frame", nil, panel)
+    local row = CreateFrame("Frame", nil, p)
     row:SetSize(420, ROW_H)
-    row:SetPoint("TOPLEFT", 16, -54 - (i - 1) * ROW_H)
+    row:SetPoint("TOPLEFT", 16, -6 - (i - 1) * ROW_H)
     row.check = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
     row.check:SetPoint("LEFT", 0, 0)
     row.check:SetScript("OnClick", function(self)
@@ -388,40 +448,26 @@ local function buildPanel()
   -- one heading per group: what this character has, the professions it doesn't, and tools
   panel.headings = {}
   for i, text in ipairs({ "Your trades", "Not learned on this character", "Tools" }) do
-    local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local h = p:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     h:SetText(GOLD .. text .. "|r")
     h:Hide()
     panel.headings[i] = h
   end
 
-  panel.empty = panel:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-  panel.empty:SetPoint("TOP", 0, -80)
+  panel.empty = p:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+  panel.empty:SetPoint("TOP", 0, -30)
   panel.empty:SetText("No modules installed yet.")
 
-  panel.soonHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  panel.soonHeader = p:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   panel.soonHeader:SetText(GOLD .. "Coming soon|r")
   panel.soon = {}
   for i = 1, #PLANNED do
-    panel.soon[i] = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    panel.soon[i] = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   end
 
-  -- vendor search lives in Trade Contacts; the button only shows while that module is on
-  panel.searchBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-  panel.searchBtn:SetSize(130, 24)
-  panel.searchBtn:SetPoint("BOTTOMLEFT", 16, 12)
-  panel.searchBtn:SetText("Vendor search")
-  panel.searchBtn:SetScript("OnClick", function() panel:Hide(); if FA.Vendors then FA.Vendors.open() end end)
-
-  -- names in town: always on, so no switch; just say whether the game's friendly nameplates allow it
-  -- (also on Trade Contacts' Search tab). ForeverArtisan only turns those on when the player clicks.
-  local townHover = CreateFrame("Frame", nil, panel)
-  townHover:SetPoint("BOTTOMLEFT", 16, 42); townHover:SetSize(428, 28)
-  panel.town = townHover:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  panel.town:SetPoint("BOTTOMLEFT"); panel.town:SetWidth(428); panel.town:SetJustifyH("LEFT")
-  FA.UI.Tip(townHover, function() if FA.TownNamesTip then FA.TownNamesTip(GameTooltip) end end)
   -- other addons ForeverArtisan reads when you have them (named in game only)
-  local works = CreateFrame("Button", nil, panel)
-  works:SetPoint("BOTTOMLEFT", 16, 150); works:SetSize(428, 56)
+  local works = CreateFrame("Button", nil, p)
+  works:SetPoint("BOTTOMLEFT", 16, 44); works:SetSize(428, 56)
   works.text = works:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   works.text:SetPoint("LEFT"); works.text:SetJustifyH("LEFT"); works.text:SetSpacing(4)
   works:SetScript("OnClick", function()
@@ -474,49 +520,583 @@ local function buildPanel()
   end)
   panel.works = works
 
-  -- feedback: the site can't open from the game, so the address sits in a box ready to copy
-  local shape = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  shape:SetPoint("BOTTOMLEFT", 16, 120)
-  shape:SetText(GOLD .. "Help shape ForeverArtisan:|r")
-  local site = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
-  site:SetSize(130, 20); site:SetPoint("LEFT", shape, "RIGHT", 12, 0)
-  site:SetAutoFocus(false); site:SetText(FA.WEBSITE)
-  site:SetScript("OnTextChanged", function(self, user) if user then self:SetText(FA.WEBSITE); self:HighlightText() end end)
-  site:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
-  site:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-  site:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-  local copy = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  copy:SetPoint("LEFT", site, "RIGHT", 8, 0); copy:SetText("click, Ctrl+C")
-  FA.UI.Tip(site, function()
-    GameTooltip:AddLine("Help shape ForeverArtisan")
-    GameTooltip:AddLine("Ideas, comments and feature requests go through the site. Copy the address, then paste it in your browser.", 1, 1, 1, true)
-  end)
-  panel.site = site
+  panel.reload = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
+  panel.reload:SetSize(130, 24)
+  panel.reload:SetPoint("BOTTOMRIGHT", -16, 12)
+  panel.reload:SetText("Reload UI")
+  panel.reload:SetScript("OnClick", ReloadUI)
+end
 
-  panel.contacts = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  panel.contacts:SetPoint("BOTTOMLEFT", 16, 76); panel.contacts:SetWidth(428); panel.contacts:SetJustifyH("LEFT")
-  panel.plates = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+local function buildContactsTab(p)
+  -- what's in it, by where it came from, so the buttons below are clear about what they search
+  Head(p, -8, "What Trade Contacts knows")
+  panel.known = Txt(p, "GameFontHighlightSmall", 16, -30, 428)
+  panel.known:SetSpacing(3)
+
+  Head(p, -96, "Open Trade Contacts")
+  -- each button opens the Trade Contacts window on that tab; Nearest trainer opens with its menu up
+  local TC = {
+    { "Search", function() FA.Vendors.open() end, "Find any of them by item, NPC, town or profession." },
+    { "Contacts", function() FA.Vendors.openTab("contacts") end, "Your contact book: the vendors and trainers you've met, by zone and trade." },
+    { "Limited stock", function() FA.Vendors.openTab("stock") end, "Limited-stock items at vendors you've met, and when they come back." },
+    { "Nearest trainer", function() FA.Vendors.openNearest() end, "The closest trainer for your class or a profession, from everything above." },
+  }
+  panel.tcButtons = {}
+  for i, t in ipairs(TC) do
+    local y = -118 - (i - 1) * 34
+    local b = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
+    b:SetSize(130, 24); b:SetPoint("TOPLEFT", 16, y); b:SetText(t[1])
+    b:SetScript("OnClick", function() if FA.Vendors then panel:Hide(); t[2]() end end)
+    b.desc = Txt(p, "GameFontHighlightSmall", 156, y - 1, 288, t[3])
+    panel.tcButtons[i] = b
+  end
+
+end
+
+-- Settings: every switch that used to be a slash command only. Each row: a box, a name, one gray line.
+-- get() true/false (nil = can't be used here: grayed, with need shown); set(on) does what the command does.
+local function CSettings() return ForeverArtisanContactsDB and ForeverArtisanContactsDB.settings end
+local SETTINGS = {
+  { head = "General" },
+  { key = "minimap", label = "Minimap button", desc = "Left-click opens this panel, right-click Trade Contacts.",
+    get = function() return not (ForeverArtisanSettings and ForeverArtisanSettings.minimapHide) end,
+    set = function(on)
+      if (not (ForeverArtisanSettings and ForeverArtisanSettings.minimapHide)) ~= on and FA.minimap then FA.minimap("") end
+    end },
+  { key = "prices", label = "Auction House prices on item tooltips", desc = "What an item sells for, from Auction House pages you've seen.",
+    get = function() return FA.PriceTipsOn and FA.PriceTipsOn() end,
+    set = function(on) if on then ForeverArtisanSettings.priceTips = nil else ForeverArtisanSettings.priceTips = false end end,
+    note = function() return (type(_G.Auctionator) == "table" and _G.Auctionator.API) and "Auctionator shows its own, so ForeverArtisan stays quiet." or nil end },
+  { head = "Trade Contacts" },
+  { key = "questie", label = "Trainers from Questie", desc = "Every profession trainer for your faction, in search and Nearest trainer.",
+    get = function()
+      if not (FA.Vendors and FA.QuestieStatus) then return nil end
+      local st = FA.QuestieStatus()
+      if st == "missing" or st == "incompatible" then return nil end
+      return st ~= "off"
+    end,
+    need = function() return FA.Vendors and "Needs Questie." or "Needs Trade Contacts on." end,
+    set = function(on) if SlashCmdList.FACONTACTS then SlashCmdList.FACONTACTS(on and "questie on" or "questie off") end end },
+  { key = "seeds", label = "Trainers from the Forever beta", desc = "Trainers we met on the beta, until you meet them yourself.",
+    get = function() local st = CSettings(); if not (FA.Vendors and st) then return nil end; return not st.seedsOff end,
+    need = function() return "Needs Trade Contacts on." end,
+    set = function(on) if SlashCmdList.FACONTACTS then SlashCmdList.FACONTACTS(on and "seeds on" or "seeds off") end end },
+  { head = "From your other addons" },
+  { key = "alts", label = "What your alts hold, on shopping lists", desc = "Bags, bank and mailbox of your other characters.",
+    get = function()
+      local st = FA.SyndicatorStatus and FA.SyndicatorStatus() or "missing"
+      if st == "missing" then return nil end
+      return st ~= "off"
+    end,
+    need = function() return "Needs Syndicator (Baganator installs it)." end,
+    set = function(on) ForeverArtisanSettings.altsOff = (not on) or nil end },
+  { key = "gather", label = "Herb and ore spots", desc = "Herbalism and Mining show where to find what you haven't logged.",
+    get = function()
+      local st = FA.GatherStatus and FA.GatherStatus() or "missing"
+      if st == "missing" or st == "incompatible" then return nil end
+      return st ~= "off"
+    end,
+    need = function() return "Needs GatherMate2 and its data pack." end,
+    set = function(on) ForeverArtisanSettings.gatherOff = (not on) or nil; if FA.GatherReset then FA.GatherReset() end end },
+  { head = "Names in town" },
+  { key = "titles", label = "Job titles under NPC names", desc = "\"Cooking Trainer\", \"Trade Supplies\" and so on, in towns.",
+    get = function() return FA.TownNamesOn and FA.TownNamesOn() end,
+    set = function(on) if FA.SetTownNames then FA.SetTownNames(on, true) end end,
+    note = function()
+      local other = FA.OtherPlatesAddon and FA.OtherPlatesAddon()
+      return (other and (ForeverArtisanSettings or {}).titlesPick == nil) and ("Off on its own while " .. other .. " shows NPC names.") or nil
+    end },
+}
+
+function refreshSettings()
+  for _, r in ipairs(panel.settingRows) do
+    local d = r.def
+    local on = d.get()
+    local usable = on ~= nil
+    r.check:SetChecked(on and true or false)
+    r.check:SetEnabled(usable)
+    r.label:SetText((usable and "" or GREY) .. d.label .. (usable and "" or "|r"))
+    local extra = (not usable and d.need and d.need()) or (d.note and d.note()) or nil
+    r.desc:SetText(GREY .. d.desc .. (extra and (" " .. extra) or "") .. "|r")
+  end
+end
+
+local function buildSettingsTab(p)
+  panel.settingRows = {}
+  local y = -8
+  for _, d in ipairs(SETTINGS) do
+    if d.head then
+      if y < -8 then y = y - 6 end
+      Head(p, y, d.head)
+      y = y - 22
+    else
+      local r = { def = d }
+      r.check = CreateFrame("CheckButton", nil, p, "UICheckButtonTemplate")
+      r.check:SetSize(24, 24); r.check:SetPoint("TOPLEFT", 14, y + 4)
+      r.label = Txt(p, "GameFontHighlight", 42, y, 400)
+      r.desc = Txt(p, "GameFontHighlightSmall", 42, y - 15, 400) -- wraps to a second line (notes, "Needs ...")
+      r.check:SetScript("OnClick", function(self)
+        ForeverArtisanSettings = ForeverArtisanSettings or {}
+        d.set(self:GetChecked() and true or false)
+        refreshPanel()
+      end)
+      panel.settingRows[#panel.settingRows + 1] = r
+      panel.settingRows[d.key] = r
+      y = y - 48
+    end
+  end
+  -- the game's friendly nameplates carry the titles: a status line, and a button when they're off
+  local townHover = CreateFrame("Frame", nil, p)
+  townHover:SetPoint("TOPLEFT", 42, y + 2); townHover:SetSize(400, 30)
+  panel.town = Txt(townHover, "GameFontHighlightSmall", 0, 0, 400)
+  FA.UI.Tip(townHover, function() if FA.TownNamesTip then FA.TownNamesTip(GameTooltip) end end)
+  panel.plates = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
   panel.plates:SetSize(150, 24)
-  panel.plates:SetPoint("BOTTOMLEFT", 152, 12)
+  panel.plates:SetPoint("TOPLEFT", 42, y - 30)
   panel.plates:SetText("Turn on nameplates")
   panel.plates:SetScript("OnClick", function()
     if FA.TurnOnFriendlyPlates then FA.TurnOnFriendlyPlates() end
     refreshPanel()
   end)
   FA.UI.Tip(panel.plates, function() if FA.TownNamesTip then FA.TownNamesTip(GameTooltip) end end)
+end
 
-  panel.reload = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-  panel.reload:SetSize(130, 24)
-  panel.reload:SetPoint("BOTTOMRIGHT", -16, 12)
-  panel.reload:SetText("Reload UI")
-  panel.reload:SetScript("OnClick", ReloadUI)
+-- Market: every profession's Best crafts in one list, by profit after the Auction House cut.
+-- Flagged BETA until two weeks after launch: beta and launch-week prices swing too much to trust fully.
+local MARKET_ROWS = 15
+local MARKET_TOP = -106 -- first row, under the "click a craft" line
+-- this week's direction, on rows and in the trend view
+local ARROW = { up = "|TInterface\\Buttons\\Arrow-Up-Up:12|t", down = "|TInterface\\Buttons\\Arrow-Down-Up:12|t" }
+local MARKET_DOT = {
+  good = "|TInterface\\COMMON\\Indicator-Green:14|t",
+  ok = "|TInterface\\COMMON\\Indicator-Yellow:14|t",
+  shaky = "|TInterface\\COMMON\\Indicator-Gray:14|t",
+}
+local MARKET_CONF = { good = "steady price", ok = "price looks fair, check it", shaky = "shaky price: old, few listed or swinging" }
 
+-- "beta" before launch, "early" for two weeks after, nil after that
+function FA.MarketStage()
+  local now, at = (time and time()) or 0, FA.LAUNCH_AT or 0
+  if now < at then return "beta" end
+  if now < at + 14 * 86400 then return "early" end
+end
 
+local function marketData()
+  local rows, read = {}, 0
+  if FA.MarketRows then rows, read = FA.MarketRows() end
+  local hide = ForeverArtisanSettings and ForeverArtisanSettings.marketHideShaky
+  local data = {}
+  for _, row in ipairs(rows) do
+    local c = row.conf or {}
+    if not (hide and c.level == "shaky") then data[#data + 1] = row end
+  end
+  return data, read
+end
+
+function refreshMarket()
+  local p = panel.market
+  if p.showing then showTrend(p.showing) return end
+  local stage = FA.MarketStage()
+  p.badge:SetText(stage and ("|cffff9020BETA|r") or "")
+  p.note:SetText(stage == "beta" and ("|cffff9020These are beta Auction House prices.|r " .. GREY .. "They swing a lot, so treat the ranking as a rough guide until launch.|r")
+    or stage == "early" and ("|cffff9020Early days:|r " .. GREY .. "launch prices swing a lot. Check the Auction House before you craft in bulk.|r")
+    or (GREY .. "Recipes you know, in every profession, ranked by profit per craft after the Auction House cut.|r"))
+  p.source:SetText(FA.PriceSourceLines and table.concat(FA.PriceSourceLines(), "\n") or "")
+  local data, read = marketData()
+  p.data = data
+  p.off = math.max(0, math.min(p.off or 0, #data - MARKET_ROWS))
+  for i, r in ipairs(p.rows) do
+    local row = data[i + p.off]
+    r.row = row
+    if row then
+      local rec = row.r
+      r.icon:SetTexture(FA.UI.Icon(rec.itemId))
+      r.left:SetText((row.prof.color and row.prof.color(rec) or "") .. rec.name .. ((rec.makes or 1) > 1 and (" x" .. rec.makes) or "") .. "|r"
+        .. GREY .. "  " .. row.prof.name .. "|r")
+      local tag = FA.HouseTag and FA.HouseCompare and FA.HouseTag(FA.HouseCompare(rec.itemId, rec.makes))
+      local tr = FA.PriceTrend(rec.itemId)
+      r.right:SetText(((tr.dir == "up" or tr.dir == "down") and (ARROW[tr.dir] .. " ") or "")
+        .. (row.profit >= 0 and (GREEN .. "+" .. FA.Money(row.profit)) or (RED .. FA.Money(row.profit))) .. "|r"
+        .. (tag and (GOLD .. "  " .. tag .. "|r") or ""))
+      r.dot:SetText(MARKET_DOT[(row.conf or {}).level or "shaky"])
+      r:Show()
+    else
+      r:Hide()
+    end
+  end
+  p.clickHint:SetShown(#data > 0)
+  p.empty:SetText(#data > 0 and ""
+    or (read == 0 and "Learn a crafting profession and open its window once, so ForeverArtisan can read your recipes.")
+    or "No prices yet for what you craft. Visit the Auction House, or scan with Auctionator.")
+  p.hide:SetChecked(ForeverArtisanSettings and ForeverArtisanSettings.marketHideShaky and true or false)
+end
+
+---------------------------------------------------------------- Market: one craft's price trend
+-- Click a Market row: a 14-day chart of what it sells for (each day's lowest price at your Auction
+-- House), whether it's trending up or down, and the same for each material.
+local CHART_W, CHART_H, CHART_DAYS = 380, 130, 14
+
+-- "up 12% this week" (green/red as good for the seller), or why there's no trend yet
+local function trendWords(t, sellerView)
+  if not t or not t.now then return GREY .. "no prices seen yet|r" end
+  if not t.dir then return GREY .. "one day seen so far: check back after another scan|r" end
+  if t.dir == "flat" then return GREY .. "steady this week|r" end
+  local pct = math.floor(math.abs(t.change) * 100 + 0.5)
+  -- for something you sell, up is good; for a material you buy, down is good
+  local good = (t.dir == "up") == (sellerView and true or false)
+  return (good and GREEN or RED) .. t.dir .. " " .. pct .. "% this week|r"
+end
+FA.TrendWords = trendWords
+
+-- line (default) or bar chart, remembered; bars only when the client can't draw lines
+local function chartMode()
+  local m = ForeverArtisanSettings and ForeverArtisanSettings.marketChart
+  if not (panel.market.detail and panel.market.detail.canLine) then return "bar" end
+  return m == "bar" and "bar" or "line"
+end
+
+local function trendArrow(t)
+  return t and t.dir and ARROW[t.dir] or ""
+end
+
+function showTrend(row)
+  local p = panel.market
+  local d = p.detail
+  p.showing = row
+  for _, w in ipairs(p.listParts) do w:Hide() end
+  d:Show()
+  local rec = row.r
+  d.title:SetText((row.prof.color and row.prof.color(rec) or "") .. rec.name .. "|r" .. GREY .. "  " .. row.prof.name .. "|r")
+  local t = FA.PriceTrend(rec.itemId)
+  d.trend = t
+  d.sells:SetText("Sells for " .. (t.now and FA.Money(t.now) or (row.sale and FA.Money(row.sale)) or "?") .. " each  ·  " .. trendWords(t, true)
+    .. (t.listed and (GREY .. "  ·  " .. t.listed .. " listed|r") or ""))
+  local byDay, hi, lo = {}, 0, nil
+  for _, e in ipairs(t.days) do
+    byDay[e.day] = e
+    if e.p > hi then hi = e.p end
+    if not lo or e.p < lo then lo = e.p end
+  end
+  local today = FA.Day and FA.Day() or 0
+  local bw = math.floor(CHART_W / CHART_DAYS)
+  local mode = chartMode()
+  d.lineBtn:SetEnabled(d.canLine and mode ~= "line"); d.barBtn:SetEnabled(d.canLine and mode ~= "bar")
+  d.lineBtn:SetShown(d.canLine); d.barBtn:SetShown(d.canLine)
+  -- bars start at 0 (sizes compare); the line spans low to high (the shape shows the trend)
+  local bot, top = 0, hi
+  if mode == "line" and lo then
+    local pad = math.max(1, math.floor((hi - lo) * 0.15 + 0.5))
+    if hi == lo then pad = math.max(1, math.floor(hi * 0.1 + 0.5)) end
+    bot, top = math.max(0, lo - pad), hi + pad
+  end
+  local function y(pr) return (top > bot) and ((pr - bot) / (top - bot) * (CHART_H - 4) + 2) or (CHART_H / 2) end
+  local prevX, prevY, nLine = nil, nil, 0
+  for i = 1, CHART_DAYS do
+    local bar, dot = d.bars[i], d.dots[i]
+    local e = byDay[today - (CHART_DAYS - i)]
+    local latest = e and (i == CHART_DAYS or (t.last and e.day == t.last))
+    bar:Hide(); dot:Hide()
+    if e and hi > 0 then
+      if mode == "bar" then
+        bar:SetHeight(math.max(2, math.floor(CHART_H * e.p / hi + 0.5)))
+        -- the latest day stands out; the rest in brand gold
+        if latest then bar:SetColorTexture(1, 0.82, 0, 0.95) else bar:SetColorTexture(0.83, 0.66, 0.31, 0.7) end
+        bar:Show()
+      else
+        local x, yy = (i - 1) * bw + bw / 2, y(e.p)
+        dot:ClearAllPoints(); dot:SetPoint("CENTER", d.chart, "BOTTOMLEFT", x, yy)
+        dot:SetSize(latest and 8 or 6, latest and 8 or 6)
+        if latest then dot:SetColorTexture(1, 0.82, 0, 1) else dot:SetColorTexture(0.83, 0.66, 0.31, 1) end
+        dot:Show()
+        -- a line from the last day with a price, across any days without one
+        if prevX then
+          nLine = nLine + 1
+          local ln = d.lines[nLine]
+          ln:SetStartPoint("BOTTOMLEFT", d.chart, prevX, prevY)
+          ln:SetEndPoint("BOTTOMLEFT", d.chart, x, yy)
+          ln:Show()
+        end
+        prevX, prevY = x, yy
+      end
+    end
+    d.hits[i].e = e
+  end
+  for k = nLine + 1, #d.lines do d.lines[k]:Hide() end
+  d.hiText:SetText(hi > 0 and FA.Money(top) or "")
+  d.loText:SetText(hi > 0 and (bot > 0 and FA.Money(bot) or "0") or "")
+  d.empty:SetText(#t.days == 0 and "No prices seen for this yet. Scan the Auction House (or browse it) and the chart fills in, one point a day." or "")
+  -- materials: what each costs now and which way it's going
+  local lines = {}
+  for _, g in ipairs(rec.reagents or {}) do
+    local mt = FA.PriceTrend(g.id)
+    local now = mt.now or (FA.AHPrice and FA.AHPrice(g.id))
+    lines[#lines + 1] = ("%s%dx %s|r  %s  %s %s"):format("|cffffffff", g.n or 1, g.name or ("item " .. tostring(g.id)),
+      now and FA.Money(now) or (GREY .. "no price|r"), trendArrow(mt), trendWords(mt, false))
+  end
+  d.mats:SetText(#lines > 0 and table.concat(lines, "\n") or (GREY .. "No materials listed.|r"))
+  d.profit:SetText("Profit per craft now: " .. (row.profit >= 0 and (GREEN .. "+" .. FA.Money(row.profit)) or (RED .. FA.Money(row.profit))) .. "|r"
+    .. GREY .. "  (after the Auction House cut)|r")
+  d.ah:SetEnabled(FA.AuctionHouseOpen and FA.AuctionHouseOpen() and true or false)
+end
+
+local function hideTrend()
+  local p = panel.market
+  p.showing = nil
+  p.detail:Hide()
+  for _, w in ipairs(p.listParts) do w:Show() end
+  refreshMarket()
+end
+
+local function buildTrend(p)
+  local d = CreateFrame("Frame", nil, p)
+  d:SetPoint("TOPLEFT", 0, -80); d:SetPoint("BOTTOMRIGHT", 0, 0)
+  d:Hide()
+  p.detail = d
+  d.back = CreateFrame("Button", nil, d, "UIPanelButtonTemplate")
+  d.back:SetSize(80, 22); d.back:SetPoint("TOPLEFT", 16, -4); d.back:SetText("< Back")
+  d.back:SetScript("OnClick", hideTrend)
+  d.title = Txt(d, "GameFontNormal", 104, -8, 230)
+  d.title:SetWordWrap(false)
+  d.sells = Txt(d, "GameFontHighlightSmall", 16, -36, 428)
+  -- chart: a frame with a faint background and baseline, the highest price at top left
+  local c = CreateFrame("Frame", nil, d)
+  c:SetSize(CHART_W, CHART_H); c:SetPoint("TOPLEFT", 48, -64)
+  local bg = c:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(); bg:SetColorTexture(0, 0, 0, 0.35)
+  local base = c:CreateTexture(nil, "BORDER"); base:SetHeight(1); base:SetPoint("BOTTOMLEFT"); base:SetPoint("BOTTOMRIGHT")
+  base:SetColorTexture(0.6, 0.6, 0.6, 0.8)
+  d.hiText = c:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  d.hiText:SetPoint("TOPRIGHT", c, "TOPLEFT", -4, 0)
+  local lo = c:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  lo:SetPoint("BOTTOMRIGHT", c, "BOTTOMLEFT", -4, 0)
+  d.loText = lo
+  local left = c:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  left:SetPoint("TOPLEFT", c, "BOTTOMLEFT", 0, -3); left:SetText("2 weeks ago")
+  local right = c:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  right:SetPoint("TOPRIGHT", c, "BOTTOMRIGHT", 0, -3); right:SetText("today")
+  d.chart = c
+  -- Line or Bars, top right; the choice is remembered
+  d.canLine = type(c.CreateLine) == "function"
+  local function setMode(m)
+    ForeverArtisanSettings = ForeverArtisanSettings or {}
+    ForeverArtisanSettings.marketChart = m
+    if p.showing then showTrend(p.showing) end
+  end
+  d.barBtn = CreateFrame("Button", nil, d, "UIPanelButtonTemplate")
+  d.barBtn:SetSize(56, 22); d.barBtn:SetPoint("TOPRIGHT", -16, -4); d.barBtn:SetText("Bars")
+  d.barBtn:SetScript("OnClick", function() setMode("bar") end)
+  d.lineBtn = CreateFrame("Button", nil, d, "UIPanelButtonTemplate")
+  d.lineBtn:SetSize(56, 22); d.lineBtn:SetPoint("RIGHT", d.barBtn, "LEFT", -4, 0); d.lineBtn:SetText("Line")
+  d.lineBtn:SetScript("OnClick", function() setMode("line") end)
+  d.lines, d.dots = {}, {}
+  for i = 1, CHART_DAYS do
+    local dot = c:CreateTexture(nil, "OVERLAY")
+    dot:Hide()
+    d.dots[i] = dot
+    if d.canLine and i < CHART_DAYS then
+      local ln = c:CreateLine(nil, "ARTWORK")
+      ln:SetThickness(2); ln:SetColorTexture(0.83, 0.66, 0.31, 0.9)
+      ln:Hide()
+      d.lines[i] = ln
+    end
+  end
+  d.bars, d.hits = {}, {}
+  local bw = math.floor(CHART_W / CHART_DAYS)
+  for i = 1, CHART_DAYS do
+    local bar = c:CreateTexture(nil, "ARTWORK")
+    bar:SetWidth(bw - 4); bar:SetPoint("BOTTOMLEFT", (i - 1) * bw + 2, 1)
+    bar:Hide()
+    d.bars[i] = bar
+    -- a hover area per day (the whole column), so short bars are easy to point at
+    local hit = CreateFrame("Frame", nil, c)
+    hit:SetSize(bw, CHART_H); hit:SetPoint("BOTTOMLEFT", (i - 1) * bw, 0)
+    hit:EnableMouse(true)
+    hit:SetScript("OnEnter", function(self)
+      local e = self.e
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      local ago = CHART_DAYS - i
+      GameTooltip:AddLine(ago == 0 and "Today" or ago == 1 and "Yesterday" or (ago .. " days ago"))
+      if e then
+        GameTooltip:AddLine("Lowest price: " .. FA.Money(e.p), 1, 1, 1)
+        if e.q then GameTooltip:AddLine(e.q .. " listed", 1, 1, 1) end
+      else
+        GameTooltip:AddLine("No prices seen that day.", 0.6, 0.6, 0.6)
+      end
+      GameTooltip:Show()
+    end)
+    hit:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    d.hits[i] = hit
+  end
+  d.empty = Txt(c, "GameFontDisable", 20, -40, CHART_W - 40)
+  d.empty:SetJustifyH("CENTER")
+
+  Txt(d, "GameFontNormal", 16, -64 - CHART_H - 30, nil, GOLD .. "Materials|r")
+  d.mats = Txt(d, "GameFontHighlightSmall", 16, -64 - CHART_H - 50, 428)
+  d.mats:SetSpacing(4)
+  -- below the materials, however many there are
+  d.profit = d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  d.profit:SetPoint("TOPLEFT", d.mats, "BOTTOMLEFT", 0, -12); d.profit:SetWidth(428); d.profit:SetJustifyH("LEFT")
+
+  d.open = CreateFrame("Button", nil, d, "UIPanelButtonTemplate")
+  d.open:SetSize(130, 24); d.open:SetPoint("TOPLEFT", d.profit, "BOTTOMLEFT", 0, -12); d.open:SetText("Open recipe")
+  d.open:SetScript("OnClick", function() local row = p.showing; if row and row.prof.open then row.prof.open(row.r) end end)
+  d.ah = CreateFrame("Button", nil, d, "UIPanelButtonTemplate")
+  d.ah:SetSize(170, 24); d.ah:SetPoint("LEFT", d.open, "RIGHT", 8, 0); d.ah:SetText("Search Auction House")
+  d.ah:SetScript("OnClick", function() local row = p.showing; if row and FA.SearchAH then FA.SearchAH(row.r.name) end end)
+  if d.ah.SetMotionScriptsWhileDisabled then d.ah:SetMotionScriptsWhileDisabled(true) end
+  FA.UI.Tip(d.ah, function()
+    GameTooltip:AddLine("Search Auction House")
+    GameTooltip:AddLine("Puts the name in the Auction House search box (you press Search). Open the Auction House first.", 1, 1, 1, true)
+  end)
+  local note = d:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  note:SetPoint("TOPLEFT", d.open, "BOTTOMLEFT", 0, -12); note:SetWidth(428); note:SetJustifyH("LEFT")
+  note:SetText("Each day is that day's lowest price at your faction's Auction House, from your scans and visits. Hover a day for its price and how many were listed.")
+end
+FA.MarketTrend = function(row) if panel and panel.market then showTrend(row) end end -- for the test suite
+
+local function buildMarketTab(p)
+  panel.market = p
+  p.head = Head(p, -8, "Market")
+  p.badge = p:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  p.badge:SetPoint("LEFT", p.head, "RIGHT", 8, 0)
+  p.note = Txt(p, "GameFontHighlightSmall", 16, -28, 428)
+  p.source = Txt(p, "GameFontDisableSmall", 16, -58, 428)
+  p.rows = {}
+  for i = 1, MARKET_ROWS do
+    local r = CreateFrame("Button", nil, p)
+    r:SetSize(428, 22); r:SetPoint("TOPLEFT", 16, MARKET_TOP - (i - 1) * 24)
+    r:SetHighlightTexture(FA.UI.HIGHLIGHT, "ADD")
+    r.icon = r:CreateTexture(nil, "ARTWORK"); r.icon:SetSize(18, 18); r.icon:SetPoint("LEFT", 2, 0)
+    r.left = r:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    r.left:SetPoint("LEFT", 26, 0); r.left:SetWidth(250); r.left:SetJustifyH("LEFT"); r.left:SetWordWrap(false)
+    -- a "next page" arrow at the end of every row says there's more behind it
+    r.chart = r:CreateTexture(nil, "OVERLAY"); r.chart:SetSize(22, 22); r.chart:SetPoint("RIGHT", 2, 0)
+    r.chart:SetTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
+    r.dot = r:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    r.dot:SetPoint("RIGHT", -24, 0)
+    r.right = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    r.right:SetPoint("RIGHT", -44, 0); r.right:SetJustifyH("RIGHT")
+    r:SetScript("OnClick", function(self)
+      if self.row then showTrend(self.row) end
+    end)
+    r:SetScript("OnEnter", function(self)
+      local row = self.row
+      if not row then return end
+      local c = row.conf or {}
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      GameTooltip:AddLine(row.r.name)
+      GameTooltip:AddLine(row.prof.name, 1, 1, 1)
+      GameTooltip:AddDoubleLine("Materials", FA.Money(row.cost or 0), 1, 1, 1, 1, 1, 1)
+      if row.sale then GameTooltip:AddDoubleLine("Sells for (Auction House)", FA.Money(row.sale * (row.r.makes or 1)), 1, 1, 1, 1, 1, 1) end
+      if row.vend then GameTooltip:AddDoubleLine("Vendor pays", FA.Money(row.vend * (row.r.makes or 1)), 1, 1, 1, 1, 1, 1) end
+      GameTooltip:AddDoubleLine("Profit after the cut", FA.Money(row.profit), 1, 1, 1, 1, 1, 1)
+      GameTooltip:AddLine(" ")
+      local col = c.level == "good" and GREEN or c.level == "ok" and "|cffffff00" or GREY
+      GameTooltip:AddLine(col .. (MARKET_CONF[c.level or "shaky"]) .. "|r")
+      GameTooltip:AddLine("Click for its price chart.", 0.5, 0.75, 1, true)
+      GameTooltip:Show()
+    end)
+    r:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    r:Hide()
+    p.rows[i] = r
+  end
+  p:EnableMouseWheel(true)
+  p:SetScript("OnMouseWheel", function(_, delta)
+    p.off = math.max(0, math.min((p.off or 0) - delta * 3, #(p.data or {}) - MARKET_ROWS))
+    refreshMarket()
+  end)
+  p.empty = Txt(p, "GameFontDisable", 16, -140, 428)
+  p.empty:SetJustifyH("CENTER")
+  p.hide = CreateFrame("CheckButton", nil, p, "UICheckButtonTemplate")
+  p.hide:SetSize(24, 24); p.hide:SetPoint("TOPLEFT", 14, MARKET_TOP - MARKET_ROWS * 24 - 6)
+  -- the words sit on the box's middle, and clicking them ticks it too (same as every other checkbox)
+  local hl = p.hide:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  hl:SetPoint("LEFT", p.hide, "RIGHT", 2, 0); hl:SetText("Hide shaky prices")
+  p.hide:SetHitRectInsets(0, -((hl:GetStringWidth() or 110) + 4), 0, 0)
+  p.hide:SetScript("OnClick", function(self)
+    ForeverArtisanSettings = ForeverArtisanSettings or {}
+    ForeverArtisanSettings.marketHideShaky = self:GetChecked() and true or nil
+    p.off = 0
+    refreshMarket()
+  end)
+  -- say it big, right above the list: rows open a price chart
+  p.clickHint = Txt(p, "GameFontNormal", 16, -82, 428,
+    "Click any craft to see its price chart and whether it's trending up or down.")
+  local help = Txt(p, "GameFontDisableSmall", 16, MARKET_TOP - MARKET_ROWS * 24 - 40, 428,
+    "Arrows: the price is up or down this week. Dots: green steady price, yellow check it, gray shaky. "
+    .. GOLD .. "Gold:|r a goblin Auction House pays that much more.")
+  p.listParts = { p.hide, help, p.empty, p.clickHint }
+  for _, r in ipairs(p.rows) do p.listParts[#p.listParts + 1] = r end
+  buildTrend(p)
+end
+
+local function buildInfoTab(p)
+  Head(p, -8, "About")
+  local about = {
+    { "Version", FA.Version() },
+    { "Built for", "WoW Forever" .. (GetBuildInfo and (" " .. (select(1, GetBuildInfo()) or "")) or "") },
+    { "License", "Free to download and use. All rights reserved." },
+  }
+  for i, l in ipairs(about) do
+    local y = -30 - (i - 1) * 18
+    Txt(p, "GameFontDisable", 16, y, 90, l[1])
+    Txt(p, "GameFontHighlight", 110, y, 330, l[2])
+  end
+
+  Head(p, -100, "Contact")
+  -- until launch day the Discord gets a call-out
+  panel.discordNews = Txt(p, "GameFontHighlight", 16, -122, 428,
+    FA.Prelaunch() and (GREEN .. "The Discord is now live.|r Send your ideas before the November 4 launch.") or "")
+  local y0 = FA.Prelaunch() and -146 or -122
+  Txt(p, "GameFontHighlightSmall", 16, y0, 428, "Questions, bug reports and ideas: the ForeverArtisan Discord")
+  panel.discord = CopyBox(p, FA.DISCORD, 300, "ForeverArtisan Discord", "Questions, bug reports and ideas, and release news.")
+  panel.discord:SetPoint("TOPLEFT", 22, y0 - 16)
+  Txt(p, "GameFontHighlightSmall", 16, y0 - 46, 428, "Guides, the changelog and the bug form: the site")
+  panel.site = CopyBox(p, FA.WEBSITE, 300, "foreverartisan.app", "Guides, the changelog, ideas and the bug form.")
+  panel.site:SetPoint("TOPLEFT", 22, y0 - 62)
+  Txt(p, "GameFontDisableSmall", 16, y0 - 90, 428, "The game can't open links: click a box, press Ctrl+C, then paste it in your browser.")
+
+  -- the newest releases, from the same lines as the What's new note in chat
+  Head(p, y0 - 120, "What's new")
+  panel.news = Txt(p, "GameFontHighlightSmall", 16, y0 - 142, 428)
+  panel.news:SetSpacing(3)
+  local cur = FA.Version()
+  local lines = {}
+  for i = #NEWS, 1, -1 do
+    local n = NEWS[i]
+    local a, b = tostring(n[1]), tostring(cur)
+    -- only releases up to the one running (a dev build may carry the next one's line already)
+    local function num(v) local x, y, z = v:match("^(%d+)%.(%d+)%.(%d+)"); return x and (x * 1000000 + y * 1000 + z) end
+    if not num(b) or not num(a) or num(a) <= num(b) then
+      lines[#lines + 1] = GOLD .. n[1] .. "|r  " .. n[2]
+      if #lines == 3 then break end
+    end
+  end
+  panel.news:SetText(table.concat(lines, "\n\n") .. "\n\n" .. GREY .. "/fa help lists every command. Full changelog on the site.|r")
+
+  local enjoy = p:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  enjoy:SetPoint("BOTTOMLEFT", 16, 16); enjoy:SetText("Enjoy the journey!")
+end
+
+local function buildPanel()
+  panel = FA.UI.Frame({ name = "ForeverArtisanPanel", width = 460, height = 600, strata = "DIALOG",
+    getPos = function() return ForeverArtisanSettings and ForeverArtisanSettings.panelPos end,
+    setPos = function(pos) ForeverArtisanSettings = ForeverArtisanSettings or {}; ForeverArtisanSettings.panelPos = pos end,
+    defaultPos = { "CENTER", 0, 0 } })
+  panel.pages, panel.tabs = {}, {}
+  FA.UI.Tabs(panel, TABS, panel.pages, panel.tabs, selectTab)
+  buildModulesTab(panel.pages.modules)
+  buildMarketTab(panel.pages.market)
+  buildContactsTab(panel.pages.contacts)
+  buildSettingsTab(panel.pages.settings)
+  buildInfoTab(panel.pages.info)
+  panel.AddonsText = addonsText
+  selectTab("modules")
   panel:SetScript("OnShow", refreshPanel)
   panel:Hide()
 end
 
 local function togglePanel()
+
   if not panel then buildPanel() end
   if panel:IsShown() then panel:Hide() else panel:Show() end
 end
@@ -550,77 +1130,28 @@ local function registerOptions()
   end
 end
 
----------------------------------------------------------------- welcome notice
--- Who ForeverArtisan is for, shown once per account (and again if WELCOME_REV goes up because the
--- message changed). /fa welcome, /fa about or /fa feedback opens it any time. Beta builds add a line.
-local FEEDBACK_URL = "https://foreverartisan.app"
-local WELCOME_REV = 1
-local welcomeFrame
-
-local WELCOME_TEXT =
-  "Like many players, I'm treating Forever as a chance to rediscover the game. The magic of WoW "
-  .. "is that first journey, and this addon is built to support that experience.\n\n"
-  .. "While ForeverArtisan lists every recipe, where to get each one comes from your own play. It learns "
-  .. "from where you've been (the trainers you meet, what you gather, the recipes you find) to help you "
-  .. "get where you're going. Want to look further ahead on your journey? Crowdsourced sites have that covered.\n\n"
-  .. "Feedback and ideas:"
-
-local function showWelcome()
-  if not welcomeFrame then
-    local b = FA.UI.Frame({ name = "ForeverArtisanWelcome", title = "Welcome", width = 440, height = 362, strata = "DIALOG",
-      defaultPos = { "CENTER", 0, 80 } })
-    local head = b:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    head:SetPoint("TOP", 0, -34)
-    head:SetText(GOLD .. "Welcome to ForeverArtisan|r")
-
-    local body = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    body:SetPoint("TOPLEFT", 22, -62); body:SetWidth(396); body:SetJustifyH("LEFT"); body:SetSpacing(2)
-    body:SetText(WELCOME_TEXT)
-
-    local link = CreateFrame("EditBox", nil, b, "InputBoxTemplate")
-    link:SetSize(250, 22); link:SetPoint("TOPLEFT", body, "BOTTOMLEFT", 6, -8)
-    link:SetAutoFocus(false); link:SetText(FEEDBACK_URL)
-    link:SetScript("OnTextChanged", function(self) self:SetText(FEEDBACK_URL); self:HighlightText() end)
-    link:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
-    link:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    local hint = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    hint:SetPoint("LEFT", link, "RIGHT", 8, 0); hint:SetText("click, then Ctrl+C")
-
-    local bug = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    bug:SetPoint("TOPLEFT", link, "BOTTOMLEFT", -6, -8); bug:SetText(FA.BUG_LINE)
-
-    local enjoy = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    enjoy:SetPoint("TOPLEFT", bug, "BOTTOMLEFT", 0, -12); enjoy:SetText("Enjoy the journey!")
-
-    local beta = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    beta:SetPoint("TOPLEFT", enjoy, "BOTTOMLEFT", 0, -8); beta:SetWidth(396); beta:SetJustifyH("LEFT")
-    beta:SetText(FA.IsBeta() and "This is a test build: some things may change or not work quite right yet." or "")
-
-    local ok = CreateFrame("Button", nil, b, "UIPanelButtonTemplate")
-    ok:SetSize(120, 24); ok:SetPoint("BOTTOMRIGHT", b, "BOTTOM", -6, 14); ok:SetText("Got it")
-    local function seen()
-      -- only a click counts as seen, so a notice that never really showed comes back next login
-      ForeverArtisanSettings = ForeverArtisanSettings or {}
-      ForeverArtisanSettings.welcomeSeen = WELCOME_REV
-      b:Hide()
-    end
-    ok:SetScript("OnClick", seen)
-    local mods = CreateFrame("Button", nil, b, "UIPanelButtonTemplate")
-    mods:SetSize(150, 24); mods:SetPoint("BOTTOMLEFT", b, "BOTTOM", 6, 14); mods:SetText("Pick my professions")
-    mods:SetScript("OnClick", function() seen(); if not panel then buildPanel() end; panel:Show() end)
-    local note = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    note:SetPoint("BOTTOM", 0, 44); note:SetText("Bring this back any time with /fa welcome")
-    welcomeFrame = b
-  end
-  welcomeFrame:Show()
+---------------------------------------------------------------- first run
+-- A fresh install opens the module panel once, so new players pick their professions and see the
+-- site and Discord boxes. (0.9.21 retired the separate welcome notice; the panel says it all.)
+-- until launch day (Nov 4, 2026, 00:00 UTC) the panel calls out the Discord
+local LAUNCH_AT = 1793750400
+FA.LAUNCH_AT = LAUNCH_AT
+function FA.Prelaunch()
+  return ((time and time()) or 0) < LAUNCH_AT
 end
-FA.ShowWelcome = showWelcome
+
+local function showPanel(tab)
+  if not panel then buildPanel() end
+  if type(tab) == "string" then selectTab(tab) end
+  panel:Show()
+end
+FA.ShowPanel = showPanel
 
 ---------------------------------------------------------------- what's new (chat, once per update)
 -- After an update, the first login prints the headline features of every release since the one you last
--- ran (up to three). A fresh install gets the welcome notice instead. /fa new prints it again.
+-- ran (up to three). A fresh install opens the module panel instead. /fa new prints it again.
 -- Add one line per release, newest last; players only see releases newer than the one they had.
-local NEWS = {
+NEWS = {
   { "0.9.8", "Camping: your camp items, the camp cooldown and campfire kits, with a reminder at a fire (/fa camp). "
     .. "Tauren: herb tooltips say when Cultivation is ready." },
   { "0.9.9", "New gold FA and map pin minimap buttons, this What's new note after updates (/fa new), "
@@ -641,6 +1172,14 @@ local NEWS = {
     .. "Fishing and Trade Contacts. Characters with the same first name no longer share data." },
   { "0.9.17", "Controller fishing without the Gamepad UI: when a cast lands out of reach, the same button casts again. "
     .. "With the Gamepad UI on, put the white dot on a far bobber. Tested on PlayStation 5 and Xbox-style controllers." },
+  { "0.9.18", "Shopping lists and plans show a material's name instead of \"item:2450\" when the game sends it late." },
+  { "0.9.19", "Works with your favorite addons: Questie (every profession trainer, where recipes and materials come from), "
+    .. "Syndicator (what your alts hold) and GatherMate2 (herb and ore spots). Trainers from the Forever beta come built in." },
+  { "0.9.20", "Fishing catches count again with auto loot. Nearest trainer lists trainers from before game updates and "
+    .. "trainers with no title under their name, like Cook Torka." },
+  { "0.9.21", "The ForeverArtisan Discord is now live: " .. FA.DISCORD .. ". Send your ideas before the November 4 launch. "
+    .. "The /fa panel has tabs now: Modules, Market (beta: your most profitable crafts in every profession), Contacts, Settings and Info (the Discord link is there). "
+    .. "Right-click the FA minimap button for Trade Contacts; its own map-pin button is gone." },
 }
 
 local function verNum(v)
@@ -680,7 +1219,7 @@ local function checkNews()
   -- before 0.9.9 nothing recorded the version: someone who already saw the welcome is updating from 0.9.7 or 0.9.8
   if not last and s.welcomeSeen then last = "0.9.7" end
   s.lastVersion = cur
-  if not last or last == cur then return end -- fresh install (the welcome covers it) or same version
+  if not last or last == cur then return end -- fresh install (the panel opens instead) or same version
   local list = newsSince(last)
   if #list > 0 then
     if C_Timer then C_Timer.After(6, function() showNews(list) end) else showNews(list) end
@@ -710,11 +1249,13 @@ ev:SetScript("OnEvent", function(_, event)
   end
   pcall(registerOptions)
   pcall(checkVersions)
-  -- the welcome notice, once per account (again when the message changes)
   FA.Migrate("ForeverArtisanSettings", "MatsledgerSettings")
   ForeverArtisanSettings = ForeverArtisanSettings or {}
-  if ForeverArtisanSettings.welcomeSeen ~= WELCOME_REV then
-    if C_Timer then C_Timer.After(4, showWelcome) else showWelcome() end
+  local s = ForeverArtisanSettings
+  -- a fresh install (nothing recorded yet) opens the module panel once
+  if not s.lastVersion and not s.welcomeSeen then
+    s.welcomeSeen = true
+    if C_Timer then C_Timer.After(4, function() showPanel("modules") end) else showPanel("modules") end
   end
   pcall(checkNews)
 end)
@@ -725,8 +1266,9 @@ local function help()
   print(PREFIX .. "version " .. FA.Version() .. "  -  commands")
   print("  /fa  - module panel (turn modules on/off)")
   print("  /fa version  - suite version, and a check that every part matches")
-  print("  /fa welcome  - what ForeverArtisan is for, and where to send bugs and ideas")
   print("  /fa bug  - where to report an error (" .. FA.BUG_URL .. ")")
+  print("  /fa discord  - the ForeverArtisan Discord (" .. FA.DISCORD .. ")")
+  print("  /fa market  - your most profitable crafts, every profession in one list")
   print("  /fa new  - what's new in recent releases")
   print("  /fa nameplates  - turn on friendly NPC nameplates (job titles in town need them)")
   print("  /fa titles on | off | auto  - job titles under NPC names (auto leaves them to Plater and other nameplate addons)")
@@ -742,7 +1284,7 @@ local function help()
     .. (hasS and "installed" or "not installed") .. ") for what your alts hold, GatherMate2 ("
     .. (hasG and "installed" or "not installed") .. ") for herb and ore spots, TomTom ("
     .. (type(rawget(_G, "TomTom")) == "table" and "installed" or "not installed") .. ") for waypoint arrows. All optional.")
-  print("  /fa minimap [angle | reset | contacts]  - show/hide or move the minimap buttons")
+  print("  /fa minimap [angle | reset]  - show/hide or move the minimap button (right-click it for Trade Contacts)")
   if FA.Vendors then print("  /fa <item, vendor or town>  - search your Trade Contacts") end
   print("  /fa enable <module>  |  /fa disable <module>")
   scan()
@@ -766,10 +1308,15 @@ SlashCmdList.FOREVERARTISAN = function(msg)
   elseif lower == "minimap" then
     if ForeverArtisan and ForeverArtisan.minimap then ForeverArtisan.minimap(rest) end
   elseif lower == "feedback" or lower == "bug" or lower == "bugs" then
-    print(PREFIX .. FA.BUG_LINE .. "  " .. GREY .. "(ideas: " .. FA.WEBSITE .. ")|r")
-    showWelcome()
+    print(PREFIX .. FA.BUG_LINE .. "  " .. GREY .. "(ideas: " .. FA.WEBSITE .. ", Discord: " .. FA.DISCORD .. ")|r")
+    showPanel("info")
+  elseif lower == "discord" then
+    print(PREFIX .. "Discord: " .. FA.DISCORD .. "  " .. GREY .. "(copy it from the box on the Info tab)|r")
+    showPanel("info")
+  elseif lower == "market" then
+    showPanel("market")
   elseif lower == "beta" or lower == "welcome" or lower == "about" then
-    showWelcome()
+    showPanel("info")
   elseif lower == "new" or lower == "news" or lower == "whatsnew" then
     showNews({}, true)
   elseif lower == "version" or lower == "ver" then

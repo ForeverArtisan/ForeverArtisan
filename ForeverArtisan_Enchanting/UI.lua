@@ -605,6 +605,19 @@ local function RefreshBestPage(p)
     or "No prices yet for what you craft. Visit the Auction House, or scan with Auctionator.")
 end
 
+-- the /fa panel's Market tab ranks every profession's crafts together; it reads them through this
+if FA.RegisterMarket then
+  FA.RegisterMarket({
+    name = "Enchanting",
+    recipes = function() return ns.Knows() and ns.HasRecipes() and ns.CharRec().recipes or nil end,
+    color = function(r)
+      local base, bonus = ns.Skill()
+      return ns.COLOR_CODE[ns.ColorFor(r, base and (base + (bonus or 0)))] or ""
+    end,
+    open = OpenOnRecipe,
+  })
+end
+
 -- the items your recipes use and make get a short price history (Core), on every character
 local function WatchMine()
   local db = ns.DB and ns.DB()
