@@ -364,14 +364,16 @@ local function RefreshLogPage(p)
 end
 
 ---------------------------------------------------------------- page 4: Recipe book
-local BOOK_ROWS = 16
+local BOOK_ROWS = 15
 local function BookData()
   local c = ns.CharRec()
   local skill = ns.Skill()
   local list = {}
   local show = view.bookShow or "all"
+  local q = view.bookFind or ""
+  local Match = FA.UI.RecipeMatches
   for _, r in pairs(c.recipes) do
-    if show == "all" or (show == "learned") == (r.learned and true or false) then list[#list + 1] = r end
+    if (show == "all" or (show == "learned") == (r.learned and true or false)) and Match(r, q) then list[#list + 1] = r end
   end
   -- where to get each recipe you don't know (looked up once)
   local where = {}
@@ -401,7 +403,9 @@ local function BookData()
   end)
   local data = {}
   local learned, unknown, headed = 0, 0, false
-  for _, r in pairs(c.recipes) do if r.learned then learned = learned + 1 else unknown = unknown + 1 end end
+  for _, r in pairs(c.recipes) do
+    if Match(r, q) then if r.learned then learned = learned + 1 else unknown = unknown + 1 end end
+  end
   if learned > 0 and show ~= "unlearned" then
     data[#data + 1] = { header = true, noIcon = true, left = GOLD .. ("Learned (%d)"):format(learned) .. "|r" }
   end
@@ -434,7 +438,11 @@ local function BookData()
 end
 
 local function BuildGuidePage(p)
-  p.rows = MakeRows(p, BOOK_ROWS, -4, false)
+  -- type to filter by recipe name or material (cleared each time the window opens)
+  p.search = FA.UI.SearchBox(p, 220, function(text) view.bookFind, view.guideOff = text, 0; ns.OnChange() end,
+    "Search recipes or materials")
+  p.search:SetPoint("TOPLEFT", 24, -4)
+  p.rows = MakeRows(p, BOOK_ROWS, -30, false)
   -- an unlearned recipe with a trainer or vendor you've met: click for a waypoint
   for _, r in ipairs(p.rows) do
     r:SetScript("OnClick", function(self)
@@ -474,9 +482,11 @@ local function RefreshGuidePage(p)
       b:SetText(b.value == "all" and "All" or b.value == "learned" and "Learned" or "Not learned")
     end
   end
+  if (view.bookFind or "") == "" and (p.search:GetText() or "") ~= "" and not p.search:HasFocus() then p.search:Reset() end
   view.guideOff = math.min(view.guideOff, math.max(0, #data - BOOK_ROWS))
   Fill(p.rows, data, view.guideOff)
-  p.empty:SetText(#data > 0 and "" or (not ns.Knows() and "This character hasn't learned Engineering.")
+  p.empty:SetText(#data > 0 and "" or ((view.bookFind or "") ~= "" and ('Nothing matches "' .. view.bookFind .. '". Press Escape to clear the search.'))
+    or (not ns.Knows() and "This character hasn't learned Engineering.")
     or (not ns.HasRecipes() and "Open your Engineering window once so I can read your recipes.")
     or ((view.bookShow == "learned") and "You haven't learned any yet. Pick All to see every recipe.")
     or "You know every recipe in the list. Pick All to see them.")
@@ -666,7 +676,7 @@ local function Build()
     self.t = (self.t or 0) + el
     if self.t > 5 then self.t = 0; if view.tab == "main" then ns.RefreshSession(pages.main) end end
   end)
-  f:HookScript("OnShow", function() view.bookShow, view.guideOff, view.planOff, view.shopOff = "all", 0, 0, 0 end)
+  f:HookScript("OnShow", function() view.bookFind = ""; view.bookShow, view.guideOff, view.planOff, view.shopOff = "all", 0, 0, 0 end)
   f:Hide()
   ShowTab("main")
 end

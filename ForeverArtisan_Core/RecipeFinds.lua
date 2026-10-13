@@ -110,12 +110,18 @@ local function NoteMat(id, from, qty)
   f[key] = e
 end
 
+-- items the loot window already counted (item id -> time), so the chat line for the same item
+-- isn't counted twice. Per item: with auto loot the window can open already empty, and then the
+-- chat line is the only record of the drop.
+local windowSeen = {}
 local function OnLoot()
   for i = 1, ((GetNumLootItems and GetNumLootItems()) or 0) do
     local link = GetLootSlotLink and GetLootSlotLink(i)
     local name = link and link:match("%[(.-)%]")
+    local lid = link and tonumber(link:match("item:(%d+)"))
     if IsRecipeItem(name) then
       Note(name, "drops", (LootFrom(i)))
+      if lid then windowSeen[lid] = GetTime() end
     else
       local id = MaterialId(link)
       if id then
@@ -123,6 +129,7 @@ local function OnLoot()
         if creature then
           local qty = GetLootSlotInfo and select(3, GetLootSlotInfo(i))
           NoteMat(id, from, qty)
+          windowSeen[id] = GetTime()
         end
       end
     end
@@ -132,7 +139,7 @@ end
 -- With auto loot, Forever can skip the loot window entirely (no LOOT_OPENED), so drops are also
 -- counted from your own "You receive loot" line. The mob is your dead target. Herbs, ore, skins,
 -- fish, chests and disenchanting aren't mob drops: loot right after those casts is skipped.
-local lastWindow, lastGather = -100, -100
+local lastGather = -100
 local GATHER = { "Skinning", "Herb Gathering", "Mining", "Fishing", "Opening", "Disenchant", "Pick Lock", "Prospecting" }
 local function IsGatherSpell(spellID)
   local GetName = (C_Spell and C_Spell.GetSpellName) or (GetSpellInfo and function(i) return (GetSpellInfo(i)) end)
@@ -143,15 +150,21 @@ local function IsGatherSpell(spellID)
 end
 local function OnChatLoot(msg, guid)
   local now = GetTime()
-  if now - lastWindow < 3 or now - lastGather < 5 then return end
+  if now - lastGather < 5 then return end
   local got = FA.ParseSelfLoot and FA.ParseSelfLoot(msg, guid)
   if not got then return end
-  if not (UnitExists and UnitExists("target") and UnitIsDead and UnitIsDead("target")) then return end
-  if UnitIsPlayer and UnitIsPlayer("target") then return end
-  local n = UnitName("target")
-  if not Plain(n) then return end
+  if windowSeen[got.id] and now - windowSeen[got.id] < 3 then return end -- the window counted it
+  local n
+  if UnitExists and UnitExists("target") and UnitIsDead and UnitIsDead("target")
+     and not (UnitIsPlayer and UnitIsPlayer("target")) then
+    n = UnitName("target")
+    if not Plain(n) then n = nil end
+  end
+  -- a recipe is worth keeping even when we don't know which mob it was (looted without a target)
   if IsRecipeItem(got.name) then
-    Note(got.name, "drops", n)
+    Note(got.name, "drops", n or "a mob")
+  elseif not n then
+    return
   else
     local id = MaterialId(got.link or ("item:" .. got.id))
     if id then NoteMat(id, n, got.qty) end
@@ -186,7 +199,7 @@ ev:SetScript("OnEvent", function(_, e, a1, ...)
   elseif e == "PLAYER_TARGET_CHANGED" then RememberUnit("target")
   elseif e == "UPDATE_MOUSEOVER_UNIT" then RememberUnit("mouseover")
   elseif e == "NAME_PLATE_UNIT_ADDED" then if a1 then RememberUnit(a1) end
-  elseif e == "LOOT_OPENED" then lastWindow = GetTime(); pcall(OnLoot) else pcall(OnQuest) end
+  elseif e == "LOOT_OPENED" then pcall(OnLoot) else pcall(OnQuest) end
 end)
 
 local function Place(e) return e.sub and (e.sub .. ", " .. e.zone) or e.zone end

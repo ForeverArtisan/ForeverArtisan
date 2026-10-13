@@ -55,9 +55,9 @@ end
 -- seeded trainers (met on the Forever beta, not by you yet) carry a short tag in lists
 local function BetaTag(npc) return (npc.seed and "  ·  beta") or (npc.questie and "  ·  Questie") or "" end
 
-local function SearchData()
+local function SearchData(results)
   local data = {}
-  for _, h in ipairs(view.results) do
+  for _, h in ipairs(results or view.results) do
     local npc, it = h.npc, h.item
     if it then
       data[#data + 1] = { id = it.id, icon = it.id and Icon(it.id) or (it.train and 136235 or 134400), npc = npc,
@@ -643,6 +643,12 @@ function ns.OpenNearest()
     if click then click(b) end
   end
   return b and b.menu and b.menu:IsShown()
+end
+
+-- the /fa panel's Contacts tab searches without opening this window: same rows as the Search tab
+function ns.SearchRows(q)
+  if not ns.DB() then return {} end
+  return SearchData(ns.Search(q or ""))
 end
 
 ns.ShowTab = function(name) if f then ShowTab(name) end end -- for the test suite

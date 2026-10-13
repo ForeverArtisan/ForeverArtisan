@@ -564,6 +564,8 @@ FA.Vendors = {
   search = search,
   hitsForLink = hitsForLink,
   open = function(q) if ns.OpenSearch then ns.OpenSearch(q) end end,
+  -- search rows for the /fa panel: { icon, id, left, right, tip/tipFn, tipTitle, npc } like the Search tab
+  rows = function(q) return ns.SearchRows and ns.SearchRows(q) or {} end,
   openTab = function(name) if ns.OpenTab then ns.OpenTab(name) end end, -- "search" | "contacts" | "stock"
   openNearest = function() if ns.OpenNearest then ns.OpenNearest() end end,
   -- vendors met, trainers met, trainers from the beta, trainers from Questie

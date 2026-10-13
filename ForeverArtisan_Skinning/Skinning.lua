@@ -355,6 +355,16 @@ local lastEntry, lastZ, lastEntryAt = nil, nil, -100
 local function LogSkin(chatItems)
   local now = GetTime()
   if now - lastLootAt < 1 then return end
+  -- auto loot can open the loot window already empty: leave the cast pending so the
+  -- "You receive loot" line right after it still counts the node
+  if not chatItems then
+    local any = false
+    for i = 1, (GetNumLootItems and GetNumLootItems() or 0) do
+      local l = GetLootSlotLink(i)
+      if type(l) == "string" and not ForeverArtisan.IsSecret(l) and l:find("item:%d") then any = true; break end
+    end
+    if not any then return end
+  end
   if not (pending and pending.ok and now - pending.t < 6) then
     if chatItems then return end
     local skinned, mob, lvl = LootLooksSkinned()

@@ -737,6 +737,25 @@ do
     _G.ForeverArtisanCookingFrame:Hide(); _G.ForeverArtisanCookingFrame:Show()
     local h=_G.ForeverArtisanCookingFrame.scripts.OnShow
     print("BOOK FILTER ok")
+    -- Recipe book search: type part of a name, only matches show; Escape clears it
+    click("^All$")
+    _G.ForeverArtisanCookingFrame:Show(); cns.OnChange()
+    local first
+    for _,d in ipairs(cns.lastBook) do if d.recipe then first=d.recipe.name break end end
+    local box
+    for _,f in pairs(frames) do if f.hint and f.hint._text=="Search recipes or materials" and f.scripts.OnTextChanged then
+      box=box or {} box[#box+1]=f end end
+    assert(box and #box>=1 and first, "recipe book has a search box")
+    for _,f in ipairs(box) do f._text=first:sub(2,6); f.scripts.OnTextChanged(f,true) end
+    local n=0
+    for _,d in ipairs(cns.lastBook) do if d.recipe then n=n+1; assert(d.recipe.name:lower():find(first:sub(2,6):lower(),1,true), "only matching recipes show") end end
+    assert(n>=1, "search keeps the recipe it was typed from")
+    for _,f in ipairs(box) do f._text="zzqqxx"; f.scripts.OnTextChanged(f,true) end
+    for _,d in ipairs(cns.lastBook) do assert(not d.recipe, "nonsense search shows nothing") end
+    for _,f in ipairs(box) do f.scripts.OnEscapePressed(f) end
+    local back=0 for _,d in ipairs(cns.lastBook) do if d.recipe then back=back+1 end end
+    assert(back>=n, "Escape clears the search")
+    print("BOOK SEARCH ok", n, back)
   end
 end
 -- first run: a fresh install opens the module panel once (the welcome notice is gone)
@@ -1019,7 +1038,7 @@ do
   out={} print=function(...) out[#out+1]=table.concat({...}," ") end
   run("FOREVERARTISAN","new")
   print=P
-  assert(table.concat(out,"\n"):find("0.9.20"), "/fa new prints it")
+  assert(table.concat(out,"\n"):find(ForeverArtisan.Version(), 1, true), "/fa new prints it")
   print("NEWS ok")
 end
 -- hidden ("secret") values: events carrying them are skipped, their errors dropped, other errors still raised
@@ -1163,6 +1182,21 @@ do
     fire("UNIT_SPELLCAST_SUCCEEDED","player","Cast-4",8613)
     line("You receive loot: |cffffffff|Hitem:2318::::::::14:::::|h[Light Leather]|h|r.")
     assert((sdb2.sinceUp or 0)==k1+1, "skin from the loot line")
+    -- 0.9.23: auto loot opens the loot window already empty, then the chat line still counts the node
+    local oldN=GetNumLootItems; GetNumLootItems=function() return 0 end
+    for _,c in ipairs({ {hdb,"Peacebloom",2366,"|cnIQ1:|Hitem:2447::::::::14:::::|h[Peacebloom]|h|r."},
+                        {mdb,"Copper Vein",2575,"|cnIQ1:|Hitem:2770::::::::14:::::|h[Copper Ore]|h|r."},
+                        {sdb2,"Mangy Wolf",8613,"|cnIQ1:|Hitem:2318::::::::14:::::|h[Light Leather]|h|r."} }) do
+      local before=c[1].sinceUp or 0
+      clock=clock+10
+      fire("UNIT_SPELLCAST_SENT","player",c[2],"Cast-E"..c[3],c[3])
+      fire("UNIT_SPELLCAST_SUCCEEDED","player","Cast-E"..c[3],c[3])
+      fire("LOOT_OPENED")
+      line("You receive loot: "..c[4])
+      assert((c[1].sinceUp or 0)==before+1, "empty loot window, node still counted from chat: "..c[2])
+    end
+    GetNumLootItems=oldN
+    print("0.9.23 empty loot window ok (herb, ore, skin)")
     UnitGUID,GetTime=oldG,oldT
   end
   SlashCmdList.FAMINING("debug")
@@ -2284,6 +2318,25 @@ do
   assert(cf._shown and menuUp, "Nearest trainer opens the window with its menu up")
   cf:Hide()
   print("0.9.21 panel contacts buttons ok")
+  -- 0.9.23: search right on the Contacts tab, results replace the buttons, no second window
+  run("FOREVERARTISAN","")
+  local box=pnl.tcSearch
+  assert(box and box.scripts.OnTextChanged, "Contacts tab has a search box")
+  box._text="a"; box.scripts.OnTextChanged(box,true)
+  local shown=0 for _,r in ipairs(pnl.tcRows) do if r._shown then shown=shown+1 end end
+  assert(shown>=1 and not pnl.tcButtons[1]._shown, "typing shows results in place of the buttons")
+  assert(not (_G.ForeverArtisanContactsFrame and _G.ForeverArtisanContactsFrame._shown), "no second window")
+  local wp
+  local OW=ForeverArtisan.Vendors.waypoint; ForeverArtisan.Vendors.waypoint=function(n) wp=n end
+  for _,r in ipairs(pnl.tcRows) do if r._shown and r.d and r.d.npc then r.scripts.OnClick(r) break end end
+  ForeverArtisan.Vendors.waypoint=OW
+  assert(wp, "clicking a result sets a waypoint")
+  box._text="zzqqxx"; box.scripts.OnTextChanged(box,true)
+  for _,r in ipairs(pnl.tcRows) do assert(not r._shown, "nonsense search shows nothing") end
+  assert((pnl.tcStatus._text or ""):find("Nothing matches"), "says nothing matches")
+  box.scripts.OnEscapePressed(box)
+  assert(pnl.tcButtons[1]._shown, "Escape brings the buttons back")
+  print("0.9.23 panel contacts search ok", shown)
 end
 -- the /fa panel's tabs: Modules, Trade Contacts, Info
 do
@@ -2333,4 +2386,32 @@ do
   print("0.9.21 panel tabs ok")
 end
 print("CRAFTS OK")
+-- 0.9.23: auto loot opens an empty loot window, then the chat line is the only record of a recipe
+-- drop (it used to be skipped for 3 seconds after any loot window). New |cn link colors too.
+do
+  local sv={GetTime,GetNumLootItems,UnitGUID,UnitExists,UnitIsDead,UnitName,UnitIsPlayer}
+  local clock=99999
+  GetTime=function() return clock end
+  UnitGUID=function(u) if u=="player" then return "Player-1-ME" end end
+  UnitExists=function(u) return u=="target" end
+  UnitIsDead=function(u) return u=="target" end
+  UnitIsPlayer=function() return false end
+  UnitName=function(u) if u=="target" then return "Savannah Raptor" end return "Me" end
+  GetNumLootItems=function() return 0 end
+  fire("LOOT_OPENED")
+  fire("CHAT_MSG_LOOT","You receive loot: |cnIQ1:|Hitem:250187::::::::13:1482:::::::::|h[Recipe: Tasty Raptor Bites]|h|r.","Me","","","Me","",0,0,"",0,201,"Player-1-ME")
+  local f=ForeverArtisanSettings.recipeFinds["Recipe: Tasty Raptor Bites"]
+  local hit
+  for k,e in pairs(f and f.drops or {}) do if e.from=="Savannah Raptor" then hit=e end end
+  assert(hit and hit.n==1, "auto-looted recipe drop is logged after an empty loot window")
+  -- looted with no target: still kept, as "a mob"
+  UnitExists=function() return false end
+  clock=clock+10
+  fire("CHAT_MSG_LOOT","You receive loot: |cnIQ1:|Hitem:250187::::::::13:1482:::::::::|h[Recipe: Tasty Raptor Bites]|h|r.","Me","","","Me","",0,0,"",0,201,"Player-1-ME")
+  local anon
+  for k,e in pairs(f.drops) do if e.from=="a mob" then anon=e end end
+  assert(anon, "a recipe looted without a target is still logged")
+  GetTime,GetNumLootItems,UnitGUID,UnitExists,UnitIsDead,UnitName,UnitIsPlayer=sv[1],sv[2],sv[3],sv[4],sv[5],sv[6],sv[7]
+  print("0.9.23 auto-loot recipe drops ok")
+end
 print("SUITE OK")

@@ -1,5 +1,11 @@
 # ForeverArtisan changelog
 
+## 0.9.23 (2026-10-13)
+- Recipe book (every crafting profession, Cooking and First Aid included): a search box at the top. Type part of a recipe's name or one of its materials ("smallfish", "raptor", "silk") and the list shows only what matches, learned and not learned. The counts follow the search. Escape clears it, and it starts empty each time you open the window.
+- `/fa` panel, Contacts tab: a search box right on the tab. Type an item, vendor, town or profession and the results show in place of the buttons, the same results as Trade Contacts' Search, without opening a second window. Click a result for a waypoint, hover it for details, scroll for more. Escape clears it and the buttons come back.
+- Fix: Herbalism, Mining and Skinning count every node with auto loot. When the loot window opened already empty, the herb, ore or skin was missed (not in the gather log, goals or "since last skill-up"). Fishing already handled this.
+- Fix: a recipe that drops while you auto loot is now remembered (Recipe book: "Dropped by Savannah Raptor, The Barrens"). With auto loot the loot window can open already empty, and the drop was skipped. A recipe looted without a target is now kept too, as "a mob". Materials from mobs (bat wings, meat) had the same gap and are fixed with it.
+
 ## 0.9.22 (2026-10-12)
 - Market price chart: the line above the chart says what it shows ("Chart: Sagefish Delight  sells for 7s each"), so a material's "down 17%" no longer reads like the craft's.
 - Click a material under the chart to chart it instead; click it again to go back to the craft.

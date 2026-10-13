@@ -239,6 +239,7 @@ local function addonsText()
 end
 
 local refreshSettings -- the Settings tab (defined with it, below)
+local refreshContactsSearch -- the Contacts tab's search (defined with it, below)
 local refreshMarket -- the Market tab (defined with it, below)
 local showTrend -- its price-trend view (defined after it)
 local function refreshPanel()
@@ -304,6 +305,7 @@ local function refreshPanel()
     panel.plates:SetShown(off)
   end
   refreshSettings()
+  refreshContactsSearch()
   if panel.tab == "market" then refreshMarket() end
 
   if panel.works then
@@ -527,13 +529,83 @@ local function buildModulesTab(p)
   panel.reload:SetScript("OnClick", ReloadUI)
 end
 
+local TC_ROWS = 13
+-- the Contacts tab's search: empty shows the Trade Contacts buttons, typing shows results in their place
+refreshContactsSearch = function()
+  if not (panel and panel.tcRows) then return end
+  local q = panel.tcQuery or ""
+  local on = FA.Vendors ~= nil
+  panel.tcSearch:SetShown(on)
+  local searching = on and q ~= ""
+  if panel.tcHead then panel.tcHead:SetShown(not searching) end
+  for _, b in ipairs(panel.tcButtons or {}) do b:SetShown(not searching); b.desc:SetShown(not searching) end
+  local data = searching and FA.Vendors.rows(q) or {}
+  panel.tcData = data
+  panel.tcOff = math.min(panel.tcOff or 0, math.max(0, #data - TC_ROWS))
+  for i, r in ipairs(panel.tcRows) do
+    local d = data[i + panel.tcOff]
+    r.d = d
+    if d then
+      r.icon:SetTexture(d.icon or 134400); r.left:SetText(d.left or ""); r.right:SetText(d.right or ""); r:Show()
+    else r:Hide() end
+  end
+  if not searching then panel.tcStatus:SetText("")
+  elseif #data == 0 then panel.tcStatus:SetText(GREY .. 'Nothing matches "' .. q .. '" among the NPCs you\'ve met or passed.|r')
+  else
+    local more = #data - panel.tcOff - TC_ROWS
+    panel.tcStatus:SetText(("%d result%s. Click one for a waypoint.%s"):format(#data, #data == 1 and "" or "s",
+      more > 0 and (GREY .. "  Scroll for " .. more .. " more.|r") or ""))
+  end
+end
+
 local function buildContactsTab(p)
   -- what's in it, by where it came from, so the buttons below are clear about what they search
   Head(p, -8, "What Trade Contacts knows")
   panel.known = Txt(p, "GameFontHighlightSmall", 16, -30, 428)
   panel.known:SetSpacing(3)
 
-  Head(p, -96, "Open Trade Contacts")
+  -- search right here: type and the results replace the buttons below (no second window)
+  panel.tcSearch = FA.UI.SearchBox(p, 428, function(text)
+    panel.tcQuery, panel.tcOff = text, 0
+    refreshContactsSearch()
+  end, "Search items, vendors, towns or a profession")
+  panel.tcSearch:SetPoint("TOPLEFT", 22, -100)
+  panel.tcStatus = Txt(p, "GameFontHighlightSmall", 16, -128, 428)
+  panel.tcRows = {}
+  for i = 1, TC_ROWS do
+    local r = CreateFrame("Button", nil, p)
+    r:SetSize(428, 22); r:SetPoint("TOPLEFT", 16, -148 - (i - 1) * 24)
+    r:SetHighlightTexture(FA.UI.HIGHLIGHT, "ADD")
+    r.icon = r:CreateTexture(nil, "ARTWORK"); r.icon:SetSize(18, 18); r.icon:SetPoint("LEFT", 2, 0)
+    r.left = r:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    r.left:SetPoint("LEFT", 26, 0); r.left:SetWidth(190); r.left:SetJustifyH("LEFT"); r.left:SetWordWrap(false)
+    r.right = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    r.right:SetPoint("RIGHT", -4, 0); r.right:SetWidth(206); r.right:SetJustifyH("RIGHT"); r.right:SetWordWrap(false)
+    r:SetScript("OnClick", function(self)
+      if self.d and self.d.npc and FA.Vendors then FA.Vendors.waypoint(self.d.npc) end
+    end)
+    r:SetScript("OnEnter", function(self)
+      local d = self.d
+      if not d then return end
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      if d.id then GameTooltip:SetItemByID(d.id) else GameTooltip:AddLine(d.tipTitle or "") end
+      local tip = d.tip or (d.tipFn and d.tipFn())
+      if tip then GameTooltip:AddLine(tip, 1, 1, 1, true) end
+      if d.npc then GameTooltip:AddLine("Click for a waypoint", 0.5, 0.75, 1) end
+      GameTooltip:Show()
+    end)
+    r:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    r:Hide()
+    panel.tcRows[i] = r
+  end
+  p:EnableMouseWheel(true)
+  p:SetScript("OnMouseWheel", function(_, delta)
+    if (panel.tcQuery or "") == "" then return end
+    panel.tcOff = math.max(0, math.min((panel.tcOff or 0) - delta * 3, math.max(0, #(panel.tcData or {}) - TC_ROWS)))
+    refreshContactsSearch()
+  end)
+
+  panel.tcHead = Head(p, -140, "Open Trade Contacts")
   -- each button opens the Trade Contacts window on that tab; Nearest trainer opens with its menu up
   local TC = {
     { "Search", function() FA.Vendors.open() end, "Find any of them by item, NPC, town or profession." },
@@ -543,13 +615,14 @@ local function buildContactsTab(p)
   }
   panel.tcButtons = {}
   for i, t in ipairs(TC) do
-    local y = -118 - (i - 1) * 34
+    local y = -162 - (i - 1) * 34
     local b = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
     b:SetSize(130, 24); b:SetPoint("TOPLEFT", 16, y); b:SetText(t[1])
     b:SetScript("OnClick", function() if FA.Vendors then panel:Hide(); t[2]() end end)
     b.desc = Txt(p, "GameFontHighlightSmall", 156, y - 1, 288, t[3])
     panel.tcButtons[i] = b
   end
+  refreshContactsSearch()
 
 end
 
@@ -1244,6 +1317,8 @@ NEWS = {
     .. "Right-click the FA minimap button for Trade Contacts; its own map-pin button is gone." },
   { "0.9.22", "Market price charts are clearer: the line above the chart says what it shows, a faint line marks the week before's "
     .. "average, and you can click a material to chart it. When the last day moved the other way, the words say so." },
+  { "0.9.23", "Search boxes: type a recipe or material in any Recipe book, or an item, vendor or town on the /fa panel's Contacts tab. "
+    .. "With auto loot, herbs, ore, leather and recipe drops now count every time." },
 }
 
 local function verNum(v)

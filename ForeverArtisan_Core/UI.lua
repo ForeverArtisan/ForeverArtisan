@@ -260,6 +260,43 @@ function UI.NumberBox(parent, w, default)
   return eb
 end
 
+-- search box: gray "Search" hint while empty, onChange(text) on every key the player types,
+-- Escape clears it. box:Reset() empties it without calling onChange.
+function UI.SearchBox(parent, w, onChange, hint)
+  local eb = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+  eb:SetSize(w or 160, 20)
+  eb:SetAutoFocus(false); eb:SetMaxLetters(40)
+  eb.hint = UI.Text(eb, "GameFontDisable", "LEFT", 4, 0, eb, "LEFT"); eb.hint:SetText(hint or "Search")
+  local function sync(self) self.hint:SetShown((self:GetText() or "") == "" and not self:HasFocus()) end
+  eb:SetScript("OnTextChanged", function(self, userInput)
+    sync(self)
+    if userInput and onChange then onChange(strtrim(self:GetText() or "")) end
+  end)
+  eb:SetScript("OnEditFocusGained", sync)
+  eb:SetScript("OnEditFocusLost", sync)
+  eb:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+  eb:SetScript("OnEscapePressed", function(self)
+    local had = (self:GetText() or "") ~= ""
+    self:SetText(""); self:ClearFocus(); sync(self)
+    if had and onChange then onChange("") end
+  end)
+  function eb:Reset() self:SetText(""); sync(self) end
+  sync(eb)
+  return eb
+end
+
+-- does a recipe match what the player typed? Name or any material, any case, plain text.
+function UI.RecipeMatches(r, q)
+  if not q or q == "" then return true end
+  q = q:lower()
+  if (r.name or ""):lower():find(q, 1, true) then return true end
+  for _, g in ipairs(r.reagents or {}) do
+    local n = g.name or (g.id and C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(g.id))
+    if (n or ""):lower():find(q, 1, true) then return true end
+  end
+  return false
+end
+
 -- progress bar: bar:Set(fraction, "done" | "capped" | nil)
 function UI.Bar(parent, w, h)
   local bar = CreateFrame("Frame", nil, parent)
