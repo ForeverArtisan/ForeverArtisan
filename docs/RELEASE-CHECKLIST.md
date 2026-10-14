@@ -5,7 +5,7 @@ Run this in game before every build goes to the site or CurseForge/Wago. Screens
 ## 0. Build
 - [ ] Release step ran clean (ask Claude to "run the release for <version>": it runs `tools/release.py` and saves the files; or `python tools\release.py . <version>` if Python is installed): syntax OK; it replaced the `-dev` version in every TOC; before launch the version is `0.9.x` (or `0.9.x-beta.N` for a rough test build, which the stores hide behind their Beta filter)
 - [ ] CHANGELOG.md top section has the version and today's date and reads right to a player
-- [ ] Commit and push. Releases go out on their own at 8:45 AM Chicago time (`.github/workflows/release.yml` tags the commit and uploads). For a hotfix right away, push the `v<version>` tag yourself or use Run workflow on the Actions tab.
+- [ ] Commit and push, then tag the commit `v<version>` (GitHub Desktop: History > right-click > Create Tag) and push. The tag ships it: CurseForge, Wago and the Discord post. The 8:45 AM schedule in release.yml is a backup that GitHub may skip.
 - [ ] Fully restart WoW if a module is new (the game already runs the repo files through the junctions)
 - [ ] Seeded trainers current: if Kerry met new profession trainers, rerun `lua5.1 tools/build_seed.lua <SavedVariables>\ForeverArtisan_Contacts.lua > ForeverArtisan_Contacts\SeedTrainers.lua` (the addon project does this)
 

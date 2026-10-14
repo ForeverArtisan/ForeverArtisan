@@ -2319,6 +2319,25 @@ do
   assert(table.concat(out,"\n"):find("foreverartisan.app/bug",1,true), "/fa bug still points at the bug form")
   print("0.9.24 feedback ok")
 end
+-- 0.9.25 /fa clash: /foreverartisan works; another addon's /fa gets one note naming /artisan
+do
+  assert(SLASH_FOREVERARTISAN3=="/foreverartisan", "long command registered")
+  local P0=print; local out={}
+  local cap=function(...) local t={} for i=1,select("#",...) do t[#t+1]=tostring(select(i,...)) end out[#out+1]=table.concat(t," ") end
+  assert(not ForeverArtisan.SlashClash(), "no clash on its own")
+  ForeverArtisanSettings.slashClashSeen=nil
+  print=cap; fire("PLAYER_LOGIN"); print=P0
+  assert(not table.concat(out,"\n"):find("another addon also uses /fa",1,true), "quiet without a clash")
+  _G.SLASH_OTHERAURAS1="/FA"
+  assert(ForeverArtisan.SlashClash()=="OTHERAURAS", "spots the other /fa")
+  out={} print=cap; fire("PLAYER_LOGIN"); print=P0
+  local txt=table.concat(out,"\n")
+  assert(txt:find("another addon also uses /fa",1,true) and txt:find("/artisan",1,true), "names /artisan: "..txt)
+  out={} print=cap; fire("PLAYER_LOGIN"); print=P0
+  assert(not table.concat(out,"\n"):find("another addon also uses /fa",1,true), "only once")
+  _G.SLASH_OTHERAURAS1=nil
+  print("0.9.25 slash clash ok")
+end
 -- Trade Contacts buttons on the /fa panel: each opens its tab; Nearest trainer opens with the menu up
 do
   if not _G.ForeverArtisanPanel._shown then run("FOREVERARTISAN","") end

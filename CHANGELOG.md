@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.25 (2026-10-14)
+- Another addon using `/fa`? ForeverArtisan also opens with `/artisan` or the new `/foreverartisan`. When another addon takes `/fa`, it says so once in chat after you log in. `/fa help` lists both.
+
 ## 0.9.24 (2026-10-13)
 - The minimap button is a clean gold "FA", easy to spot at minimap size. The addon list icon uses the FA emblem, the same mark as the site, Discord and the store pages.
 - `/fa feedback` (or `/fa ideas`) shows the Discord link. Ideas go in #suggestions. The link also shows once in chat after you log in. `/fa bug` still points to the bug form.

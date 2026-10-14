@@ -1320,6 +1320,7 @@ NEWS = {
   { "0.9.23", "Search boxes: type a recipe or material in any Recipe book, or an item, vendor or town on the /fa panel's Contacts tab. "
     .. "With auto loot, herbs, ore, leather and recipe drops now count every time." },
   { "0.9.24", "A new minimap button: a clean gold FA that's easy to spot. /fa feedback shows the Discord link, and ideas go in #suggestions." },
+  { "0.9.25", "Another addon using /fa? Open ForeverArtisan with /artisan or /foreverartisan. It tells you once if it spots the clash." },
 }
 
 local function verNum(v)
@@ -1378,6 +1379,24 @@ local function askOnce()
   if C_Timer then C_Timer.After(12, feedbackLines) else feedbackLines() end
 end
 
+-- another addon that also registers /fa can win it: say once which command still opens ForeverArtisan
+function FA.SlashClash()
+  for k, v in pairs(_G) do
+    if type(k) == "string" and type(v) == "string" and k:find("^SLASH_") and not k:find("^SLASH_FOREVERARTISAN")
+      and v:lower() == "/fa" then
+      return k:match("^SLASH_(.-)%d*$")
+    end
+  end
+end
+
+local function slashNote()
+  local s = ForeverArtisanSettings
+  if s.slashClashSeen or not FA.SlashClash() then return end
+  s.slashClashSeen = true
+  local line = PREFIX .. "another addon also uses /fa. Use |cffffffff/artisan|r (or /foreverartisan) to open ForeverArtisan."
+  if C_Timer then C_Timer.After(8, function() print(line) end) else print(line) end
+end
+
 -- warn once per login if any module is from a different release than Core
 local function checkVersions()
   local bad = {}
@@ -1411,12 +1430,13 @@ ev:SetScript("OnEvent", function(_, event)
   end
   pcall(checkNews)
   pcall(askOnce)
+  pcall(slashNote)
 end)
 
 ---------------------------------------------------------------- /fa
 
 local function help()
-  print(PREFIX .. "version " .. FA.Version() .. "  -  commands")
+  print(PREFIX .. "version " .. FA.Version() .. "  -  commands (/artisan and /foreverartisan work too, if another addon has /fa)")
   print("  /fa  - module panel (turn modules on/off)")
   print("  /fa version  - suite version, and a check that every part matches")
   print("  /fa feedback  - tell us what to build next (Discord)")
@@ -1452,6 +1472,7 @@ end
 
 SLASH_FOREVERARTISAN1 = "/fa"
 SLASH_FOREVERARTISAN2 = "/artisan"
+SLASH_FOREVERARTISAN3 = "/foreverartisan"
 SlashCmdList.FOREVERARTISAN = function(msg)
   msg = strtrim(msg or "")
   local word, rest = msg:match("^(%S*)%s*(.-)$")
