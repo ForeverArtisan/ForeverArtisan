@@ -7,7 +7,7 @@ local ADDON = ...
 local GREY, GREEN = "|cff9d9d9d", "|cff40ff40"
 local PREFIX = ForeverArtisan.Prefix()
 local LDB_NAME = "ForeverArtisan"
--- our own texture (ForeverArtisan_Core\Media): the gold FA
+-- our own texture (ForeverArtisan_Core\Media): a clean gold "FA" (Logo\minimap-options\fa-gold), flat like the game's own minimap icons
 local MEDIA = "Interface\\AddOns\\ForeverArtisan_Core\\Media\\"
 local ICON = MEDIA .. "minimap"
 
@@ -97,7 +97,7 @@ local function BuildOwnButton(cfg)
   -- same layout as current LibDBIcon: the dark disc and the icon sit on the ring's center
   bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background"); bg:SetSize(24, 24); bg:SetPoint("CENTER", 0, 1)
   local icon = b:CreateTexture(nil, "ARTWORK")
-  icon:SetTexture(cfg.icon); icon:SetSize(18, 18); icon:SetPoint("CENTER", 0, 1)
+  icon:SetTexture(cfg.icon); icon:SetSize(20, 20); icon:SetPoint("CENTER", 0, 1) -- the emblem has its own dark rim
   icon:SetTexCoord(0, 1, 0, 1) -- our icons carry their own padding, unlike the game's bordered ones
   local border = b:CreateTexture(nil, "OVERLAY")
   border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder"); border:SetSize(50, 50); border:SetPoint("TOPLEFT")
@@ -155,6 +155,8 @@ local function Build()
     s.ldbIcon.hide = s.minimapHide and true or false
     LDBIcon:Register(LDB_NAME, obj, s.ldbIcon)
     mm = LDBIcon:GetMinimapButton(LDB_NAME)
+    -- the emblem carries its own dark rim: a little larger than the default 18 so it fills the ring
+    if mm and mm.icon and mm.icon.SetSize then mm.icon:SetSize(20, 20) end
   else
     LDBIcon = nil
     if not s.minimapAngle then s.minimapAngle = FreeAngle() end
