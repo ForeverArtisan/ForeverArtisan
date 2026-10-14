@@ -1,11 +1,9 @@
 # ForeverArtisan changelog
 
-## 0.9.25 (2026-10-14)
-- Another addon using `/fa`? ForeverArtisan also opens with `/artisan` or the new `/foreverartisan`. When another addon takes `/fa`, it says so once in chat after you log in. `/fa help` lists both.
-
-## 0.9.24 (2026-10-13)
+## 0.9.24 (2026-10-14)
 - The minimap button is a clean gold "FA", easy to spot at minimap size. The addon list icon uses the FA emblem, the same mark as the site, Discord and the store pages.
 - `/fa feedback` (or `/fa ideas`) shows the Discord link. Ideas go in #suggestions. The link also shows once in chat after you log in. `/fa bug` still points to the bug form.
+- Another addon using `/fa`? ForeverArtisan also opens with `/artisan` or the new `/foreverartisan`. When another addon takes `/fa`, it says so once in chat after you log in. `/fa help` lists both.
 
 ## 0.9.23 (2026-10-13)
 - Recipe book (every crafting profession, Cooking and First Aid included): a search box at the top. Type part of a recipe's name or one of its materials ("smallfish", "raptor", "silk") and the list shows only what matches, learned and not learned. The counts follow the search. Escape clears it, and it starts empty each time you open the window.
