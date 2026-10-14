@@ -2294,8 +2294,30 @@ do
   run("FOREVERARTISAN","discord"); print=P0
   local saw=false for _,l in ipairs(out) do if l:find("discord.gg",1,true) then saw=true end end
   assert(saw and pnl._shown and pnl.tab=="info", "/fa discord names it and opens the Info tab")
-  assert(pnl.discordNews and pnl.discordNews._text:find("now live"), "pre-launch Discord call-out")
+  if ForeverArtisan.Prelaunch() then
+    assert(pnl.discordNews and pnl.discordNews._text:find(ForeverArtisan.ASK,1,true), "pre-launch Discord call-out asks the question")
+  end
   print("0.9.21 discord link ok")
+end
+-- 0.9.25 feedback: /fa feedback asks the question with the link; login asks once
+do
+  local P0=print; local out={}
+  local cap=function(...) local t={} for i=1,select("#",...) do t[#t+1]=tostring(select(i,...)) end out[#out+1]=table.concat(t," ") end
+  print=cap; run("FOREVERARTISAN","feedback"); print=P0
+  local txt=table.concat(out,"\n")
+  assert(txt:find(ForeverArtisan.ASK,1,true) and txt:find(ForeverArtisan.DISCORD,1,true), "/fa feedback asks and links: "..txt)
+  assert(_G.ForeverArtisanPanel.tab=="info", "/fa feedback opens Info")
+  assert(not txt:find("!",1,true), "no exclamation marks")
+  local keep=ForeverArtisanSettings.discordAsked
+  ForeverArtisanSettings.discordAsked=nil
+  out={} print=cap; fire("PLAYER_LOGIN"); print=P0
+  assert(table.concat(out,"\n"):find(ForeverArtisan.DISCORD,1,true) and ForeverArtisanSettings.discordAsked, "login asks once")
+  out={} print=cap; fire("PLAYER_LOGIN"); print=P0
+  assert(not table.concat(out,"\n"):find(ForeverArtisan.ASK,1,true), "and only once")
+  ForeverArtisanSettings.discordAsked=keep or true
+  out={} print=cap; run("FOREVERARTISAN","bug"); print=P0
+  assert(table.concat(out,"\n"):find("foreverartisan.app/bug",1,true), "/fa bug still points at the bug form")
+  print("0.9.25 feedback ok")
 end
 -- Trade Contacts buttons on the /fa panel: each opens its tab; Nearest trainer opens with the menu up
 do
