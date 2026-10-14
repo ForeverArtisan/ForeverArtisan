@@ -1,4 +1,4 @@
-# Releases go out every day at 7:00 AM Chicago time, on their own.
+# Releases go out every day at 8:45 AM Chicago time, on their own.
 #
 # How it works: commit and push to main whenever. Each morning this checks the top of
 # CHANGELOG.md. If it's a dated version ("## 0.9.24 (2026-10-13)", not "(unreleased)") and
@@ -7,7 +7,7 @@
 # Nothing new to ship: it does nothing.
 #
 # Need it out now instead? Push a tag like v0.9.24 yourself, or press "Run workflow" on
-# the Actions tab (Release). Both skip the 7 AM wait.
+# the Actions tab (Release). Both skip the 8:45 AM wait.
 name: Release
 
 on:
@@ -15,10 +15,11 @@ on:
     tags:
       - "v*"
   schedule:
-    # GitHub runs schedules in UTC. 7:00 AM in Chicago is 12:00 UTC in daylight time and
-    # 13:00 UTC in standard time, so both are listed and the wrong one stops itself below.
-    - cron: "0 12 * * *"
-    - cron: "0 13 * * *"
+    # GitHub runs schedules in UTC. 8:45 AM in Chicago is 13:45 UTC in daylight time and
+    # 14:45 UTC in standard time, so both are listed and the wrong one stops itself below.
+    # Not on the hour: GitHub delays or skips top-of-the-hour schedules when it's busy.
+    - cron: "45 13 * * *"
+    - cron: "45 14 * * *"
   workflow_dispatch:
 
 permissions:
@@ -48,13 +49,13 @@ jobs:
             echo "go=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
-            # which of the two crons fired, and is it the one that is 7 AM in Chicago today
+            # which of the two crons fired, and is it the one that is 8:45 AM in Chicago today
             offset=$(TZ=America/Chicago date +%z)
-            if [ "${{ github.event.schedule }}" = "0 12 * * *" ] && [ "$offset" != "-0500" ]; then
-              echo "Standard time: the 13:00 UTC run handles 7 AM. Skipping."; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
+            if [ "${{ github.event.schedule }}" = "45 13 * * *" ] && [ "$offset" != "-0500" ]; then
+              echo "Standard time: the 14:45 UTC run handles 8:45 AM. Skipping."; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
             fi
-            if [ "${{ github.event.schedule }}" = "0 13 * * *" ] && [ "$offset" != "-0600" ]; then
-              echo "Daylight time: the 12:00 UTC run handles 7 AM. Skipping."; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
+            if [ "${{ github.event.schedule }}" = "45 14 * * *" ] && [ "$offset" != "-0600" ]; then
+              echo "Daylight time: the 13:45 UTC run handles 8:45 AM. Skipping."; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
             fi
           fi
           head=$(grep -m1 -E '^## ' CHANGELOG.md || true)

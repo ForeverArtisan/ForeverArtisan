@@ -138,7 +138,7 @@ def main():
     if out:
         package(root, ver, out)
     print("store label: %s (tags with -beta upload as Beta; everything else as Release)" % ("Beta" if "-beta" in ver else "Release"))
-    print("next: commit and push in GitHub Desktop. It goes out at the next 7:00 AM (Chicago) run.")
+    print("next: commit and push in GitHub Desktop. It goes out at the next 8:45 AM (Chicago) run.")
     print("      Need it now? Tag the commit v%s and push the tag, or press Run workflow on the Actions tab." % ver)
 
 
