@@ -2299,7 +2299,7 @@ do
   end
   print("0.9.21 discord link ok")
 end
--- 0.9.25 feedback: /fa feedback is one Discord line; login shows it once
+-- 0.9.24 feedback: /fa feedback is one Discord line; login shows it once
 do
   local P0=print; local out={}
   local cap=function(...) local t={} for i=1,select("#",...) do t[#t+1]=tostring(select(i,...)) end out[#out+1]=table.concat(t," ") end
@@ -2317,7 +2317,7 @@ do
   ForeverArtisanSettings.discordAsked=keep or true
   out={} print=cap; run("FOREVERARTISAN","bug"); print=P0
   assert(table.concat(out,"\n"):find("foreverartisan.app/bug",1,true), "/fa bug still points at the bug form")
-  print("0.9.25 feedback ok")
+  print("0.9.24 feedback ok")
 end
 -- Trade Contacts buttons on the /fa panel: each opens its tab; Nearest trainer opens with the menu up
 do

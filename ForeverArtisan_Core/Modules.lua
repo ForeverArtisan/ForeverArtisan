@@ -1319,8 +1319,7 @@ NEWS = {
     .. "average, and you can click a material to chart it. When the last day moved the other way, the words say so." },
   { "0.9.23", "Search boxes: type a recipe or material in any Recipe book, or an item, vendor or town on the /fa panel's Contacts tab. "
     .. "With auto loot, herbs, ore, leather and recipe drops now count every time." },
-  { "0.9.24", "A new minimap button: a clean gold FA that's easy to spot." },
-  { "0.9.25", "/fa feedback shows the Discord link. Ideas go in #suggestions." },
+  { "0.9.24", "A new minimap button: a clean gold FA that's easy to spot. /fa feedback shows the Discord link, and ideas go in #suggestions." },
 }
 
 local function verNum(v)
