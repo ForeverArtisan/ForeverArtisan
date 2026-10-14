@@ -25,8 +25,6 @@ FA.DISCORD = "discord.gg/egbRhRtr2J"
 -- one line, same words everywhere it appears (What's new, /fa feedback)
 FA.BUG_URL = "foreverartisan.app/bug"
 FA.BUG_LINE = "Seeing an error? Tell us at " .. FA.BUG_URL
--- the one question we ask players (login note, /fa feedback, Info tab)
-FA.ASK = "What profession are you leveling first, and what slows you down?"
 
 ---------------------------------------------------------------- hidden ("secret") values
 -- Forever hides some values from addons: unit names and GUIDs on some nameplates, buffs and casts in combat.

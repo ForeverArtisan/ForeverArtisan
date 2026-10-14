@@ -1180,8 +1180,8 @@ local function buildInfoTab(p)
   Head(p, -100, "Contact")
   -- until launch day the Discord gets a call-out
   panel.discordNews = Txt(p, "GameFontHighlight", 16, -122, 428,
-    FA.Prelaunch() and (GREEN .. "Help shape the November 4 launch.|r " .. FA.ASK) or "")
-  local y0 = FA.Prelaunch() and -162 or -122 -- the call-out wraps to two lines
+    FA.Prelaunch() and (GREEN .. "The Discord is now live.|r Send your ideas before the November 4 launch.") or "")
+  local y0 = FA.Prelaunch() and -146 or -122
   Txt(p, "GameFontHighlightSmall", 16, y0, 428, "Questions, bug reports and ideas: the ForeverArtisan Discord")
   panel.discord = CopyBox(p, FA.DISCORD, 300, "ForeverArtisan Discord", "Questions, bug reports and ideas, and release news.")
   panel.discord:SetPoint("TOPLEFT", 22, y0 - 16)
@@ -1320,7 +1320,7 @@ NEWS = {
   { "0.9.23", "Search boxes: type a recipe or material in any Recipe book, or an item, vendor or town on the /fa panel's Contacts tab. "
     .. "With auto loot, herbs, ore, leather and recipe drops now count every time." },
   { "0.9.24", "A new minimap button: a clean gold FA that's easy to spot." },
-  { "0.9.25", "/fa feedback: one question and the Discord link. Tell us what to build before the November 4 launch." },
+  { "0.9.25", "/fa feedback shows the Discord link. Ideas go in #suggestions." },
 }
 
 local function verNum(v)
@@ -1369,9 +1369,7 @@ end
 
 -- the Discord ask: /fa feedback, and once in chat after login
 local function feedbackLines()
-  print(PREFIX .. GOLD .. (FA.Prelaunch() and "Help shape the November 4 launch." or "Ideas, questions and help:") .. "|r "
-    .. FA.ASK .. " Post it in #suggestions on the Discord: " .. FA.DISCORD)
-  print("  " .. GREY .. FA.BUG_LINE .. ". The game can't open links: copy them from the Info tab (/fa discord).|r")
+  print(PREFIX .. "Discord: " .. FA.DISCORD .. "  " .. GREY .. "(ideas go in #suggestions)|r")
 end
 
 local function askOnce()

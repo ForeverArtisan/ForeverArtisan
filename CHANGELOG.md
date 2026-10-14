@@ -1,7 +1,7 @@
 # ForeverArtisan changelog
 
 ## 0.9.25 (2026-10-13)
-- Feedback before launch: `/fa feedback` asks one question (what profession you're leveling first, and what slows you down) and points you to #suggestions on the Discord. The same question shows once in chat after you log in, and on the Info tab until launch day. `/fa bug` still points to the bug form.
+- `/fa feedback` (or `/fa ideas`) shows the Discord link. Ideas go in #suggestions. The link also shows once in chat after you log in. `/fa bug` still points to the bug form.
 
 ## 0.9.24 (2026-10-13)
 - The minimap button is a clean gold "FA", easy to spot at minimap size. The addon list icon uses the FA emblem, the same mark as the site, Discord and the store pages.
