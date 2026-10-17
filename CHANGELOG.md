@@ -1,5 +1,17 @@
 # ForeverArtisan changelog
 
+## 0.9.25 (2026-10-17)
+- The ForeverArtisan Discord gets a small window once (20 seconds after login, never in combat) with the link to copy, and once more on launch day. It replaces the one-time chat line. `/fa discord` still shows the link any time.
+- New on the /fa Modules tab: **Legacy points**, an estimate of the points your account has earned (1 per class at level 25, 45 and 60, and 1 per crafting profession at skill 150, 225 and 300, from the beta rules) and the next milestone for this character. Hover for every class and profession. It counts characters that have logged in with ForeverArtisan.
+- New on the /fa Modules tab: **Crafting cooldowns** (transmutes, Mooncloth and others) across your characters, read when you use one or open the profession window. A chat line says when one is ready again.
+- Crafting tabs show skill-ups per hour instead of crafts per hour, after 5 minutes of crafting. A quick batch used to show over 1,000 crafts an hour, which didn't say much.
+- `/fa nameplates off` turns friendly nameplates back off, NPCs included. `/fa nameplates` turns on a hidden game setting for NPC nameplates that Shift+V doesn't touch, so there was no easy way back before. Turning them on now also says it shows nameplates over other players.
+- Fishing lures: "Best" is now the best lure your Fishing skill can use, and auto-lure picks that one. Clicking the lure button skips lures you can't use yet; hover it to see what each one needs. With only lures you can't use yet, it casts without one and tells you which skill you need.
+- Fishing weapon swap: a new Ranged box shows your wand, bow or gun. It stays on while you fish, since the pole only uses your hands. Dropping a wand on the Main hand or Off hand box now says so instead of "That can't go in the main hand slot."
+- Trade Contacts search finds recipes too. With Questie installed, typing part of a recipe name ("boar") shows who sells it for your faction, what drops it, or who gives the quest for it, after the NPCs you've met. Click a row for a waypoint. Recipes only the other faction can get are marked "Alliance only" or "Horde only". With nothing found, the search points you to the Recipe book search, which also lists recipes you train.
+- Tauren Cultivation: herb tooltips show the player level each herb needs right away (its Herbalism skill divided by 5, from the Oct 15 beta patch). Before, ForeverArtisan only learned it from your own casts.
+- Tauren Cultivation: with the new 15-minute cooldown, "Cultivation is ready again" only shows in chat while you're out gathering (you picked a herb in the last 10 minutes). Otherwise you hear it the next time you start picking a herb.
+
 ## 0.9.24 (2026-10-14)
 - The minimap button is a clean gold "FA", easy to spot at minimap size. The addon list icon uses the FA emblem, the same mark as the site, Discord and the store pages.
 - `/fa feedback` (or `/fa ideas`) shows the Discord link. Ideas go in #suggestions. The link also shows once in chat after you log in. `/fa bug` still points to the bug form.

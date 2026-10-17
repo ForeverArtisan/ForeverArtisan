@@ -7,6 +7,7 @@
 --   FA.QDB.Npc(id)                  { n, t, f = "Horde"/"Alliance"/"Both", m, x, y, z } or nil
 --   FA.QuestieRecipeSources(name, prefixes)  recipe book lines: who sells or drops it, quest rewards
 --   FA.QuestieMaterial(id)          one shopping-list line for a material, or nil
+--   FA.QuestieRecipeSearch(q)       recipe items by name, with sellers, drops and quests (Trade Contacts search)
 local FA = ForeverArtisan
 local QDB = {}
 FA.QDB = QDB
@@ -191,11 +192,12 @@ end
 
 -- sellers (your faction) and droppers of one item, already looked up
 local function Sources(L, itemId)
-  local sellers, droppers = {}, {}
+  local sellers, droppers, foe = {}, {}, nil
   local _, vendors = pcall(L.Item.vendors, itemId)
   for _, nid in ipairs(type(vendors) == "table" and vendors or {}) do
     local npc = QDB.Npc(nid)
-    if npc and Friendly(npc) then sellers[#sellers + 1] = npc end
+    if npc and Friendly(npc) then sellers[#sellers + 1] = npc
+    elseif npc then foe = foe or npc.f end
   end
   local _, drops = pcall(L.Item.npcDrops, itemId)
   local dropCount = type(drops) == "table" and #drops or 0
@@ -205,7 +207,44 @@ local function Sources(L, itemId)
       if npc then droppers[#droppers + 1] = npc end
     end
   end
-  return SortHere(sellers), SortHere(droppers), dropCount
+  return SortHere(sellers), SortHere(droppers), dropCount, foe
+end
+
+-- a quest that rewards an item: its name, who starts it (an NPC you can walk to) and which side can take it
+local function band(a, b)
+  if bit and bit.band then return bit.band(a, b) end
+  local r, k = 0, 1
+  while a > 0 and b > 0 do
+    if a % 2 == 1 and b % 2 == 1 then r = r + k end
+    a, b, k = math.floor(a / 2), math.floor(b / 2), k * 2
+  end
+  return r
+end
+local function QuestInfo(L, itemId)
+  local _, quests = pcall(L.Item.questRewards, itemId)
+  local qid = type(quests) == "table" and quests[1]
+  if not (qid and L.Quest) then return nil end
+  local _, name = pcall(L.Quest.name, qid)
+  if type(name) ~= "string" then return nil end
+  local info = { name = name }
+  local _, races = pcall(L.Quest.requiredRaces, qid)
+  local masks = L.Enum and L.Enum.factionRaceMasks
+  if type(races) == "number" and races > 0 and type(masks) == "table" and masks.Horde and masks.Alliance then
+    local h, a = band(races, masks.Horde) > 0, band(races, masks.Alliance) > 0
+    info.side = (h and not a) and "Horde" or (a and not h) and "Alliance" or nil
+  end
+  local _, starts = pcall(L.Quest.startedBy, qid)
+  local npcs = type(starts) == "table" and starts[1]
+  for _, nid in ipairs(type(npcs) == "table" and npcs or {}) do
+    local npc = QDB.Npc(nid)
+    if npc then
+      info.side = info.side or (npc.f ~= "Both" and npc.f) or nil
+      if Friendly(npc) and npc.m then info.giver = npc; break end
+    end
+  end
+  local mine = MyFaction()
+  if info.side and mine and info.side ~= mine then info.giver = nil; info.other = info.side end
+  return info
 end
 
 -- Recipe book lines for a recipe nobody in your Trade Contacts teaches or sells:
@@ -233,6 +272,36 @@ function FA.QuestieRecipeSources(recipeName, prefixes)
   end
   if #lines == 0 then return nil end
   return lines, sellers[1] or droppers[1]
+end
+
+-- Trade Contacts search: recipe items whose name has the text, with who sells them for your faction,
+-- who drops them, or the quest that gives them. Names only ("boar" finds "Recipe: ... Boar ...").
+-- { { n = item name, id, sellers = {npc}, droppers = {npc}, dropCount, quest = name or nil }, ... } or nil
+local MAX_RECIPES = 8
+function FA.QuestieRecipeSearch(q)
+  if QDB.Off() or not recipeIndex or type(q) ~= "string" then return nil end
+  q = q:lower():gsub("^%s+", ""):gsub("%s+$", "")
+  if #q < 3 then return nil end
+  local L = QDB.Lib()
+  if not (L and L.Item) then return nil end
+  local names = {}
+  for name in pairs(recipeIndex) do
+    if name:lower():find(q, 1, true) then names[#names + 1] = name end
+  end
+  if #names == 0 then return nil end
+  table.sort(names)
+  local out = {}
+  for i = 1, math.min(MAX_RECIPES, #names) do
+    local id = recipeIndex[names[i]]
+    local sellers, droppers, dropCount, foe = Sources(L, id)
+    local r = { n = names[i], id = id, sellers = sellers, droppers = droppers, dropCount = dropCount }
+    local qi = QuestInfo(L, id)
+    if qi then r.quest, r.questGiver, r.questOther = qi.name, qi.giver, qi.other end
+    -- only the other side can get it: sold by their vendors or from their quest, and it doesn't drop
+    if #sellers == 0 and dropCount == 0 and (foe or qi) and (not qi or qi.other) then r.other = qi and qi.other or foe end
+    out[#out + 1] = r
+  end
+  return out, #names
 end
 
 -- One shopping-list line for a material, or nil: a vendor for your faction first, then a short drop list.

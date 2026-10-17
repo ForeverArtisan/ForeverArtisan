@@ -206,7 +206,7 @@ local function ReadLegacyPage()
   local n = GetNumAuctionItems("list")
   if not n or Secret(n) then return end
   if n > T.biggest then T.biggest = n end
-  local cheapest, listed = {}, {}
+  local cheapest, listed, names = {}, {}, {}
   for i = 1, n do
     local r = { GetAuctionItemInfo("list", i) }
     local count, buyout, id = r[3], r[10], r[17]
@@ -215,10 +215,14 @@ local function ReadLegacyPage()
       local unit = buyout / count
       if not cheapest[id] or unit < cheapest[id] then cheapest[id] = unit end
       listed[id] = (listed[id] or 0) + count
+      if type(r[1]) == "string" and not Secret(r[1]) then names[id] = r[1] end
       Heard(id, count)
     end
   end
-  for id, unit in pairs(cheapest) do FA.NotePrice(id, unit); FA.NoteMarket(id, unit, listed[id]) end
+  for id, unit in pairs(cheapest) do
+    FA.NotePrice(id, unit); FA.NoteMarket(id, unit, listed[id])
+    if FA.NoteRecipeListing then pcall(FA.NoteRecipeListing, id, names[id], unit) end
+  end
 end
 
 -- Newer Auction House (C_AuctionHouse): browse list, commodity and item results
@@ -233,6 +237,10 @@ local function ReadBrowse()
     if r.minPrice and r.minPrice > 0 and not Secret(r.minPrice) then
       FA.NotePrice(id, r.minPrice)
       FA.NoteMarket(id, r.minPrice, not Secret(r.totalQuantity) and r.totalQuantity or nil)
+      if FA.NoteRecipeListing then
+        local nm = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(id)
+        pcall(FA.NoteRecipeListing, id, type(nm) == "string" and not Secret(nm) and nm or nil, r.minPrice)
+      end
     end
     Heard(id, r.totalQuantity)
   end
@@ -737,6 +745,23 @@ end
 local market = {}
 function FA.RegisterMarket(p)
   if type(p) == "table" and p.name and p.recipes then market[#market + 1] = p end
+end
+
+-- Does this character know a recipe? true / false, or nil when that profession's window hasn't been read
+-- (or no module for it is on). profName is the module's name ("Cooking", "First Aid").
+function FA.MarketKnows(profName, recipeName)
+  for _, p in ipairs(market) do
+    if p.name == profName then
+      local ok, recs = pcall(p.recipes)
+      if not ok or not recs then return nil end
+      local want = recipeName:lower()
+      for _, r in pairs(recs) do
+        if r.name and r.name:lower() == want then return r.learned and true or false end
+      end
+      return false
+    end
+  end
+  return nil
 end
 
 -- Every profession's Best crafts in one list, by profit after the cut: rows from FA.BestCrafts,

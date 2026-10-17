@@ -1,8 +1,9 @@
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
 -- ForeverArtisan: Herbalism: Cultivation (Tauren racial, WoW Forever).
--- Cultivation grows a duplicate of a nearby herb that anyone can pick, Herbalism or not. One-hour cooldown,
--- each herb only once, and each herb has a player-level requirement (Forever beta, Sep 24).
--- We don't ship those levels: when a cast fails on level, we remember it for that herb; when it works, that too.
+-- Cultivation grows a duplicate of a nearby herb that anyone can pick, Herbalism or not. Cooldown read from the game (15 min since the Oct 15 beta build, was 60),
+-- each herb only once, and each herb has a player-level requirement.
+-- Since the Oct 15 beta patch the rule is public: the herb's Herbalism skill divided by 5 (herbs above 300 skill: 60).
+-- We use that rule, and a level named in a failed cast's error still wins (in case Forever rounds differently).
 -- Everything here stays quiet unless this character knows the spell.
 local _, ns = ...
 if not ns or not ns.DB then return end
@@ -89,13 +90,23 @@ local function HerbRec(name)
   return h
 end
 
+-- the level the game's rule gives for a herb: its Herbalism skill / 5, at least 1; above 300 skill, 60
+function ns.CultivationRuleLevel(name)
+  local rec = name and ns.herbByName and ns.herbByName[name:lower()]
+  if not rec or not rec.req then return nil end
+  if rec.req > 300 then return 60 end
+  return math.max(1, math.ceil(rec.req / 5))
+end
+
 -- true = your level is enough, false = too low, nil = not known yet. Second value: the level to show.
 function ns.CultivationLevelOK(name)
   local db = DB()
   local h = db and name and db.cultivate.herbs[name]
-  if not h then return nil end
   local lvl = UnitLevel("player") or 0
-  if h.need then return lvl >= h.need, h.need end
+  if h and h.need then return lvl >= h.need, h.need end
+  local rule = ns.CultivationRuleLevel(name)
+  if rule then return lvl >= rule, rule end
+  if not h then return nil end
   if h.ok and lvl >= h.ok then return true end
   if h.low and lvl <= h.low then return false, h.low + 1 end
   return nil
@@ -152,6 +163,9 @@ end
 ---------------------------------------------------------------- reminders
 local nudged = false     -- one nudge per ready period
 local wake = 0           -- newest timer wins
+local lastPick = -1e9    -- when you last started picking a herb
+local QUIET_AFTER = 600  -- "ready again" only if you picked a herb in the last 10 minutes; otherwise the nudge on your next pick says it
+function ns.CultivationNotePick() lastPick = GetTime() end
 
 local function ScheduleReady(prev)
   local left = Left()
@@ -163,7 +177,8 @@ local function ScheduleReady(prev)
     if mine ~= wake or not On() then return end
     if Left() == 0 then
       nudged = false
-      say(GREEN .. "Cultivation is ready again.|r")
+      -- 15-minute cooldown: only speak up while you're out gathering
+      if GetTime() - lastPick <= QUIET_AFTER then say(GREEN .. "Cultivation is ready again.|r") end
       if ns.OnChange then ns.OnChange() end
     else
       ScheduleReady(left)
@@ -200,6 +215,7 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3, a4)
     if IsCultivation(a4) then
       castTarget = { name = TargetName(a2), t = GetTime() }
     elseif ns.IsHerbSpell and ns.IsHerbSpell(a4) then
+      ns.CultivationNotePick()
       ns.CultivationNudge(a2)
     end
   elseif e == "UNIT_SPELLCAST_SUCCEEDED" and a1 == "player" then
@@ -248,7 +264,7 @@ function ns.CultivationReport(rest)
   for name in pairs(db.cultivate.herbs) do names[#names + 1] = name end
   table.sort(names)
   if #names == 0 then
-    say(GRAY .. "No herbs tried yet. Each herb has a level requirement; I learn it from your casts.|r")
+    say(GRAY .. "No herbs tried yet. Each herb needs a player level: its Herbalism skill divided by 5 (Kingsblood 125: level 25).|r")
     return
   end
   for _, name in ipairs(names) do

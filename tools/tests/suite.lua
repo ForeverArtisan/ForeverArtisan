@@ -59,7 +59,7 @@ C_DateAndTime={GetCurrentCalendarTime=function() return {year=2026,month=9,month
 C_Calendar={OpenCalendar=noop, GetMonthInfo=function() return {numDays=30,month=9,year=2026} end, GetNumDayEvents=function() return 0 end}
 GetCameraZoom=function() return 8 end SaveView=noop SetView=noop GetCursorPosition=function() return 0,0 end
 ReloadUI=noop HideUIPanel=noop
-GetContainerNumSlots=function() return 0 end GetContainerItemID=noop GetContainerItemLink=noop GetContainerItemInfo=noop
+GetContainerNumSlots=function(b) return TEST_BAGS and TEST_BAGS[b] and #TEST_BAGS[b] or 0 end GetContainerItemID=function(b,sl) return TEST_BAGS and TEST_BAGS[b] and TEST_BAGS[b][sl] end GetContainerItemLink=noop GetContainerItemInfo=noop
 GetGameTime=function() return 12,0 end
 GetBuildInfo=function() return "1.16.0","16001","Sep 1 2026",11601 end
 GetLocale=function() return "enUS" end GetRealmName=function() return "Beta" end UnitClass=function() return "Druid","DRUID" end UnitRace=function() return "Tauren","Tauren" end GetMoney=function() return 0 end
@@ -471,6 +471,34 @@ do
   assert(st.swapKey=="SHIFT-PAD2", "Shift + a controller button: "..tostring(st.swapKey))
   GetCVar, IsShiftKeyDown = oCV, oSh
   fns.SetKey("swapKey","") st.key=oldKey
+  -- 0.9.25: a wand dropped on a hand slot gets a clear note; the ranged slot is never part of the swap
+  do
+    local oldC, oldI = C_Item, GetItemInfoInstant
+    local inst=function(id) if id==5069 then return id,"Weapon","Wand","INVTYPE_RANGEDRIGHT",1,2,19 end return oldC.GetItemInfoInstant(id) end
+    C_Item=setmetatable({GetItemInfoInstant=inst}, {__index=oldC}); GetItemInfoInstant=inst
+    assert(fns.IsRanged(5069) and not fns.GearFits(5069,"mh") and not fns.GearFits(5069,"oh"), "wand: ranged slot only")
+    C_Item, GetItemInfoInstant = oldC, oldI
+    print("0.9.25 wand note ok")
+  end
+  -- 0.9.25: the best lure is the best one your skill allows
+  do
+    local oldSkill, oldLure = fns.SkillRankNow, ForeverArtisanFishingDB.settings.lure
+    ForeverArtisanFishingDB.settings.lure = nil
+    TEST_BAGS = { [0] = { 6533, 6529 } }
+    fns.SkillRankNow = function() return 44 end
+    fns.InvalidateLure()
+    assert(fns.PickLure() == 6529, "skill 44: Shiny Bauble, not the Attractor")
+    local l = fns.BagLures()
+    assert(l[1].id == 6529 and l[1].usable and l[2].id == 6533 and not l[2].usable and l[2].req == 100, "usable lures listed first")
+    fns.SkillRankNow = function() return 100 end
+    assert(fns.PickLure() == 6533, "skill 100: the Attractor (cache follows the skill)")
+    fns.SkillRankNow = function() return 44 end
+    ForeverArtisanFishingDB.settings.lure = "Aquadynamic Fish Attractor"
+    fns.InvalidateLure()
+    assert(fns.PickLure() == 6529, "a picked lure you can't use yet is skipped")
+    TEST_BAGS = nil; fns.SkillRankNow = oldSkill; ForeverArtisanFishingDB.settings.lure = oldLure; fns.InvalidateLure()
+    print("0.9.25 usable lure ok")
+  end
   -- key bindings that open windows (a controller button can be set in the game's Key Bindings)
   assert(type(ForeverArtisanTogglePanel)=="function" and type(ForeverArtisanFishingToggle)=="function"
     and type(ForeverArtisanContactsToggle)=="function", "binding functions exist")
@@ -906,7 +934,9 @@ do
   fire("UNIT_SPELLCAST_SENT","player","Liferoot","g4",CULT)
   fire("UI_ERROR_MESSAGE",0,"Your level is too low")
   ok,need=hns.CultivationLevelOK("Liferoot")
-  assert(ok==false and need==21, "too low at 20 -> needs 21+")
+  assert(ok==false and need==30, "rule: Liferoot 150 / 5 = level 30")
+  assert(hns.CultivationRuleLevel("Peacebloom")==1 and hns.CultivationRuleLevel("Earthroot")==3 and hns.CultivationRuleLevel("Black Lotus")==60, "rule levels")
+  assert(tip("Goldthorn"):find("needs level 34"), "never-tried herb shows its rule level: "..tip("Goldthorn"))
   -- a success: works at 20, cooldown starts, no ready line
   fire("UNIT_SPELLCAST_SENT","player","Mageroyal","g5",CULT)
   cdStart, cdDur = 990, 3600
@@ -915,6 +945,26 @@ do
   assert(ForeverArtisanHerbalismDB.cultivate.casts==1, "cast counted")
   print("CULT STATUS", hns.CultivationStatus())
   assert(hns.CultivationStatus():find("60 min") and tip("Peacebloom")=="", "on cooldown")
+  -- ready again: speaks only if you picked a herb in the last 10 minutes
+  do
+    local oT, oGT = C_Timer, GetTime
+    local now = 5000
+    GetTime=function() return now end
+    C_Timer={After=function(d,fn) if d>600 then cdStart, cdDur = 0, 0 end fn() end, NewTicker=oT.NewTicker}
+    cdStart, cdDur = now - 10, 900
+    local b=#chat
+    fire("UNIT_SPELLCAST_SUCCEEDED","player","g6",CULT)
+    local spoke=false for i=b+1,#chat do if chat[i]:find("ready again") then spoke=true end end
+    assert(not spoke, "no herb picked lately: quiet")
+    cdStart, cdDur = now - 10, 900
+    fire("UNIT_SPELLCAST_SENT","player","Peacebloom","g7",2366)
+    b=#chat
+    fire("UNIT_SPELLCAST_SUCCEEDED","player","g8",CULT)
+    spoke=false for i=b+1,#chat do if chat[i]:find("ready again") then spoke=true end end
+    assert(spoke, "gathering: says ready again")
+    C_Timer, GetTime = oT, oGT
+    cdStart, cdDur = 990, 3600
+  end
   run("FAHERB","cultivation")
   run("FAHERB","cultivation off")
   cdStart, cdDur = 0, 0
@@ -1087,6 +1137,12 @@ do
   for _,c in ipairs({"","titles","titles off","titles on","nameplates",""}) do SlashCmdList.FOREVERARTISAN(c) end
   assert(FA.TownNamesOn()==true, "/fa titles on")
   SlashCmdList.FOREVERARTISAN("contacts scout"); SlashCmdList.FOREVERARTISAN("contacts todo")
+  -- 0.9.25: /fa nameplates off undoes it, and the in-town reminder stays quiet after that
+  SlashCmdList.FOREVERARTISAN("nameplates off")
+  assert(cv.nameplateShowFriends=="0" and cv.nameplateShowFriendlyNPCs=="0" and not FA.FriendlyPlatesOn() and ForeverArtisanSettings.platesOffPick, "nameplates off")
+  SlashCmdList.FOREVERARTISAN("nameplates")
+  assert(FA.FriendlyPlatesOn() and not ForeverArtisanSettings.platesOffPick, "and back on")
+  print("0.9.25 nameplates off ok")
   GetCVar, SetCVar = oldGet, oldSet
   -- an older install that had turned it off in Trade Contacts keeps it off
   -- automatic: on by itself, off when a nameplate addon like Plater runs, and the old switch doesn't count
@@ -2081,6 +2137,50 @@ do
   assert(FA.QuestieRecipeSources("Runecloth Robe",{"Pattern: "})==nil and FA.QuestieMaterial(3182)==nil, "questie off: no recipe or material lines")
   run("FACONTACTS","questie on")
   print("0.9.19 questie items ok")
+  -- 0.9.25: Trade Contacts search finds recipe items from Questie when nobody you've met sells them
+  local function rowsFor(q2)
+    local out = {}
+    for _, d in ipairs(cns.SearchRows(q2)) do if (d.right or ""):find("Questie") and d.id then out[#out + 1] = d end end
+    return out
+  end
+  local rr = rowsFor("runecloth")
+  assert(#rr == 1 and rr[1].left == "Pattern: Runecloth Robe" and rr[1].right:find("Sold by Darnall") and rr[1].npc and rr[1].npc.m == 1450,
+    "recipe search: seller for your faction, with a waypoint")
+  assert(rr[1].tipFn():find("From Questie's database"), "recipe row tooltip")
+  rr = rowsFor("fishing rack")
+  assert(#rr == 1 and rr[1].right:find("Drops from Gelihast"), "recipe search: drop")
+  rr = rowsFor("bass and you")
+  assert(#rr == 1 and rr[1].right:find("Quest: Nat Pagle") and not rr[1].npc, "recipe search: quest reward, no waypoint")
+  -- quests: a waypoint to the quest giver for your side; the other side's quest and vendors say so
+  items[9998]={name="Recipe: Hordish Boar Bites",class=9,questRewards={557}}
+  items[9999]={name="Recipe: Beer Basted Boar Ribs",class=9,questRewards={556},vendors={9100}}
+  local qstart={[556]={{9002}},[557]={{9001}}}
+  local qname={[555]="Nat Pagle, Angler Extreme",[556]="Beer Basted Boar Ribs",[557]="Boar Bites"}
+  LibQuestieDB.Quest={ name=function(q) return qname[q] end, startedBy=function(q) return qstart[q] end,
+    requiredRaces=function(q) return q==556 and 77 or 0 end }
+  LibQuestieDB.Enum={ factionRaceMasks={ Alliance=77, Horde=178 } }
+  FA.QDB.Reset(); FA.QDB.BuildRecipeIndex()
+  rr = rowsFor("boar")
+  local byName = {}
+  for _, d in ipairs(rr) do byName[d.left] = d end
+  local hb, bb = byName["Recipe: Hordish Boar Bites"], byName["Recipe: Beer Basted Boar Ribs"]
+  assert(hb and hb.right:find("Quest from Grumbo") and hb.npc and hb.npc.m == 1454, "quest giver for your side, with a waypoint")
+  assert(bb and bb.right:find("Alliance only") and not bb.npc and bb.tipFn():find("Auction House"), "other side's recipe says so")
+  assert(#rowsFor("ru") == 0, "two letters: no recipe lookups")
+  assert(#rowsFor("spider") == 0, "materials aren't recipes")
+  db.entries["vendor:7940"]={kind="vendor",npcId=7940,name="Darnall",title="Cloth Merchant",zone="Moonglade",mapID=1450,x=51,y=51,
+    items={{name="Pattern: Runecloth Robe",itemId=14469,priceCopper=5000}}}
+  cns.OnContactsChanged()
+  local mine, qrow = 0, 0
+  for _, d in ipairs(cns.SearchRows("runecloth")) do
+    if d.left:find("Runecloth Robe") then if d.right:find("Questie") then qrow = qrow + 1 else mine = mine + 1 end end
+  end
+  assert(mine == 1 and qrow == 0, "your own vendor wins in search too")
+  db.entries["vendor:7940"]=nil; cns.OnContactsChanged()
+  run("FACONTACTS","questie off")
+  assert(#rowsFor("runecloth") == 0, "questie off: no recipe rows")
+  run("FACONTACTS","questie on")
+  print("0.9.25 questie recipe search ok")
   -- a QuestieDB we can't read: the feature stays off, no errors
   LibQuestieDB.RequireContract=function() return false end
   cns.QuestieReset(); db.questieCache=nil; cns.BuildQuestieTrainers(); cns.OnContactsChanged()
@@ -2308,13 +2408,29 @@ do
   assert(#out==1 and txt:find(ForeverArtisan.DISCORD,1,true) and txt:find("#suggestions",1,true), "/fa feedback is one Discord line: "..txt)
   assert(_G.ForeverArtisanPanel.tab=="info", "/fa feedback opens Info")
   assert(not txt:find("!",1,true), "no exclamation marks")
-  local keep=ForeverArtisanSettings.discordAsked
-  ForeverArtisanSettings.discordAsked=nil
+  -- 0.9.25: a Discord popup once before launch and once more at launch, 20 s after login, never in combat
+  local S=ForeverArtisanSettings
+  local oldT, oldTime, oldCombat = C_Timer, time, InCombatLockdown
+  C_Timer={After=function(_,fn) fn() end, NewTicker=function() return {Cancel=function() end} end}
+  local shown={}
+  StaticPopupDialogs={} StaticPopup_Show=function(name) shown[#shown+1]=StaticPopupDialogs[name].text return {} end
+  S.discordPopupPre, S.discordPopupLaunch = nil, nil
   out={} print=cap; fire("PLAYER_LOGIN"); print=P0
-  assert(table.concat(out,"\n"):find(ForeverArtisan.DISCORD,1,true) and ForeverArtisanSettings.discordAsked, "login asks once")
-  out={} print=cap; fire("PLAYER_LOGIN"); print=P0
-  assert(not table.concat(out,"\n"):find("#suggestions",1,true), "and only once")
-  ForeverArtisanSettings.discordAsked=keep or true
+  assert(#shown==1 and shown[1]:find("now live") and shown[1]:find("help shape ForeverArtisan before launch on November 4") and S.discordPopupPre and not shown[1]:find("!",1,true), "popup before launch")
+  local dlg=StaticPopupDialogs.FOREVERARTISAN_DISCORD
+  local eb={_t="",SetText=function(e,t) e._t=t end,GetText=function(e) return e._t end,SetFocus=function() end,HighlightText=function() end}
+  dlg.OnShow({editBox=eb}); assert(eb._t==ForeverArtisan.DISCORD, "link in the box")
+  eb._t="x"; dlg.EditBoxOnTextChanged(eb); assert(eb._t==ForeverArtisan.DISCORD, "the box can't be edited")
+  fire("PLAYER_LOGIN"); assert(#shown==1, "only once before launch")
+  time=function(t) if t then return oldTime(t) end return ForeverArtisan.LAUNCH_AT + 3600 end
+  InCombatLockdown=function() return true end
+  fire("PLAYER_LOGIN"); assert(#shown==1, "not in combat")
+  InCombatLockdown=oldCombat
+  fire("PLAYER_REGEN_ENABLED")
+  assert(#shown==2 and shown[2]:find("WoW Forever is live") and S.discordPopupLaunch, "once more at launch, after the fight")
+  fire("PLAYER_LOGIN"); assert(#shown==2, "then never again")
+  C_Timer, time = oldT, oldTime
+  StaticPopupDialogs=nil StaticPopup_Show=nil
   out={} print=cap; run("FOREVERARTISAN","bug"); print=P0
   assert(table.concat(out,"\n"):find("foreverartisan.app/bug",1,true), "/fa bug still points at the bug form")
   print("0.9.24 feedback ok")
@@ -2454,5 +2570,127 @@ do
   assert(anon, "a recipe looted without a target is still logged")
   GetTime,GetNumLootItems,UnitGUID,UnitExists,UnitIsDead,UnitName,UnitIsPlayer=sv[1],sv[2],sv[3],sv[4],sv[5],sv[6],sv[7]
   print("0.9.23 auto-loot recipe drops ok")
+end
+-- 0.9.25: skill-ups per hour after 5 minutes, instead of crafts per hour after 1
+do
+  local fa=loadedFrames["ForeverArtisan_FirstAid"].ns
+  local oldT, sess = GetTime, fa.session
+  local saved = { sess.crafts, sess.ups, sess.start }
+  GetTime=function() return 1000 end
+  sess.crafts, sess.ups, sess.start = 24, 16, 1000 - 76
+  local i = fa.SessionInfo()
+  assert(i.upsPerHour == nil and i.perHour == nil, "a quick batch shows no rate")
+  sess.start = 1000 - 600
+  i = fa.SessionInfo()
+  assert(i.upsPerHour == 96, "16 skill-ups in 10 minutes = 96/hour, got "..tostring(i.upsPerHour))
+  sess.crafts, sess.ups, sess.start = saved[1], saved[2], saved[3]; GetTime=oldT
+  print("0.9.25 skill-ups per hour ok")
+end
+-- 0.9.25: legacy points (estimate), crafting cooldowns, recipe watch
+do
+  local FA=ForeverArtisan
+  local oldLT, oldAcct = FA.LearnedTrades, ForeverArtisanSettings.account
+  FA.LearnedTrades=function() return { tailoring={rank=74}, cooking={rank=50} } end
+  ForeverArtisanSettings.account={ chars={
+    a={ name="Boomz", class="MAGE", className="Mage", level=26, profs={ Tailoring=160 }, cds={} },
+    b={ name="Alt", class="MAGE", className="Mage", level=10, profs={ Tailoring=230, Alchemy=50 }, cds={} } } }
+  FA.NoteCharacter() -- this character: Druid 20, Tailoring 74 (Cooking doesn't count)
+  local total, rows = FA.LegacyPoints()
+  local by={} for _, r in ipairs(rows) do by[r.name]=r end
+  assert(by.Mage.earned==1 and by.Mage.best==26 and by.Mage.who=="Boomz", "class points from the best character of that class")
+  assert(by.Tailoring.earned==2 and by.Tailoring.next==300 and by.Alchemy.earned==0 and not by.Cooking, "profession points, crafting only")
+  assert(total==3, "total "..total)
+  local line, tip = FA.LegacyLines()
+  assert(line:find("3") and line:find("level 25 Druid %(best 20%)") and line:find("Tailoring 300 %(best 230%)"), "next milestones for this character: "..line)
+  assert(#tip > 4, "tooltip lists each class and profession")
+  -- cooldowns from the profession window
+  local o1,o2,o3 = GetNumTradeSkills, GetTradeSkillInfo, GetTradeSkillCooldown
+  GetNumTradeSkills=function() return 2 end
+  GetTradeSkillInfo=function(i) if i==1 then return "Transmute: Arcanite","optimal" end return "Elixir of Minor Fortitude","easy" end
+  GetTradeSkillCooldown=function(i) if i==1 then return 7200 end end
+  FA._AccountReadTradeSkill()
+  local cds = FA.CooldownList()
+  assert(#cds==1 and cds[1].name=="Transmute: Arcanite" and cds[1].mine and not cds[1].ready, "cooldown saved")
+  local cl = FA.CooldownLines()
+  assert(cl:find("Transmute: Arcanite 2h") or cl:find("Transmute: Arcanite 1h 59m"), "cooldown line: "..cl)
+  for _, c in pairs(ForeverArtisanSettings.account.chars) do if c.cds["Transmute: Arcanite"] then c.cds["Transmute: Arcanite"].readyAt = time() - 5 end end
+  FA._AccountTellReady()
+  assert(FA.CooldownLines():find("ready"), "ready shows")
+  local told=false
+  for _, c in pairs(ForeverArtisanSettings.account.chars) do local cd=c.cds["Transmute: Arcanite"]; if cd and cd.told then told=true end end
+  assert(told, "said once after login")
+  GetNumTradeSkills, GetTradeSkillInfo, GetTradeSkillCooldown = o1,o2,o3
+  print("0.9.25 legacy and cooldowns ok")
+  -- recipe watch
+  local oldC, oldI, oldKnows = C_Item, GetItemInfoInstant, FA.MarketKnows
+  local inst=function(id)
+    if id==9999 then return id,"Recipe","Cooking","",1,9,5 end
+    if id==9998 then return id,"Recipe","Leatherworking","",1,9,1 end
+    if id==9997 then return id,"Trade Goods","x","",1,7,0 end
+    return oldC.GetItemInfoInstant(id)
+  end
+  C_Item=setmetatable({GetItemInfoInstant=inst}, {__index=oldC}); GetItemInfoInstant=inst
+  FA.MarketKnows=function(prof, name) return name=="Known Stew" end
+  assert(FA.RECIPE_WATCH_READY==false and FA.RecipeWatchLines()==nil, "held back for 0.9.26: off and out of sight")
+  FA.RECIPE_WATCH_READY=true
+  ForeverArtisanSettings.recipeWatch=nil; FA._RecipeWatchReset()
+  local oldTimer=C_Timer; C_Timer={After=function() end, NewTicker=function() return {Cancel=function() end} end}
+  FA.NoteRecipeListing(9999, "Recipe: Beer Basted Boar Ribs", 6000)
+  FA.NoteRecipeListing(9998, "Pattern: Thick Armor Kit", 500)      -- no Leatherworking here
+  FA.NoteRecipeListing(9997, "Recipe: Not Really", 100)             -- not a recipe item
+  local said={}
+  local oldPrint, oldReq = print, FA.RecipeWatchReq
+  print=function(...) said[#said+1]=table.concat({tostringall and tostringall(...) or tostring((...))}," ") end
+  FA.RecipeWatchReq=function(e) return e.id==9999 and 300 or nil end
+  FA._RecipeWatchFlush()
+  print=oldPrint
+  assert(#said==0, "chat stays quiet when you can't learn any of them yet")
+  FA.RecipeWatchReq=oldReq
+  FA._RecipeWatchReset()
+  FA.NoteRecipeListing(9999, "Recipe: Beer Basted Boar Ribs", 6000)
+  said={} print=function(...) said[#said+1]=tostring((...)) end
+  FA._RecipeWatchFlush()
+  print=oldPrint
+  assert(#said==1 and said[1]:find("Beer Basted"), "a recipe you can learn gets a line")
+  C_Timer=oldTimer
+  local wl = FA.RecipeWatchList()
+  assert(#wl==1 and wl[1].name=="Recipe: Beer Basted Boar Ribs" and wl[1].prof=="Cooking" and wl[1].price==6000, "only recipes for your professions")
+  local wline = FA.RecipeWatchLines()
+  local wline, wtip = FA.RecipeWatchLines()
+  assert(wline and wline:find("1 recipe for you on the AH") and wtip[2]:find("1 you can learn now"), "Market tab line and short hover")
+  FA.NoteRecipeListing(9999, "Recipe: Beer Basted Boar Ribs", 4000)
+  assert(FA.RecipeWatchList()[1].price==4000, "cheaper price wins")
+  -- a vendor you've met sells it for less: both prices, the cheaper one in green
+  local cdb=ForeverArtisanContactsDB
+  cdb.entries["vendor:7777"]={kind="vendor",npcId=7777,name="Cookie",title="Cooking Supplies",zone="Orgrimmar",mapID=1454,x=50,y=50,
+    items={{name="Recipe: Beer Basted Boar Ribs",itemId=9999,priceCopper=300}}}
+  loadedFrames["ForeverArtisan_Contacts"].ns.OnContactsChanged()
+  local ntext, cheaper, src = FA.RecipeNpcText(FA.RecipeWatchList()[1])
+  assert(ntext and ntext:find("^vendor") and cheaper and src.npc.n=="Cookie" and src.price==300, "vendor price to compare: "..tostring(ntext))
+  -- the Market tab's gold line opens the list
+  SlashCmdList.FOREVERARTISAN("market")
+  local pm=_G.ForeverArtisanPanel.pages.market
+  assert(pm.watch:IsShown(), "gold line shows")
+  pm.watch:GetScript("OnMouseUp")(pm.watch)
+  assert(pm.wview:IsShown() and pm.wview.rows[1].e and pm.wview.rows[1].e.id==9999, "click: the list")
+  assert(pm.wview.rows[1].right._text:find("AH") and pm.wview.rows[1].right._text:find("vendor"), "row shows both prices")
+  pm.wview.rows[1]:GetScript("OnClick")(pm.wview.rows[1])
+  pm.wview.rows[1]:GetScript("OnClick")(pm.wview.rows[1], "RightButton")
+  pm.wview.rows[1]:GetScript("OnEnter")(pm.wview.rows[1])
+  cdb.entries["vendor:7777"]=nil; loadedFrames["ForeverArtisan_Contacts"].ns.OnContactsChanged()
+  pm.wview.back:GetScript("OnClick")(pm.wview.back)
+  assert(not pm.wview:IsShown() and not pm.watching, "back to the crafts")
+  FA.MarketKnows=function() return true end
+  assert(#FA.RecipeWatchList()==0, "once you learn it, it drops off")
+  FA.MarketKnows=function() return false end
+  SlashCmdList.FOREVERARTISAN("recipewatch off")
+  FA.NoteRecipeListing(9999, "Recipe: Beer Basted Boar Ribs", 4000)
+  assert(#FA.RecipeWatchList()==0, "off: nothing noted")
+  SlashCmdList.FOREVERARTISAN("recipewatch on")
+  SlashCmdList.FOREVERARTISAN("") -- the panel draws the new lines without errors
+  C_Item, GetItemInfoInstant, FA.MarketKnows = oldC, oldI, oldKnows
+  FA.LearnedTrades, ForeverArtisanSettings.account, ForeverArtisanSettings.recipeWatch = oldLT, oldAcct, nil
+  FA.RECIPE_WATCH_READY=false
+  print("0.9.25 recipe watch ok")
 end
 print("SUITE OK")

@@ -59,7 +59,29 @@ local function SearchData(results)
   local data = {}
   for _, h in ipairs(results or view.results) do
     local npc, it = h.npc, h.item
-    if it then
+    if it and it.q then
+      -- from Questie's database: a recipe nobody you've met sells (Finder.lua)
+      local how = (it.how == "sold" and npc) and ("Sold by " .. npc.n .. ", " .. ns.Where(npc))
+        or (it.how == "drop" and npc) and ("Drops from " .. npc.n .. ", " .. ns.Where(npc))
+        or (it.how == "quest" and npc) and ("Quest from " .. npc.n .. ", " .. ns.Where(npc))
+        or (it.how == "quest" and it.quest) and ("Quest: " .. it.quest)
+        or (it.how == "other") and (RED .. (it.other or "Other faction") .. " only|r" .. GRAY)
+        or ("Drops from " .. (it.drops or 0) .. " kinds of mobs")
+      data[#data + 1] = { id = it.id, icon = it.id and Icon(it.id) or 134939, npc = npc,
+        left = it.n, right = GRAY .. how .. "  ·  Questie|r", tail = "",
+        tipFn = function()
+          local lines = { how .. (npc and npc.x and ("  (%.1f, %.1f)"):format(npc.x, npc.y) or "") }
+          if it.how == "quest" and it.quest then lines[#lines + 1] = "Quest: " .. it.quest
+          elseif it.quest then lines[#lines + 1] = "Also a quest reward: " .. it.quest end
+          if it.how == "other" then
+            lines[#lines + 1] = "Only " .. (it.other or "the other faction") .. " vendors or quests give it. Look for it on the Auction House."
+          elseif not npc then
+            lines[#lines + 1] = "No location in Questie's database for this one."
+          end
+          lines[#lines + 1] = GRAY .. "From Questie's database. You haven't met anyone who sells it.|r"
+          return table.concat(lines, "\n")
+        end }
+    elseif it then
       data[#data + 1] = { id = it.id, icon = it.id and Icon(it.id) or (it.train and 136235 or 134400), npc = npc,
         left = it.n .. (it.sk and (GRAY .. "  " .. it.sk .. "|r") or ""),
         right = GRAY .. npc.n .. ", " .. ns.Where(npc) .. ns.AgeTag(npc, true) .. BetaTag(npc) .. "|r",
@@ -140,7 +162,7 @@ local function BuildSearchPage(p)
     GameTooltip:AddLine("Lists crafting NPCs you've passed but never talked to, nearest first. Talk to each one to save what it sells or trains.", 1, 1, 1, true)
   end)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
-  help:SetText("Search items, vendors, towns or a profession. Click a row for a waypoint. Hover a checkbox to see what it does.")
+  help:SetText("Search items, recipes, vendors, towns or a profession. Click a row for a waypoint. Hover a checkbox to see what it does.")
   p.help = help
   Wheel(p, "searchOff", function() return #view.results - SEARCH_ROWS end)
 end
@@ -168,7 +190,7 @@ local function RefreshSearchPage(p)
   if p.help then
     p.help:SetText((view.nearestLabel and qs == "missing")
       and (YELLOW .. "Only trainers you've met or that we saw on the Forever beta. With Questie installed, every profession trainer in the game shows here.|r")
-      or "Search items, vendors, towns or a profession. Click a row for a waypoint. Hover a checkbox to see what it does.")
+      or "Search items, recipes, vendors, towns or a profession. Click a row for a waypoint. Hover a checkbox to see what it does.")
   end
   if view.nearestLabel then
     p.status:SetText(view.nearestLabel .. GRAY .. "  Click one for a waypoint.|r")
@@ -192,7 +214,7 @@ local function RefreshSearchPage(p)
     p.status:SetText(("%d vendors and %d trainers you've met%s. Type to search."):format(v, t,
       #extra > 0 and (", plus trainers: " .. table.concat(extra, ", ")) or ""))
   elseif #data == 0 then
-    p.status:SetText(GRAY .. "Nothing matches among the NPCs you've met or passed.|r")
+    p.status:SetText(GRAY .. "Nothing matches among the NPCs you've met or passed. For a recipe, try the Recipe book search in that profession.|r")
   else
     p.status:SetText(("%d result%s"):format(#data, #data == 1 and "" or "s"))
   end

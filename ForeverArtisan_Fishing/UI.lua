@@ -232,21 +232,29 @@ local function BuildFishingPage(p)
   lb:SetScript("OnClick", function(_, button)
     if button == "RightButton" then S().lure = nil; ns.OnChange(); return end
     local opts = { false }
-    for _, l in ipairs(ns.BagLures()) do opts[#opts + 1] = ns.ItemName(l.id) end
+    for _, l in ipairs(ns.BagLures()) do if l.usable then opts[#opts + 1] = ns.ItemName(l.id) end end
     local cur, idx = S().lure, 1
     for i, name in ipairs(opts) do if name and cur and name:lower() == cur:lower() then idx = i end end
     S().lure = opts[(idx % #opts) + 1] or nil
     ns.OnChange()
   end)
-  Tip(lb, function() GameTooltip:AddLine("Click: next lure in your bags"); GameTooltip:AddLine("Right-click: back to the best one", 1, 1, 1) end)
+  Tip(lb, function()
+    GameTooltip:AddLine("Click: next lure in your bags you can use")
+    GameTooltip:AddLine("Right-click: back to the best one", 1, 1, 1)
+    for _, l in ipairs(ns.BagLures()) do
+      if not l.usable then GameTooltip:AddLine(("%s (+%d): needs Fishing %d"):format(ns.ItemName(l.id), l.bonus, l.req), 0.6, 0.6, 0.6) end
+    end
+  end)
   p.lureBtn = lb
 
   Header(p, -348, "Weapon swap")
   local LBL = { pole = "Pole", mh = "Main hand", oh = "Off hand" }
+  local RANGED_NOTE = "Your wand, bow or gun stays in the ranged slot. The pole only uses your hands, so there's nothing to swap."
   local function slot(kind, x)
     local b = ItemSlot(p, x, -368, LBL[kind],
       function(_, id)
         if ns.GearFits(id, kind) then ns.SetGear(kind, id)
+        elseif ns.IsRanged(id) then ns.say(RANGED_NOTE)
         else ns.say(("That can't go in the %s slot."):format(LBL[kind]:lower())) end
       end,
       function() ns.SetGear(kind, nil) end,
@@ -258,10 +266,17 @@ local function BuildFishingPage(p)
     return b
   end
   p.slots = { slot("pole", 22), slot("mh", 72), slot("oh", 122) }
-  Text(p, nil, "TOPLEFT", 176, -372):SetText("Swap key:")
-  p.swapKeyBtn = KeyButton(p, 244, -368, "swapKey", ns.UpdateSwapKey, 120)
-  local gh = Text(p, "GameFontDisableSmall", "TOPLEFT", 176, -396); gh:SetWidth(270)
-  gh:SetText("Toggles pole <-> weapons, even in combat. Empty slots use what you last wore. The fishing key also grabs your weapons once combat starts.")
+  -- the ranged slot, shown so a wand has an obvious home: read only, it stays on while you fish
+  p.ranged = ItemSlot(p, 172, -368, "Ranged",
+    function() ns.say(RANGED_NOTE) end, nil,
+    function(self)
+      GameTooltip:AddLine(self.itemId and "Stays on while you fish. The pole only uses your hands."
+        or "Nothing in your ranged slot.", 0.6, 0.8, 1, true)
+    end)
+  Text(p, nil, "TOPLEFT", 222, -372):SetText("Swap key:")
+  p.swapKeyBtn = KeyButton(p, 290, -368, "swapKey", ns.UpdateSwapKey, 100)
+  local gh = Text(p, "GameFontDisableSmall", "TOPLEFT", 222, -396); gh:SetWidth(228)
+  gh:SetText("Toggles pole <-> weapons, even in combat. Empty slots use what you last wore. In combat, the fishing key grabs your weapons.")
 
   -- profession gear from your bags: a better pole, a fishing line to put on (hover for all)
   p.gearHover = CreateFrame("Frame", nil, p); p.gearHover:SetPoint("TOPLEFT", 20, -446); p.gearHover:SetSize(430, 32)
@@ -315,11 +330,16 @@ local function RefreshFishingPage(p)
   local lures = ns.BagLures()
   if s.lure then
     local have = 0
-    for _, l in ipairs(lures) do if ns.ItemName(l.id):lower() == s.lure:lower() then have = l.count end end
-    p.lureBtn:SetText(("%s (%d)"):format(s.lure, have))
+    local need
+    for _, l in ipairs(lures) do
+      if ns.ItemName(l.id):lower() == s.lure:lower() then have = l.count; need = not l.usable and l.req end
+    end
+    p.lureBtn:SetText(("%s (%d)"):format(s.lure, have) .. (need and (RED .. " needs " .. need .. "|r") or ""))
   else
     local best = lures[1]
-    p.lureBtn:SetText(best and ("Best: %s (+%d)"):format(ns.ItemName(best.id), best.bonus) or (GRAY .. "Best (none in bags)|r"))
+    p.lureBtn:SetText((best and best.usable) and ("Best: %s (+%d)"):format(ns.ItemName(best.id), best.bonus)
+      or best and (GRAY .. "Best: none you can use yet|r")
+      or (GRAY .. "Best (none in bags)|r"))
   end
 
   local mh, oh, poleId = ns.GearSet()
@@ -333,6 +353,9 @@ local function RefreshFishingPage(p)
     sl.icon:SetDesaturated(sl.auto and true or false)
     sl.icon:SetAlpha(sl.auto and 0.6 or 1)
   end
+  local rid = GetInventoryItemID and GetInventoryItemID("player", 18)
+  p.ranged.itemId = rid
+  p.ranged.icon:SetTexture(rid and Icon(rid) or nil)
 end
 
 ---------- page 2: Progress

@@ -318,7 +318,7 @@ function ns.DetailText(npc, it)
   local place = (npc.s and npc.z and npc.s ~= npc.z) and (npc.s .. ", " .. npc.z) or (npc.s or npc.z or "?")
   lines[#lines + 1] = string.format("%s  (%.1f, %.1f)", place, npc.x or 0, npc.y or 0)
   if it then
-    lines[#lines + 1] = it.n .. "  " .. money(it)
+    lines[#lines + 1] = it.q and it.n or (it.n .. "  " .. money(it))
     if it.sk then lines[#lines + 1] = "Requires " .. it.sk end
     if it.lv then lines[#lines + 1] = "Requires level " .. it.lv end
     if it.lim then lines[#lines + 1] = "|cffff8040Limited stock|r (" .. it.lim .. " when you last looked)" end
@@ -481,7 +481,34 @@ local function search(q)
     end
   end
   for _, h in ipairs(seenHits(known, has)) do hits[#hits + 1] = h end
-  return sortHits(hits)
+  sortHits(hits)
+  -- recipes nobody you've met sells: what Questie's database knows, after your own contacts
+  if FA.QuestieRecipeSearch then
+    local ok, recipes = pcall(FA.QuestieRecipeSearch, q)
+    if ok and recipes then
+      local have = {}
+      for _, h in ipairs(hits) do if h.item and h.item.n then have[h.item.n] = true end end
+      for _, r in ipairs(recipes) do
+        if not have[r.n] then
+          local function add(src, how)
+            local npc = src and { id = src.id, n = src.n, t = src.t, k = how == "drop" and "mob" or "vendor",
+              z = src.z, m = src.m, x = src.x, y = src.y, age = 0, key = "questie:" .. src.id, questie = true, items = {} }
+            hits[#hits + 1] = { npc = npc, item = { n = r.n, id = r.id, q = true, how = how,
+              quest = r.quest, other = r.other, giver = r.questGiver and r.questGiver.n, drops = r.dropCount },
+              seen = true, questie = true }
+          end
+          if #r.sellers > 0 then
+            for i = 1, math.min(2, #r.sellers) do add(r.sellers[i], "sold") end
+          elseif #r.droppers > 0 then add(r.droppers[1], "drop")
+          elseif r.quest and not r.questOther then add(r.questGiver, "quest")
+          elseif r.dropCount > 0 then add(nil, "drop")
+          elseif r.other then add(nil, "other")
+          end
+        end
+      end
+    end
+  end
+  return hits
 end
 
 -- every crafting NPC you've passed but not talked to, nearest first ("Only not visited")

@@ -242,6 +242,7 @@ local refreshSettings -- the Settings tab (defined with it, below)
 local refreshContactsSearch -- the Contacts tab's search (defined with it, below)
 local refreshMarket -- the Market tab (defined with it, below)
 local showTrend -- its price-trend view (defined after it)
+local showWatch -- its recipe watch list (defined after it)
 local function refreshPanel()
   if not panel then return end
   scan()
@@ -332,6 +333,20 @@ local function refreshPanel()
   -- "Coming soon" grid under the installed modules
   local shown = math.min(#modules, #panel.rows)
   local top = (shown > 0) and (y - 10) or -60
+  -- your account: legacy points and crafting cooldowns
+  local acctFns = { FA.LegacyLines, FA.CooldownLines }
+  for i, f in ipairs(panel.acct or {}) do
+    local ok, line, tip = false, nil, nil
+    if acctFns[i] then ok, line, tip = pcall(acctFns[i]) end
+    if ok and line then
+      f:ClearAllPoints(); f:SetPoint("TOPLEFT", 18, top - 2)
+      f.text:SetText(line); f.tip = tip; f:Show()
+      top = top - 20
+    else
+      f:Hide()
+    end
+  end
+  if panel.acct and panel.acct[1]:IsShown() then top = top - 8 end
   local soon = comingSoon()
   panel.soonHeader:ClearAllPoints()
   panel.soonHeader:SetPoint("TOPLEFT", 18, top)
@@ -460,6 +475,27 @@ local function buildModulesTab(p)
   panel.empty:SetPoint("TOP", 0, -30)
   panel.empty:SetText("No modules installed yet.")
 
+  -- your account: legacy points and crafting cooldowns (Account.lua), one line each, details on hover
+  panel.acct = {}
+  for i = 1, 2 do
+    local f = CreateFrame("Frame", nil, p)
+    f:SetSize(428, 18)
+    f.text = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.text:SetPoint("LEFT", 0, 0); f.text:SetWidth(428); f.text:SetJustifyH("LEFT"); f.text:SetWordWrap(false)
+    f:EnableMouse(true)
+    f:SetScript("OnEnter", function(self)
+      if not self.tip then return end
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      for j, l in ipairs(self.tip) do
+        if j == 1 then GameTooltip:AddLine(l) else GameTooltip:AddLine(l, 1, 1, 1, true) end
+      end
+      GameTooltip:Show()
+    end)
+    f:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    f:Hide()
+    panel.acct[i] = f
+  end
+
   panel.soonHeader = p:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   panel.soonHeader:SetText(GOLD .. "Coming soon|r")
   panel.soon = {}
@@ -550,7 +586,7 @@ refreshContactsSearch = function()
     else r:Hide() end
   end
   if not searching then panel.tcStatus:SetText("")
-  elseif #data == 0 then panel.tcStatus:SetText(GREY .. 'Nothing matches "' .. q .. '" among the NPCs you\'ve met or passed.|r')
+  elseif #data == 0 then panel.tcStatus:SetText(GREY .. 'Nothing matches "' .. q .. '" among the NPCs you\'ve met or passed. For a recipe, try the Recipe book search in that profession.|r')
   else
     local more = #data - panel.tcOff - TC_ROWS
     panel.tcStatus:SetText(("%d result%s. Click one for a waypoint.%s"):format(#data, #data == 1 and "" or "s",
@@ -568,7 +604,7 @@ local function buildContactsTab(p)
   panel.tcSearch = FA.UI.SearchBox(p, 428, function(text)
     panel.tcQuery, panel.tcOff = text, 0
     refreshContactsSearch()
-  end, "Search items, vendors, towns or a profession")
+  end, "Search items, recipes, vendors, towns or a profession")
   panel.tcSearch:SetPoint("TOPLEFT", 22, -100)
   panel.tcStatus = Txt(p, "GameFontHighlightSmall", 16, -128, 428)
   panel.tcRows = {}
@@ -769,12 +805,17 @@ end
 function refreshMarket()
   local p = panel.market
   if p.showing then showTrend(p.showing) return end
+  if p.watching then showWatch() return end
   local stage = FA.MarketStage()
   p.badge:SetText(stage and ("|cffff9020BETA|r") or "")
   p.note:SetText(stage == "beta" and ("|cffff9020These are beta Auction House prices.|r " .. GREY .. "They swing a lot, so treat the ranking as a rough guide until launch.|r")
     or stage == "early" and ("|cffff9020Early days:|r " .. GREY .. "launch prices swing a lot. Check the Auction House before you craft in bulk.|r")
     or (GREY .. "Recipes you know, in every profession, ranked by profit per craft after the Auction House cut.|r"))
   p.source:SetText(FA.PriceSourceLines and table.concat(FA.PriceSourceLines(), "\n") or "")
+  local okW, wline, wtip = false, nil, nil
+  if FA.RecipeWatchLines then okW, wline, wtip = pcall(FA.RecipeWatchLines) end
+  p.watch.text:SetText(okW and wline or ""); p.watch.tip = okW and wtip or nil
+  p.watch:SetShown(okW and wline ~= nil)
   local data, read = marketData()
   p.data = data
   p.off = math.max(0, math.min(p.off or 0, #data - MARKET_ROWS))
@@ -958,6 +999,116 @@ function showTrend(row, chartId)
   d.ah:SetEnabled(FA.AuctionHouseOpen and FA.AuctionHouseOpen() and true or false)
 end
 
+-- recipe watch list (RecipeWatch.lua): what's on the Auction House that you don't know yet
+local WATCH_ROWS = 15
+local function hideWatch()
+  local p = panel.market
+  p.watching = nil
+  p.wview:Hide()
+  for _, w in ipairs(p.listParts) do w:Show() end
+  refreshMarket()
+end
+
+function showWatch()
+  local p = panel.market
+  local v = p.wview
+  p.watching = true
+  for _, w in ipairs(p.listParts) do w:Hide() end
+  v:Show()
+  local list = FA.RecipeWatchList and FA.RecipeWatchList() or {}
+  local tr = FA.LearnedTrades and FA.LearnedTrades() or {}
+  v.data = list
+  v.off = math.max(0, math.min(v.off or 0, #list - WATCH_ROWS))
+  for i, r in ipairs(v.rows) do
+    local e = list[i + v.off]
+    r.e = e
+    if e then
+      local req = FA.RecipeWatchReq and FA.RecipeWatchReq(e)
+      local have = tr[e.prof:lower()] and tr[e.prof:lower()].rank
+      r.icon:SetTexture(FA.UI.Icon(e.id))
+      r.left:SetText((e.ready and "" or GREY) .. e.name .. "|r")
+      local npcText, cheaper = FA.RecipeNpcText and FA.RecipeNpcText(e)
+      r.right:SetText(FA.Money(e.price) .. GREY .. " AH|r"
+        .. (npcText and ((cheaper and GREEN or GREY) .. "  ·  " .. npcText .. "|r") or "")
+        .. (req and (GREY .. "  ·  " .. ((have and have < req) and (RED .. "needs " .. req .. "|r") or ("needs " .. req))) or "") .. "|r")
+      r:Show()
+    else
+      r:Hide()
+    end
+  end
+  v.empty:SetShown(#list == 0)
+  v.hint:SetText(GREY .. (#list > WATCH_ROWS and ("Scroll for more. ") or "")
+    .. "Green: cheaper at a trainer or vendor (hover for who). Red: your skill is too low for it. Click to search the Auction House, right-click for a waypoint.|r")
+end
+
+local function buildWatch(p)
+  local v = CreateFrame("Frame", nil, p)
+  v:SetPoint("TOPLEFT", 0, -80); v:SetPoint("BOTTOMRIGHT", 0, 0)
+  v:Hide()
+  p.wview = v
+  v.back = CreateFrame("Button", nil, v, "UIPanelButtonTemplate")
+  v.back:SetSize(80, 22); v.back:SetPoint("TOPLEFT", 16, -4); v.back:SetText("< Back")
+  v.back:SetScript("OnClick", hideWatch)
+  v.title = Txt(v, "GameFontNormal", 104, -8, 330, GOLD .. "Recipes you don't know, on the Auction House|r")
+  v.rows = {}
+  for i = 1, WATCH_ROWS do
+    local r = CreateFrame("Button", nil, v)
+    r:SetSize(428, 22); r:SetPoint("TOPLEFT", 16, -36 - (i - 1) * 24)
+    r:SetHighlightTexture(FA.UI.HIGHLIGHT, "ADD")
+    r.icon = r:CreateTexture(nil, "ARTWORK"); r.icon:SetSize(18, 18); r.icon:SetPoint("LEFT", 2, 0)
+    r.left = r:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    r.left:SetPoint("LEFT", 26, 0); r.left:SetWidth(200); r.left:SetJustifyH("LEFT"); r.left:SetWordWrap(false)
+    r.right = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    r.right:SetPoint("RIGHT", -4, 0); r.right:SetJustifyH("RIGHT")
+    r:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    r:SetScript("OnClick", function(self, button)
+      if not self.e then return end
+      if button == "RightButton" then
+        local src = FA.RecipeNpcSource and FA.RecipeNpcSource(self.e)
+        if src and src.npc and FA.Vendors and FA.Vendors.waypoint then FA.Vendors.waypoint(src.npc)
+        else print(PREFIX .. "No trainer or vendor you've met sells " .. self.e.name .. ".") end
+        return
+      end
+      if FA.AuctionHouseOpen and FA.AuctionHouseOpen() and FA.SearchAH then
+        FA.SearchAH(self.e.name)
+      else
+        print(PREFIX .. "Open the Auction House, then click " .. self.e.name .. " to search for it.")
+      end
+    end)
+    r:SetScript("OnEnter", function(self)
+      if not self.e then return end
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      GameTooltip:SetItemByID(self.e.id)
+      GameTooltip:AddLine(" ")
+      GameTooltip:AddLine("Auction House: " .. FA.Money(self.e.price) .. " (cheapest seen)", 1, 1, 1)
+      local npcText, cheaper, src = nil, nil, nil
+      if FA.RecipeNpcText then npcText, cheaper, src = FA.RecipeNpcText(self.e) end
+      if src then
+        GameTooltip:AddLine((src.kind == "trainer" and "Trainer: " or "Vendor: ") .. src.npc.n .. ", " .. (src.npc.z or "?")
+          .. "  " .. (src.price and FA.Money(src.price) or "price not seen yet") .. (src.questie and " (from Questie)" or ""),
+          cheaper and 0.25 or 1, 1, cheaper and 0.25 or 1, true)
+        if cheaper then GameTooltip:AddLine("Cheaper there than on the Auction House.", 0.25, 1, 0.25) end
+        GameTooltip:AddLine("Right-click for a waypoint to them.", 0.5, 0.75, 1, true)
+      else
+        GameTooltip:AddLine("No trainer or vendor you've met sells it.", 0.6, 0.6, 0.6, true)
+      end
+      GameTooltip:AddLine("Click with the Auction House open to search for it.", 0.5, 0.75, 1, true)
+      GameTooltip:Show()
+    end)
+    r:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    r:Hide()
+    v.rows[i] = r
+  end
+  v:EnableMouseWheel(true)
+  v:SetScript("OnMouseWheel", function(_, delta)
+    if not p.watching then return end
+    v.off = math.max(0, math.min((v.off or 0) - delta * 3, #(v.data or {}) - WATCH_ROWS))
+    showWatch()
+  end)
+  v.empty = Txt(v, "GameFontDisable", 16, -60, 428, "Nothing yet. Browse the Auction House or run an Auctionator scan.")
+  v.hint = Txt(v, "GameFontDisableSmall", 16, -36 - WATCH_ROWS * 24 - 8, 428)
+end
+
 local function hideTrend()
   local p = panel.market
   p.showing = nil
@@ -1094,6 +1245,22 @@ local function buildMarketTab(p)
   p.badge = p:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   p.badge:SetPoint("LEFT", p.head, "RIGHT", 8, 0)
   p.note = Txt(p, "GameFontHighlightSmall", 16, -28, 428)
+  -- recipe watch (RecipeWatch.lua): recipes you don't know, seen on the Auction House
+  p.watch = CreateFrame("Frame", nil, p)
+  p.watch:SetSize(220, 16); p.watch:SetPoint("TOPRIGHT", -16, -8)
+  p.watch.text = p.watch:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  p.watch.text:SetPoint("RIGHT", 0, 0); p.watch.text:SetJustifyH("RIGHT")
+  p.watch:EnableMouse(true)
+  p.watch:SetScript("OnEnter", function(self)
+    if not self.tip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    for j, l in ipairs(self.tip) do
+      if j == 1 then GameTooltip:AddLine(l) else GameTooltip:AddLine(l, 1, 1, 1, true) end
+    end
+    GameTooltip:Show()
+  end)
+  p.watch:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  p.watch:SetScript("OnMouseUp", function() GameTooltip:Hide(); if showWatch then showWatch() end end)
   p.source = Txt(p, "GameFontDisableSmall", 16, -58, 428)
   p.rows = {}
   for i = 1, MARKET_ROWS do
@@ -1162,6 +1329,7 @@ local function buildMarketTab(p)
   p.listParts = { p.hide, help, p.empty, p.clickHint }
   for _, r in ipairs(p.rows) do p.listParts[#p.listParts + 1] = r end
   buildTrend(p)
+  buildWatch(p)
 end
 
 local function buildInfoTab(p)
@@ -1321,6 +1489,8 @@ NEWS = {
     .. "With auto loot, herbs, ore, leather and recipe drops now count every time." },
   { "0.9.24", "A new minimap button: a clean gold FA that's easy to spot. /fa feedback shows the Discord link, and ideas go in #suggestions. "
     .. "Another addon using /fa? Open ForeverArtisan with /artisan or /foreverartisan." },
+  { "0.9.25", "Modules tab: legacy points and crafting cooldowns. Trade Contacts finds recipes too, "
+    .. "and the lure button picks the best lure you can use. The Discord is live: come help shape ForeverArtisan." },
 }
 
 local function verNum(v)
@@ -1372,11 +1542,69 @@ local function feedbackLines()
   print(PREFIX .. "Discord: " .. FA.DISCORD .. "  " .. GREY .. "(ideas go in #suggestions)|r")
 end
 
-local function askOnce()
+-- The Discord popup: once before launch, and once more on or after launch day (Nov 4) for everyone,
+-- 20 seconds after login and never in combat. The link sits in a box to copy (the game can't open links).
+local function discordText(launch)
+  return (launch and ("WoW Forever is live, and so is the ForeverArtisan Discord.\n\n"
+      .. "Get release news, ask questions and tell us what to build next (#suggestions).\n\n")
+    or ("The ForeverArtisan Discord is now live.\n\n"
+      .. "Join the Discord to help shape ForeverArtisan before launch on November 4. "
+      .. "Get release news, ask questions and tell us what to build next (#suggestions).\n\n"))
+    .. "Copy the link below (Ctrl+C) and paste it in your browser."
+end
+
+function FA.ShowDiscordPopup(launch)
+  if not (StaticPopupDialogs and StaticPopup_Show) then feedbackLines(); return false end
+  StaticPopupDialogs.FOREVERARTISAN_DISCORD = {
+    text = discordText(launch),
+    button1 = "Got it",
+    hasEditBox = true, editBoxWidth = 260,
+    OnShow = function(self)
+      local eb = self.editBox or self.EditBox or (self.GetEditBox and self:GetEditBox())
+      if eb then eb:SetText(FA.DISCORD); eb:SetFocus(); eb:HighlightText() end
+    end,
+    EditBoxOnTextChanged = function(eb, data)
+      if eb:GetText() ~= FA.DISCORD then eb:SetText(FA.DISCORD); eb:HighlightText() end
+    end,
+    EditBoxOnEnterPressed = function(eb) eb:GetParent():Hide() end,
+    EditBoxOnEscapePressed = function(eb) eb:GetParent():Hide() end,
+    timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+  }
+  -- counts as shown only if the game actually opened it (it can refuse, e.g. with other popups up)
+  local dlg = StaticPopup_Show("FOREVERARTISAN_DISCORD")
+  return dlg ~= nil
+end
+
+-- which one is due: "pre" before launch, "launch" on or after it, or nil when it's been shown
+function FA.DiscordPopupDue()
+  local s = ForeverArtisanSettings or {}
+  if FA.Prelaunch() then return (not s.discordPopupPre) and "pre" or nil end
+  return (not s.discordPopupLaunch) and "launch" or nil
+end
+
+local popupWait
+local function discordPopup()
+  local due = FA.DiscordPopupDue()
+  if not due then return end
+  if InCombatLockdown and InCombatLockdown() then
+    -- after the fight
+    if not popupWait then
+      popupWait = CreateFrame("Frame")
+      popupWait:SetScript("OnEvent", function(f) f:UnregisterAllEvents(); pcall(discordPopup) end)
+    end
+    popupWait:RegisterEvent("PLAYER_REGEN_ENABLED")
+    return
+  end
   local s = ForeverArtisanSettings
-  if s.discordAsked then return end
-  s.discordAsked = true
-  if C_Timer then C_Timer.After(12, feedbackLines) else feedbackLines() end
+  if FA.ShowDiscordPopup(due == "launch") then
+    if due == "pre" then s.discordPopupPre = true else s.discordPopupLaunch = true end
+  end
+end
+
+local function askOnce(freshInstall)
+  -- a fresh install already opens the /fa panel, which shows the Discord: the popup waits for the next login
+  if freshInstall then return end
+  if C_Timer then C_Timer.After(20, function() pcall(discordPopup) end) else pcall(discordPopup) end
 end
 
 -- another addon that also registers /fa can win it: say once which command still opens ForeverArtisan
@@ -1424,12 +1652,14 @@ ev:SetScript("OnEvent", function(_, event)
   ForeverArtisanSettings = ForeverArtisanSettings or {}
   local s = ForeverArtisanSettings
   -- a fresh install (nothing recorded yet) opens the module panel once
+  local fresh = false
   if not s.lastVersion and not s.welcomeSeen then
     s.welcomeSeen = true
+    fresh = true
     if C_Timer then C_Timer.After(4, function() showPanel("modules") end) else showPanel("modules") end
   end
   pcall(checkNews)
-  pcall(askOnce)
+  pcall(askOnce, fresh)
   pcall(slashNote)
 end)
 
@@ -1444,7 +1674,8 @@ local function help()
   print("  /fa discord  - the ForeverArtisan Discord (" .. FA.DISCORD .. ")")
   print("  /fa market  - your most profitable crafts, every profession in one list")
   print("  /fa new  - what's new in recent releases")
-  print("  /fa nameplates  - turn on friendly NPC nameplates (job titles in town need them)")
+  if FA.RECIPE_WATCH_READY then print("  /fa recipewatch on | off  - recipes you don't know, noted when you see them on the Auction House") end
+  print("  /fa nameplates on | off  - the game's friendly nameplates (job titles in town need them; also shows them over players)")
   print("  /fa titles on | off | auto  - job titles under NPC names (auto leaves them to Plater and other nameplate addons)")
   print("  /fa prices on | off  - Auction House prices on item tooltips (off while Auctionator shows its own)")
   print("  /fa alts on | off  - what your other characters hold, on shopping lists (needs Syndicator)")
@@ -1511,8 +1742,19 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     if (FA.secretSkips or 0) > 0 then
       print(GREY .. ("  Hidden game values skipped this session: %d (harmless)"):format(FA.secretSkips) .. "|r")
     end
+  elseif (lower == "recipewatch" or lower == "watch") and FA.RECIPE_WATCH_READY then
+    local r = (rest or ""):lower()
+    ForeverArtisanSettings = ForeverArtisanSettings or {}
+    if r == "off" then ForeverArtisanSettings.recipeWatchOff = true
+    elseif r == "on" then ForeverArtisanSettings.recipeWatchOff = nil end
+    local list = FA.RecipeWatchList and FA.RecipeWatchList() or {}
+    print(PREFIX .. "Recipe watch " .. (ForeverArtisanSettings.recipeWatchOff and "off" or "on") .. ". "
+      .. (#list > 0 and (#list .. " recipe" .. (#list == 1 and "" or "s") .. " you don't know seen on the Auction House (/fa > Market, hover the gold line).") or "Nothing seen yet.")
+      .. GREY .. " /fa recipewatch on | off|r")
   elseif lower == "nameplates" or lower == "plates" then
-    if FA.TurnOnFriendlyPlates then FA.TurnOnFriendlyPlates() end
+    if (rest or ""):lower():match("^%s*off") then
+      if FA.TurnOffFriendlyPlates then FA.TurnOffFriendlyPlates() end
+    elseif FA.TurnOnFriendlyPlates then FA.TurnOnFriendlyPlates() end
     if panel and panel:IsShown() then refreshPanel() end
   elseif lower == "titles" or lower == "names" then
     local r = (rest or ""):lower()

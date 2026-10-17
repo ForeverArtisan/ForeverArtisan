@@ -27,6 +27,8 @@ local KNOWN_LURES = {
   [7307] = 75,  -- Flesh Eating Worm
   [6533] = 100, -- Aquadynamic Fish Attractor
 }
+-- the Fishing skill each lure needs (Classic values; the tooltip's "Requires Fishing (N)" wins)
+local KNOWN_REQ = { [6529] = 0, [6530] = 50, [6811] = 50, [6532] = 100, [7307] = 100, [6533] = 100 }
 local FISHING_IDS = { [7620]=true, [7731]=true, [7732]=true, [18248]=true }
 
 local db
@@ -122,16 +124,43 @@ local function LureBonus(id, bag, slot)
   return b
 end
 
--- Returns itemID, bonus of the lure to use (pinned name first, else biggest bonus).
+-- the Fishing skill a lure needs, read once per item from its tooltip ("Requires Fishing (50)")
+local reqCache = {}
+local function LureReq(id, bag, slot)
+  if reqCache[id] ~= nil then return reqCache[id] end
+  local req
+  if bag and slot then
+    scanTip:SetOwner(WorldFrame, "ANCHOR_NONE")
+    scanTip:ClearLines()
+    scanTip:SetBagItem(bag, slot)
+    for i = 2, scanTip:NumLines() do
+      local fs = _G["ForeverArtisanFishingScanTipTextLeft" .. i]
+      local t = fs and fs:GetText()
+      local n = t and tonumber(t:match("^Requires Fishing %((%d+)%)"))
+      if n then req = n; break end
+    end
+  end
+  req = req or KNOWN_REQ[id] or 0
+  reqCache[id] = req
+  return req
+end
+ns.LureReq = function(id) return reqCache[id] or KNOWN_REQ[id] or 0 end
+
+-- your Fishing skill without lures, or nil when the game hasn't said yet (then every lure counts as usable)
+local function SkillNow() return ns.SkillRankNow and ns.SkillRankNow() or nil end
+local function Usable(req, skill) return not skill or (req or 0) <= skill end
+
+-- Returns itemID, bonus of the lure to use (pinned name first, else the biggest one your skill allows).
 local function PickLure()
   local best, bestBonus, pinned
   local want = db.settings.lure and db.settings.lure:lower()
+  local skill = SkillNow()
   for bag = 0, LAST_BAG do
     for slot = 1, (NumSlots(bag) or 0) do
       local id = SlotItemID(bag, slot)
       if id then
         local b = LureBonus(id, bag, slot)
-        if b then
+        if b and Usable(LureReq(id, bag, slot), skill) then
           if want and ItemName(id):lower() == want then pinned = id end
           if not bestBonus or b > bestBonus then best, bestBonus = id, b end
         end
@@ -182,7 +211,9 @@ btn:SetScript("PreClick", function(self)
       self.lureId, self.lureBonus = id, bonus
       warnedNoLure = false
     elseif not warnedNoLure then
-      say("No lures in your bags. Casting without one.")
+      local first = ns.BagLures and ns.BagLures()[1]
+      say(first and ("No lure you can use yet (%s needs Fishing %d). Casting without one."):format(ItemName(first.id), first.req or 0)
+        or "No lures in your bags. Casting without one.")
       warnedNoLure = true
     end
   end
@@ -464,6 +495,10 @@ local function IsPole(id)
 end
 local function EquipLoc(id) if id then return select(4, ItemInstant(id)) end end
 
+-- a wand, bow, gun or thrown weapon: lives in the ranged slot, which fishing never touches
+local RANGED = { INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
+function ns.IsRanged(id) return id and RANGED[EquipLoc(id) or ""] or false end
+
 -- which slot(s) an item may go in: "pole", "mh", "oh"
 function ns.GearFits(id, slot)
   if slot == "pole" then return IsPole(id) end
@@ -632,6 +667,12 @@ local function FishingSkill()
   local c = CharSkill()
   if r and skillSource ~= "chat" and c then c.r = r; if mx and mx > 0 then c.max = mx end end
   return r, m, mx or (c and c.max)
+end
+ns.SkillRankNow = function()
+  local ok, r = pcall(FishingSkill)
+  if ok and r then return r end
+  local c = CharSkill()
+  return c and c.r or nil
 end
 function ns.FishingNotLearned() return noFishing end
 -- Core's gear reminders ask here when the profession list can't say (this reads chat too)
@@ -1079,6 +1120,7 @@ end
 -- every lure in your bags: { {id=, bonus=, count=}, ... } sorted by bonus
 local function BagLures()
   local seen, list = {}, {}
+  local skill = SkillNow()
   for bag = 0, LAST_BAG do
     for slot = 1, (NumSlots(bag) or 0) do
       local id = SlotItemID(bag, slot)
@@ -1086,12 +1128,18 @@ local function BagLures()
         local b = LureBonus(id, bag, slot)
         if b then
           seen[id] = true
-          list[#list + 1] = { id = id, bonus = b, count = ItemCount(id) }
+          local req = LureReq(id, bag, slot)
+          list[#list + 1] = { id = id, bonus = b, count = ItemCount(id), req = req, usable = Usable(req, skill) }
         end
       end
     end
   end
-  table.sort(list, function(a, b) return a.bonus > b.bonus end)
+  -- the ones you can use first, biggest bonus first
+  table.sort(list, function(a, b)
+    if a.usable ~= b.usable then return a.usable end
+    if a.bonus ~= b.bonus then return a.bonus > b.bonus end
+    return a.id < b.id
+  end)
   return list
 end
 
@@ -1100,7 +1148,8 @@ ns.DB = function() return db end
 local lurePick, lurePicked
 function ns.InvalidateLure() lurePicked = false end
 local function CachedPickLure()
-  if not lurePicked then lurePick = { PickLure() }; lurePicked = true end
+  local skill = SkillNow()
+  if not lurePicked or lurePick.skill ~= skill then lurePick = { PickLure() }; lurePick.skill = skill; lurePicked = true end
   return lurePick[1], lurePick[2]
 end
 ns.say, ns.PickLure, ns.BagLures, ns.LureLeft = say, CachedPickLure, BagLures, LureLeft

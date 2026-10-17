@@ -478,7 +478,8 @@ function ns.SessionInfo()
   local s = { cooks = session.cooks, ups = session.ups, last = session.last }
   if session.start then
     s.mins = (GetTime() - session.start) / 60
-    if s.mins >= 1 then s.perHour = math.floor(session.cooks * 60 / s.mins + 0.5) end
+    -- skill-ups per hour, once there's enough time to mean something (a quick batch looked like 1,000+ crafts/hour)
+    if s.mins >= 5 and session.ups > 0 then s.upsPerHour = math.floor(session.ups * 60 / s.mins + 0.5) end
   end
   return s
 end

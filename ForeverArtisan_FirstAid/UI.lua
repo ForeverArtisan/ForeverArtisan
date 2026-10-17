@@ -93,7 +93,7 @@ function ns.RefreshSession(p)
   local s = ns.SessionInfo()
   if s.crafts > 0 then
     p.sess:SetText(("%d made  ·  %d skill-up%s%s"):format(s.crafts, s.ups, s.ups == 1 and "" or "s",
-      s.perHour and ("  ·  " .. GOLD .. s.perHour .. " crafts/hour|r") or ""))
+      s.upsPerHour and ("  ·  " .. GOLD .. s.upsPerHour .. " skill-ups/hour|r") or ""))
     p.last:SetText(s.last and (GRAY .. "Last craft: |r" .. s.last) or "")
   else
     p.sess:SetText(GRAY .. "Nothing made yet this session.|r"); p.last:SetText("")

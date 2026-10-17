@@ -171,11 +171,23 @@ FA.PLATES_OFF_LINE = "Friendly NPC nameplates are off, so ForeverArtisan can't s
   .. "or note the crafting NPCs you pass in town. Type /fa nameplates to turn them on."
 
 function FA.TurnOnFriendlyPlates()
+  S().platesOffPick = nil
   for _, cv in ipairs(PLATE_CVARS) do pcall(SetCVar, cv, "1") end
   StartTicker()
-  print(PREFIX .. "Friendly NPC nameplates on. NPCs in town now show their job under their name"
+  print(PREFIX .. "Friendly nameplates on. NPCs in town now show their job under their name"
     .. (FA.Vendors and ", and Trade Contacts notes the crafting NPCs you pass." or "."))
+  print(PREFIX .. "This also shows nameplates over other players. /fa nameplates off turns them all off again (Shift+V alone doesn't hide the NPC ones).")
   if FA.OnTownNamesChanged then pcall(FA.OnTownNamesChanged, true) end
+end
+
+-- /fa nameplates off: undo it. Remembered, so the once-per-session "nameplates are off" line stays quiet.
+function FA.TurnOffFriendlyPlates()
+  S().platesOffPick = true
+  for _, cv in ipairs(PLATE_CVARS) do pcall(SetCVar, cv, "0") end
+  HideAll()
+  print(PREFIX .. "Friendly nameplates off (players and NPCs). Job titles in town are hidden"
+    .. (FA.Vendors and ", and Trade Contacts only saves NPCs you talk to" or "") .. ". /fa nameplates turns them back on.")
+  if FA.OnTownNamesChanged then pcall(FA.OnTownNamesChanged, false) end
 end
 
 -- /fa titles on|off|auto: just the job titles; the nameplates themselves stay as the player set them.
@@ -227,6 +239,7 @@ function FA.TownNamesTip(tt)
     tt:AddLine("Friendly NPC nameplates: on", 0.3, 1, 0.3)
   else
     tt:AddLine("Friendly NPC nameplates: OFF. Click Turn on nameplates, or type /fa nameplates.", 1, 0.3, 0.3, true)
+    tt:AddLine("The game's switch also shows nameplates over other players. /fa nameplates off undoes it.", 0.6, 0.6, 0.6, true)
   end
   if FA.TownNamesExtraTip then FA.TownNamesExtraTip(tt) end
   tt:AddLine(" ")
@@ -240,7 +253,7 @@ end
 -- once per session, in a town (resting), when the nameplates the titles need are off
 local warned = false
 local function MaybeWarn()
-  if warned or FA.FriendlyPlatesOn() or not (IsResting and IsResting()) then return end
+  if warned or S().platesOffPick or FA.FriendlyPlatesOn() or not (IsResting and IsResting()) then return end
   warned = true
   print(PREFIX .. FA.PLATES_OFF_LINE)
 end
