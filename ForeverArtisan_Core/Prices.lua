@@ -252,8 +252,12 @@ local function ReadCommodity(id)
   if ok and type(r) == "table" and r.unitPrice then FA.NotePrice(id, r.unitPrice); FA.NoteMarket(id, r.unitPrice); Heard(id, r.quantity) end
 end
 -- A full scan on the newer Auction House arrives as a "replicate" list. The test only counts it,
--- a slice at a time so a big scan never stalls the game.
+-- a slice at a time so a big scan never stalls the game. The game fires REPLICATE_ITEM_LIST_UPDATE
+-- thousands of times during one scan: only one walk runs at a time, and one more walk runs at the
+-- end if the list changed meanwhile (thanks to a player's report: overlapping walks hitched the game).
+local replicateBusy, replicateAgain = false, false
 local function ReadReplicate()
+  if replicateBusy then replicateAgain = true; return end
   local AH = C_AuctionHouse
   if not (AH and AH.GetNumReplicateItems and AH.GetReplicateItemInfo) then return end
   local ok, n = pcall(AH.GetNumReplicateItems)
@@ -261,17 +265,28 @@ local function ReadReplicate()
   if n > T.replicate then T.replicate = n end
   local i = 0
   local function slice()
+    local t0 = Clock()
     local stop = math.min(n, i + 1000)
     for k = i, stop - 1 do
       local ok2, _, _, count, _, _, _, _, _, _, _, _, _, _, _, _, _, id = pcall(AH.GetReplicateItemInfo, k)
       if ok2 then T.replicateRead = T.replicateRead + 1; Heard(id, count) end
     end
     i = stop
-    if i < n then
-      if C_Timer and C_Timer.After then C_Timer.After(0, slice) end
+    local ms = Clock() - t0
+    if ms > T.slowMs then T.slowMs = ms end
+    if i < n and C_Timer and C_Timer.After then
+      C_Timer.After(0, function() local okS = pcall(slice); if not okS then replicateBusy = false end end)
+    else
+      replicateBusy = false
+      if replicateAgain then
+        replicateAgain = false
+        if C_Timer and C_Timer.After then C_Timer.After(0, ReadReplicate) end
+      end
     end
   end
-  slice()
+  replicateBusy, replicateAgain = true, false
+  local okS = pcall(slice)
+  if not okS then replicateBusy = false end
 end
 local function ReadItem(itemKey)
   local AH = C_AuctionHouse

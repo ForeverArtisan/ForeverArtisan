@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.26 (2026-10-17)
+- Fixed: a full Auction House scan that uses the game's full-scan list (some auction addons' "full scan") could hitch the game for 30 to 90 seconds. ForeverArtisan's `/fa ahtest` listener started a new read of the list every time the game updated it, thousands of times per scan. Now one read runs at a time. Thanks to the player who traced it.
+
 ## 0.9.25 (2026-10-17)
 - The ForeverArtisan Discord gets a small window once (20 seconds after login, never in combat) with the link to copy, and once more on launch day. It replaces the one-time chat line. `/fa discord` still shows the link any time.
 - New on the /fa Modules tab: **Legacy points**, an estimate of the points your account has earned (1 per class at level 25, 45 and 60, and 1 per crafting profession at skill 150, 225 and 300, from the beta rules) and the next milestone for this character. Hover for every class and profession. It counts characters that have logged in with ForeverArtisan.

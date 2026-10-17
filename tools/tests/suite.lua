@@ -1290,10 +1290,21 @@ do
   fire("REPLICATE_ITEM_LIST_UPDATE")
   assert(FA.AHTest.replicate==2500 and FA.AHTest.replicateRead==2500, "full scan read: "..FA.AHTest.replicateRead)
   assert(FA.AHTest.nIds>=1200 and FA.AHTest.withQty>=1200, "distinct items heard: "..FA.AHTest.nIds)
+  -- 0.9.26: the scan fires the event thousands of times; only one walk runs, plus one at the end
+  do
+    local q, oldT = {}, C_Timer
+    C_Timer={After=function(_,fn) q[#q+1]=fn end, NewTicker=function() return {Cancel=function() end} end}
+    local before=FA.AHTest.replicateRead
+    for _=1,50 do fire("REPLICATE_ITEM_LIST_UPDATE") end
+    local guard=0
+    while #q>0 and guard<1000 do local fn=table.remove(q,1); fn(); guard=guard+1 end
+    C_Timer=oldT
+    assert(FA.AHTest.replicateRead-before==5000, "one walk plus one final walk, not 50: "..(FA.AHTest.replicateRead-before))
+  end
   local outT={} local P0=print print=function(...) outT[#outT+1]=table.concat({...}," ") end
   run("FOREVERARTISAN","ahtest") print=P0
   local rep=table.concat(outT,"\n")
-  assert(rep:find("REPLICATE_ITEM_LIST_UPDATE x1") and rep:find("full%-scan list: 2500"), "report: "..rep)
+  assert(rep:find("REPLICATE_ITEM_LIST_UPDATE x51") and rep:find("full%-scan list: 2500"), "report: "..rep)
   run("FOREVERARTISAN","ahtest reset")
   assert(FA.AHTest.nIds==0, "reset")
   print("AH LISTEN TEST ok")

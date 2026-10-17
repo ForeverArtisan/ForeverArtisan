@@ -1491,6 +1491,7 @@ NEWS = {
     .. "Another addon using /fa? Open ForeverArtisan with /artisan or /foreverartisan." },
   { "0.9.25", "Modules tab: legacy points and crafting cooldowns. Trade Contacts finds recipes too, "
     .. "and the lure button picks the best lure you can use. The Discord is live: come help shape ForeverArtisan." },
+  { "0.9.26", "Fixed a long game hitch during full Auction House scans from some auction addons." },
 }
 
 local function verNum(v)
