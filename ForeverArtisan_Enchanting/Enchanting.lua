@@ -287,7 +287,8 @@ local function ScanModern()
     local r = { id = e.id, name = ri.name, learned = ri.learned and true or false, group = e.group,
                 grayAt = (ri.maxTrivialLevel and ri.maxTrivialLevel > 0) and ri.maxTrivialLevel or nil,
                 ups = (ri.numSkillUps and ri.numSkillUps > 1) and ri.numSkillUps or nil,
-                color = ri.learned and DIFF[ri.relativeDifficulty] or nil, scanSkill = rank, reagents = {} }
+                color = ri.learned and DIFF[ri.relativeDifficulty] or nil, scanSkill = rank, reagents = {},
+                icon = ri.icon } -- enchants make no item: this is the icon to show for them
     -- reagents, tools and the made item don't change between scans: keep them instead of asking again
     local old = known[ri.name]
     if old and old.id == e.id and old.reagents and #old.reagents > 0 then
@@ -340,6 +341,7 @@ local function ScanOld()
       r.id = rl and tonumber(rl:match("enchant:(%d+)")) or nil
       local link = GetTradeSkillItemLink and GetTradeSkillItemLink(i)
       r.itemId = link and tonumber(link:match("item:(%d+)"))
+      r.icon = GetTradeSkillIcon and GetTradeSkillIcon(i) or nil
       local made = GetTradeSkillNumMade and GetTradeSkillNumMade(i)
       if made and made > 1 then r.makes = made end
       for j = 1, (GetTradeSkillNumReagents(i) or 0) do
@@ -366,6 +368,7 @@ local function ScanCraft()
     elseif cname then
       local r = { name = cname, learned = true, group = header, color = OLD_KIND[kind], scanSkill = rank, reagents = {} }
       if GetCraftSpellFocus then r.tools = ToolsFromPairs(GetCraftSpellFocus(i)) end
+      r.icon = GetCraftIcon and GetCraftIcon(i) or nil
       local link = GetCraftItemLink and GetCraftItemLink(i)
       if link then
         r.id = tonumber(link:match("enchant:(%d+)")) or nil

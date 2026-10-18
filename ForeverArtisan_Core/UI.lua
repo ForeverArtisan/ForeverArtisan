@@ -260,6 +260,32 @@ function UI.NumberBox(parent, w, default)
   return eb
 end
 
+-- money box: the player types "50s", "1g 20s" or "25c"; set(copper or nil) on Enter or leaving the box.
+-- Shows what was understood ("1g 20s"), or goes back to the saved value when it can't be read.
+function UI.MoneyBox(parent, w, get, set, hint)
+  local eb = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+  eb:SetSize(w or 70, 20)
+  eb:SetAutoFocus(false); eb:SetMaxLetters(16); eb:SetJustifyH("CENTER")
+  eb.hint = UI.Text(eb, "GameFontDisable", "CENTER", 0, 0, eb, "CENTER"); eb.hint:SetText(hint or "none")
+  local function show(self)
+    local v = get()
+    self:SetText(v and FA.MoneyPlain(v) or "")
+    self.hint:SetShown(not v and not self:HasFocus())
+  end
+  local function commit(self)
+    local v = FA.ParseMoney and FA.ParseMoney(self:GetText())
+    if v ~= false then set(v or nil) end
+    show(self)
+  end
+  eb:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+  eb:SetScript("OnEscapePressed", function(self) show(self); self:ClearFocus() end)
+  eb:SetScript("OnEditFocusGained", function(self) self.hint:Hide() end)
+  eb:SetScript("OnEditFocusLost", commit)
+  eb.Sync = show
+  show(eb)
+  return eb
+end
+
 -- search box: gray "Search" hint while empty, onChange(text) on every key the player types,
 -- Escape clears it. box:Reset() empties it without calling onChange.
 function UI.SearchBox(parent, w, onChange, hint)
@@ -406,6 +432,7 @@ function UI.Kit(ns, view)
 
   K.Text, K.Header, K.Button, K.Tip, K.Icon = UI.Text, UI.Header, UI.Button, UI.Tip, UI.Icon
   K.QColor, K.Clock, K.Bar, K.NumberBox, K.ConfirmButton, K.SkillBar = UI.QColor, UI.Clock, UI.Bar, UI.NumberBox, UI.ConfirmButton, UI.SkillBar
+  K.MoneyBox = UI.MoneyBox
 
   function K.Check(parent, label, x, y, get, set, after)
     local c = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")

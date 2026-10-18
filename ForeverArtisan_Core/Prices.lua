@@ -482,6 +482,12 @@ function FA.ItemPrice(id, name)
   if id then ah, src, age = FA.AHPrice(id) end
   local v, who = Vendor(id, name)
   if v and (not ah or v <= ah) then return v, "vendor", nil, who end
+  -- a vendor-only material (thread, dye, vials, flux...) before you've met a vendor for it: the usual
+  -- price, so plans and costs work right away (fifth value true = the usual price, not a vendor's own)
+  if not v then
+    local est = FA.VendorEstimate and FA.VendorEstimate(id, name)
+    if est and (not ah or est <= ah) then return est, "vendor", nil, nil, true end
+  end
   return ah, src, age
 end
 
@@ -511,6 +517,54 @@ function FA.Money(copper)
   return ("%dc"):format(c)
 end
 
+-- "1g 20s", "50s", "25c", "1.5g", "2g50s" typed by a player, in copper. A number alone is silver.
+-- nil when empty, false when it can't be read.
+function FA.ParseMoney(text)
+  text = tostring(text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+  if text == "" then return nil end
+  local total, any = 0, false
+  local rest = text:gsub("(%d+%.?%d*)%s*([gsc])", function(n, u)
+    any = true
+    total = total + tonumber(n) * (u == "g" and 10000 or u == "s" and 100 or 1)
+    return ""
+  end)
+  rest = rest:gsub("[%s,]", "")
+  if not any then
+    local n = tonumber(rest)
+    return n and n >= 0 and math.floor(n * 100 + 0.5) or false
+  end
+  if rest ~= "" then return false end
+  return math.floor(total + 0.5)
+end
+
+-- money as plain text for a box the player types in ("1g 20s", "50s", "25c")
+function FA.MoneyPlain(copper)
+  if not copper then return "" end
+  local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
+  local t = {}
+  if g > 0 then t[#t + 1] = g .. "g" end
+  if s > 0 then t[#t + 1] = s .. "s" end
+  if c > 0 or #t == 0 then t[#t + 1] = c .. "c" end
+  return table.concat(t, " ")
+end
+
+-- the player's "hide crafts that make less than" (copper), or nil for none; every character shares it
+function FA.MinProfit()
+  local v = ForeverArtisanSettings and ForeverArtisanSettings.minProfit
+  return (type(v) == "number" and v > 0) and v or nil
+end
+function FA.SetMinProfit(copper)
+  ForeverArtisanSettings = ForeverArtisanSettings or {}
+  ForeverArtisanSettings.minProfit = (type(copper) == "number" and copper > 0) and copper or nil
+end
+
+-- return on the materials: +150% means 1g of materials brings back 2.5g (1.5g profit)
+function FA.ReturnText(ret)
+  if not ret then return "" end
+  local pct = math.floor(ret * 100 + 0.5)
+  return (pct >= 0 and "+" or "") .. pct .. "%"
+end
+
 function FA.AgeText(days)
   if not days then return "" end
   if days < 1 then return "today" end
@@ -520,10 +574,11 @@ end
 
 -- one line for a tooltip: "AH price: 12s each (Auctionator, 2 days old)"
 function FA.PriceLine(id, name)
-  local p, src, age, who = FA.ItemPrice(id, name)
+  local p, src, age, who, usual = FA.ItemPrice(id, name)
   if not p then
     return "No price yet. Search it at the Auction House (click the row there) and it's remembered."
   end
+  if src == "vendor" and usual then return "Vendor price: about " .. FA.Money(p) .. " each (the usual price; a vendor you meet shows theirs)" end
   if src == "vendor" then return "Vendor price: " .. FA.Money(p) .. " each" .. (who and (" at " .. who) or "") end
   return ("Auction House: %s each (%s, %s)"):format(FA.Money(p), src, FA.AgeText(age))
 end
@@ -548,6 +603,21 @@ local function VendorSell(id)
   if type(p) == "number" and p > 0 and not Secret(p) then return p end
 end
 FA.VendorSell = VendorSell
+
+-- What a vendor usually charges for a vendor-only material (the fixed list in VendorItems.lua), before
+-- you've met one: 4x what a vendor pays for it, how Classic prices vendor goods (Coarse Thread sells for
+-- 2c and costs 10c, Fine Thread 25c and 1s, Empty Vial 1c and 4c). Within a few copper; nil when the
+-- item isn't on the list or the game hasn't loaded it yet.
+function FA.VendorEstimate(id, name)
+  if not (FA.VendorHint and FA.VendorHint(name or id)) then return nil end
+  if not id and type(name) == "string" then
+    local f = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    local ok, got = pcall(f or function() end, name)
+    id = ok and tonumber(got) or nil
+  end
+  local sell = VendorSell(id)
+  return sell and sell * 4 or nil
+end
 
 -- Tooltip lines for a recipe: what one craft's materials cost, what it sells for, and the difference.
 -- Empty when nothing is known. Sale prices are before the Auction House cut.
@@ -653,7 +723,9 @@ function FA.CraftValueLines(r)
     if best then
       local d = best - cost
       if d >= 0 then
-        lines[#lines + 1] = FA.GREEN .. "Profit: about " .. FA.Money(d) .. " a craft|r" .. FA.GRAY .. " (" .. where .. ")|r"
+        lines[#lines + 1] = FA.GREEN .. "Profit: about " .. FA.Money(d) .. " a craft"
+          .. (cost > 0 and (" (" .. FA.ReturnText(d / cost):gsub("^%+", "") .. " return)") or "") .. "|r"
+          .. FA.GRAY .. " (" .. where .. ")|r"
       else
         lines[#lines + 1] = FA.GRAY .. "Costs about " .. FA.Money(-d) .. " more than it sells for (" .. where .. ")|r"
       end
@@ -736,9 +808,15 @@ function FA.BestCrafts(recipes, chanceOf, mode)
       local ch = (chanceOf and chanceOf(r)) or 0
       local row = { r = r, cost = cost, sale = ah, vend = vend, chance = ch }
       if cost and best > 0 then row.profit = best - cost end
+      -- return on the materials (profit for each copper they cost); none when they cost nothing
+      if row.profit and cost > 0 then row.ret = row.profit / cost end
       if cost and ch > 0 then row.perPoint = (cost - best) / ch end
       local keep = (mode == "level" and row.perPoint) or (mode == "both" and row.perPoint and (row.profit or 0) > 0)
+        or (mode == "return" and row.ret)
         or ((mode == "profit" or not mode) and row.profit)
+      -- the player's own minimum ("hide crafts that make less than"), for every list that's about profit
+      local min = FA.MinProfit()
+      if keep and min and mode ~= "level" and (row.profit or 0) < min then keep = false end
       if keep then
         row.conf = FA.PriceConfidence(r.itemId)
         out[#out + 1] = row
@@ -748,6 +826,9 @@ function FA.BestCrafts(recipes, chanceOf, mode)
   table.sort(out, function(a, b)
     if mode == "level" then
       if a.perPoint ~= b.perPoint then return a.perPoint < b.perPoint end
+    elseif mode == "return" then
+      if a.ret ~= b.ret then return a.ret > b.ret end
+      if a.profit ~= b.profit then return a.profit > b.profit end
     elseif a.profit ~= b.profit then return a.profit > b.profit end
     return (a.r.name or "") < (b.r.name or "")
   end)
@@ -799,19 +880,23 @@ end
 
 -- Every profession's Best crafts in one list, by profit after the cut: rows from FA.BestCrafts,
 -- each with .prof (the module). Second value: how many professions had recipes to read.
-function FA.MarketRows()
+-- sortBy "return": best return on the materials first (crafts with free materials have no return
+-- and go after the rest); otherwise most profit first.
+function FA.MarketRows(sortBy)
   local out, read = {}, 0
+  local mode = sortBy == "return" and "return" or "profit"
   for _, p in ipairs(market) do
     local ok, recs = pcall(p.recipes)
     if ok and recs then
       read = read + 1
-      for _, row in ipairs(FA.BestCrafts(recs, nil, "profit")) do
+      for _, row in ipairs(FA.BestCrafts(recs, nil, mode)) do
         row.prof = p
         out[#out + 1] = row
       end
     end
   end
   table.sort(out, function(a, b)
+    if mode == "return" and a.ret ~= b.ret then return (a.ret or -1e9) > (b.ret or -1e9) end
     if a.profit ~= b.profit then return a.profit > b.profit end
     return (a.r.name or "") < (b.r.name or "")
   end)

@@ -1751,6 +1751,24 @@ do
   local chance={["Cheap Thing"]=1, ["Loser"]=0.5, ["Basic Campfire"]=1}
   local rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "profit")
   assert(rows[1].r.name=="Pricey Thing" and rows[2].r.name=="Cheap Thing" and rows[3].r.name=="Loser" and #rows==3, "most profit first")
+  -- best return: profit for each copper of materials; a cheap craft with a big return goes first
+  assert(math.abs(rows[1].ret - 235/50) < 0.001 and rows[1].r.name=="Pricey Thing", "return on the row")
+  recipes.F={name="Tiny Thing", learned=true, itemId=991002, reagents={{id=991001,n=1}}} -- 95-10 = +85, +850%
+  rows=FA.BestCrafts(recipes, nil, "return")
+  assert(rows[1].r.name=="Tiny Thing" and rows[2].r.name=="Pricey Thing" and rows[#rows].r.name=="Loser", "best return first")
+  assert(FA.ReturnText(rows[1].ret)=="+850%" and FA.ReturnText(-0.5)=="-50%", "return text")
+  -- the player's minimum profit: typed as money, hides crafts that make less (both sorts, not leveling)
+  assert(FA.ParseMoney("1g 20s")==12000 and FA.ParseMoney("50s")==5000 and FA.ParseMoney("25c")==25
+    and FA.ParseMoney("2g50s")==25000 and FA.ParseMoney("1.5g")==15000 and FA.ParseMoney("80")==8000
+    and FA.ParseMoney("")==nil and FA.ParseMoney("lots")==false and FA.ParseMoney("5x")==false, "money typed by a player")
+  assert(FA.MoneyPlain(12000)=="1g 20s" and FA.MoneyPlain(25)=="25c" and FA.MoneyPlain(5000)=="50s", "money as plain text")
+  FA.SetMinProfit(80)
+  rows=FA.BestCrafts(recipes, nil, "return")
+  assert(#rows==2 and rows[1].r.name=="Tiny Thing" and rows[2].r.name=="Pricey Thing", "min 80c: 75c and the loser hidden")
+  rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "level")
+  assert(#rows==2, "leveling ignores the minimum")
+  FA.SetMinProfit(nil); recipes.F=nil
+  assert(FA.MinProfit()==nil, "cleared")
   rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "level")
   assert(#rows==2 and rows[1].r.name=="Cheap Thing" and rows[1].perPoint<0, "cheapest to level: one that earns money first")
   rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "both")
@@ -1768,6 +1786,18 @@ do
   for _,f in pairs(frames) do if f._text=="Best crafts" and f.scripts.OnClick then f.scripts.OnClick(f) end end
   assert(ck.lastBest and #ck.lastBest>=2, "best tab rendered: "..tostring(ck.lastBest and #ck.lastBest))
   assert(ck.lastBest[1].left:find("Pricey Thing") and ck.lastBest[1].tail:find("Indicator"), "row with a confidence dot")
+  assert(ck.lastBest[1].right:find("%%"), "profit rows show the return too: "..ck.lastBest[1].right)
+  for _,f in pairs(frames) do if f._text=="Best return" and f.scripts.OnClick then f.scripts.OnClick(f) end end
+  assert(ck.DB().settings.bestMode=="return" and ck.lastBest[1].right:find("^|c%x+%+%d+%%"), "best return: % first: "..tostring(ck.lastBest[1] and ck.lastBest[1].right))
+  -- the minimum box: typed money, saved for every profession
+  local mbox for _,f in pairs(frames) do if f.Sync and f.hint and f.scripts.OnEditFocusLost and f._w==74 then mbox=f end end
+  assert(mbox, "min profit box on Best crafts")
+  mbox:SetText("2s"); mbox.scripts.OnEditFocusLost(mbox)
+  assert(FA.MinProfit()==200 and mbox._text=="2s", "typed 2s: saved and shown back")
+  mbox:SetText("junk"); mbox.scripts.OnEditFocusLost(mbox)
+  assert(FA.MinProfit()==200 and mbox._text=="2s", "nonsense: kept the old value")
+  mbox:SetText(""); mbox.scripts.OnEditFocusLost(mbox)
+  assert(FA.MinProfit()==nil, "empty: no minimum")
   for _,f in pairs(frames) do if f._text=="Cheapest to level" and f.scripts.OnClick then f.scripts.OnClick(f) end end
   assert(ck.DB().settings.bestMode=="level", "mode remembered")
   -- Market: every profession's crafts in one list (Cooking's here), by profit, flagged beta before launch
@@ -1782,6 +1812,15 @@ do
   assert(mk.rows[1]._shown and mk.rows[1].left._text:find("Pricey Thing") and mk.rows[1].left._text:find("Cooking"), "row names the recipe and profession")
   assert(mk.rows[1].right._text:find("%+") and mk.rows[1].dot._text:find("Indicator"), "profit and confidence dot")
   assert(mk.clickHint._shown and mk.clickHint._text:find("Click any craft"), "the click hint above the list")
+  -- Market: sort by return, and the shared minimum
+  assert(mk.sortBtn._text=="Sort: most profit", "market sort button")
+  mk.sortBtn.scripts.OnClick(mk.sortBtn)
+  assert(ForeverArtisanSettings.marketSort=="return" and mk.sortBtn._text=="Sort: best return" and mk.rows[1].right._text:find("%%"), "market by return")
+  mk.sortBtn.scripts.OnClick(mk.sortBtn)
+  assert(ForeverArtisanSettings.marketSort==nil, "back to profit")
+  FA.SetMinProfit(1000000); run("FOREVERARTISAN","market")
+  assert(mk.empty._text:find("Nothing makes at least"), "min hides everything: says so")
+  FA.SetMinProfit(nil); run("FOREVERARTISAN","market")
   assert(FA.MarketStage()=="beta" and mk.badge._text:find("BETA") and mk.note._text:find("beta Auction House prices"), "beta before launch")
   local oT=time
   time=function(t) if t then return oT(t) end return FA.LAUNCH_AT + 3*86400 end
@@ -2941,5 +2980,57 @@ do
   COUNTS[2996]=nil; COUNTS[2320]=nil; ForeverArtisanSettings.bank=nil
   FA.Vendors=oldV; FA._StockReset()
   print("0.9.27 bank and vendor mats ok")
+end
+-- vendor-only mats before you've met a vendor: the usual price (4x what a vendor pays)
+do
+  local FA=ForeverArtisan
+  local oldGI, oldCI, oldV = GetItemInfo, C_Item, FA.Vendors
+  local info={[2320]={"Coarse Thread",2},[2321]={"Fine Thread",25},[2589]={"Linen Cloth",13}}
+  local GI=function(id) local e=info[id]; if not e then return oldGI(id) end
+    return e[1],nil,1,1,1,"Trade Goods","Cloth",20,"",134400,e[2] end
+  GetItemInfo=GI; C_Item=setmetatable({GetItemInfo=GI}, {__index=oldC or oldCI})
+  FA.Vendors={hitsForLink=function() return {} end}
+  assert(FA.VendorEstimate(2320,"Coarse Thread")==8 and FA.VendorEstimate(2321,"Fine Thread")==100, "usual price: 4x the sell price")
+  assert(FA.VendorEstimate(2589,"Linen Cloth")==nil, "not a vendor item: no estimate")
+  local p, src, _, _, usual = FA.ItemPrice(2321, "Fine Thread")
+  assert(p==100 and src=="vendor" and usual, "ItemPrice falls back to the usual price")
+  assert(FA.PriceLine(2321, "Fine Thread"):find("about") , "tooltip says it's the usual price")
+  FA._StockReset()
+  local ok2, price, u2 = FA.VendorBuy(2320, "Coarse Thread")
+  assert(ok2 and price==8 and u2, "Make now's vendor mats get the usual price too")
+  -- a met vendor's own price wins
+  FA.Vendors={hitsForLink=function(_, name) if name=="Fine Thread" then return {{npc={n="Tamar"},item={id=2321,p=90,stack=1}}} end return {} end}
+  FA._StockReset()
+  p, src, _, _, usual = FA.ItemPrice(2321, "Fine Thread")
+  assert(p==90 and not usual, "met vendor's price wins")
+  GetItemInfo, C_Item, FA.Vendors = oldGI, oldCI, oldV; FA._StockReset()
+  print("usual vendor prices ok")
+end
+-- disenchant log: auto loot emptied the loot window, so the chat loot lines are what's saved
+do
+  local FA=ForeverArtisan
+  local T=FA._DisenchantTest
+  assert(T, "disenchant test hooks")
+  ForeverArtisanSettings.deLog=nil
+  local oldT=C_Timer; C_Timer={After=function(_, f) f() end, NewTicker=function() return {Cancel=function() end} end}
+  T.setPending({ link="|cff1eff00|Hitem:2077::::::::|h[Magician Staff]|h|r", at=GetTime() })
+  T.chat("You receive loot: |cffffffff|Hitem:10940::::::::|h[Strange Dust]|h|rx2.", nil)
+  T.chat("You receive loot: |cffffffff|Hitem:2589::::::::|h[Linen Cloth]|h|r.", nil) -- not from the disenchant
+  local L=ForeverArtisanSettings.deLog
+  assert(L and #L.list==1 and L.list[1].out[10940]==2 and not L.list[1].out[2589], "logged from chat: "..tostring(L and #L.list))
+  -- no cast: chat lines are ignored
+  T.setPending(nil)
+  T.chat("You receive loot: |cffffffff|Hitem:10940::::::::|h[Strange Dust]|h|r.", nil)
+  assert(#ForeverArtisanSettings.deLog.list==1, "no cast, nothing logged")
+  FA.DisenchantCommand("debug"); assert(ForeverArtisanSettings.deDebug, "debug on")
+  FA.DisenchantCommand("debug"); assert(not ForeverArtisanSettings.deDebug, "debug off")
+  FA.DisenchantLogSummary()
+  -- the Enchanting Craft log tab lists them, with totals
+  local vrows, vtot, vn, vok = FA.DisenchantLogView()
+  assert(vn==1 and #vrows==1 and vrows[1].outText:find("2 ") and #vtot==1 and vtot[1].n==2, "log view: one row, totals")
+  local ens=loadedFrames["ForeverArtisan_Enchanting"].ns
+  run("FAENCH",""); ens.ShowTab("log")
+  C_Timer=oldT; ForeverArtisanSettings.deLog=nil
+  print("disenchant chat loot ok")
 end
 print("SUITE OK")

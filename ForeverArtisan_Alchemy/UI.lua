@@ -508,9 +508,10 @@ end
 -- visits; the dot says how much to trust each price. Never searches, posts or buys.
 local BEST_ROWS = 14
 local BEST_MODES = {
-  { "profit", "Most profit", 100, "Recipes you know, ranked by profit per craft after the Auction House's cut." },
-  { "level", "Cheapest to level", 140, "Recipes that still give skill-ups, cheapest per point first." },
-  { "both", "Profit + skill-ups", 140, "Crafts that level you and pay for themselves." },
+  { "profit", "Most profit", 86, "Ranked by profit per craft after the Auction House's cut, with the return." },
+  { "return", "Best return", 86, "Ranked by return: +150% means 1g of materials brings back 2g 50s." },
+  { "level", "Cheapest to level", 120, "Recipes that still give skill-ups, cheapest per point first." },
+  { "both", "Profit + skill-ups", 124, "Crafts that level you and pay for themselves." },
 }
 local DOT = {
   good = "|TInterface\\COMMON\\Indicator-Green:14|t",
@@ -551,10 +552,14 @@ local function BestData()
         right = row.perPoint > 0 and (FA.Money(math.floor(row.perPoint + 0.5)) .. " a point")
           or (GREEN .. "earns " .. FA.Money(math.floor(-row.perPoint + 0.5)) .. " a point|r")
       else
-        -- a clearly better house replaces the "sells" price with where to sell
+        -- profit and return on every row, whichever sort is picked, so pocket-change crafts stand out;
+        -- a clearly better house adds where to sell
         local tag = FA.HouseTag and FA.HouseTag(FA.HouseCompare(r.itemId, r.makes))
-        right = (row.profit >= 0 and (GREEN .. "+" .. FA.Money(row.profit)) or (RED .. FA.Money(row.profit))) .. "|r"
-          .. (tag and (GOLD_TAG .. "  " .. tag .. "|r") or (GRAY .. "  sells " .. FA.Money(row.sale or row.vend or 0) .. "|r"))
+        local money = (row.profit >= 0 and (GREEN .. "+" .. FA.Money(row.profit)) or (RED .. FA.Money(row.profit))) .. "|r"
+        local ret = row.ret and ((row.ret >= 0 and GREEN or RED) .. FA.ReturnText(row.ret) .. "|r") or (GRAY .. "free mats|r")
+        if mode == "return" then right = ret .. GRAY .. "  ·  |r" .. money
+        else right = money .. GRAY .. "  ·  |r" .. ret end
+        if tag then right = right .. GOLD_TAG .. "  " .. tag .. "|r" end
       end
       data[#data + 1] = { id = r.itemId, icon = Icon(r.itemId), recipe = r,
         left = (ns.COLOR_CODE[col] or "") .. r.name .. ((r.makes or 1) > 1 and (" x" .. r.makes) or "") .. "|r",
@@ -572,7 +577,7 @@ local function BuildBestPage(p)
     local b = Button(p, m[2], m[3], function()
       S().bestMode = m[1]; view.bestOff = 0; ns.OnChange()
     end)
-    if prev then b:SetPoint("LEFT", prev, "RIGHT", 6, 0) else b:SetPoint("TOPLEFT", 20, -4) end
+    if prev then b:SetPoint("LEFT", prev, "RIGHT", 4, 0) else b:SetPoint("TOPLEFT", 16, -4) end
     b.value, b.label = m[1], m[2]
     p.modeBtns[#p.modeBtns + 1] = b
     prev = b
@@ -592,6 +597,19 @@ local function BuildBestPage(p)
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -150, p, "TOP"); p.empty:SetJustifyH("CENTER"); p.empty:SetWidth(400)
   p.hide = K.Check(p, "Hide shaky prices", 16, -(80 + BEST_ROWS * 24 + 4),
     function() return S().bestHideShaky end, function(v) S().bestHideShaky = v or nil; view.bestOff = 0 end)
+  -- the player's own minimum profit per craft (every profession and the Market tab share it)
+  p.minLabel = Text(p, "GameFontHighlightSmall", "TOPLEFT", 200, -(80 + BEST_ROWS * 24 + 9))
+  p.minLabel:SetText("Hide crafts making under")
+  p.min = K.MoneyBox(p, 74, function() return FA.MinProfit() end,
+    function(v) FA.SetMinProfit(v); view.bestOff = 0; ns.OnChange() end)
+  p.min:SetPoint("LEFT", p.minLabel, "RIGHT", 8, 0)
+  if K.Tip then
+    K.Tip(p.min, function()
+      GameTooltip:AddLine("Minimum profit per craft")
+      GameTooltip:AddLine("Type an amount like 50s, 1g or 1g 20s (a number alone is silver). "
+        .. "Crafts that make less are hidden here and on the Market tab. Empty shows everything.", 1, 1, 1, true)
+    end)
+  end
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 16, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText(GOLD_TAG .. "Gold:|r a goblin Auction House (Booty Bay, Gadgetzan, Everlook) pays that much more a craft. Hover for both houses. Dots: green steady, yellow check it, gray shaky. Click to open the recipe (at the Auction House: search it).")
   Wheel(p, "bestOff", function() return (p.count or 0) - BEST_ROWS end)
@@ -616,12 +634,14 @@ local function RefreshBestPage(p)
   view.bestOff = math.min(view.bestOff or 0, math.max(0, #data - BEST_ROWS))
   Fill(p.rows, data, view.bestOff)
   if p.hide.Sync then p.hide:Sync() end
+  if p.min and p.min.Sync and not (p.min.HasFocus and p.min:HasFocus()) then p.min:Sync() end
   p.empty:SetText(#data > 0 and "" or (not ns.Knows() and "This character hasn't learned Alchemy.")
     or (not ns.HasRecipes() and "Open your Alchemy window once so I can read your recipes.")
     or (mode ~= "profit" and (function() local b, _, c = ns.Skill(); return b and c and c > 0 and b >= c end)()
       and "You're at this rank's cap: train the next rank and skill-up crafts show here again.")
     or (mode == "level" and "Nothing that still gives skill-ups has prices yet. Visit the Auction House, or scan with Auctionator.")
     or (mode == "both" and "None of your skill-up recipes pays for itself at today's prices.")
+    or (FA.MinProfit() and ("Nothing makes at least " .. FA.Money(FA.MinProfit()) .. " a craft. Lower or clear the minimum below."))
     or "No prices yet for what you craft. Visit the Auction House, or scan with Auctionator.")
 end
 

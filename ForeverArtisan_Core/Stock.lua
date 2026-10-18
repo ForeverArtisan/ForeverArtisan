@@ -104,10 +104,10 @@ function FA.VendorBuy(id, name)
   if now - buyAt > 10 then wipe(buyMemo); buyAt = now end
   local key = tostring(id) .. ":" .. tostring(name)
   local hit = buyMemo[key]
-  if hit then return hit[1], hit[2] end
-  local isV, price = FA._VendorBuy(id, name)
-  buyMemo[key] = { isV, price }
-  return isV, price
+  if hit then return hit[1], hit[2], hit[3] end
+  local isV, price, usual = FA._VendorBuy(id, name)
+  buyMemo[key] = { isV, price, usual }
+  return isV, price, usual
 end
 function FA._VendorBuy(id, name)
   local V = FA.Vendors
@@ -123,7 +123,11 @@ function FA._VendorBuy(id, name)
     end
   end
   if best then return true, best end
-  if FA.VendorHint and FA.VendorHint(name or id) then return true, nil end
+  -- a vendor-only material with no vendor met yet: the usual price (third value true)
+  if FA.VendorHint and FA.VendorHint(name or id) then
+    local est = FA.VendorEstimate and FA.VendorEstimate(id, name)
+    return true, est, est ~= nil
+  end
   return false
 end
 
@@ -142,8 +146,8 @@ function FA.MakeCounts(r, Count)
     local a, b = math.floor(inBags / need), math.floor(both / need)
     bags = (not bags or a < bags) and a or bags
     bank = (not bank or b < bank) and b or bank
-    local isV, price = FA.VendorBuy(g.id, g.name)
-    if isV then vend[#vend + 1] = { g = g, need = need, have = both, price = price }
+    local isV, price, usual = FA.VendorBuy(g.id, g.name)
+    if isV then vend[#vend + 1] = { g = g, need = need, have = both, price = price, usual = usual }
     else buy = (not buy or b < buy) and b or buy end
     all[#all + 1] = { g = g, need = need, bags = inBags, bank = both - inBags, vendor = isV }
   end
@@ -162,7 +166,7 @@ function FA.MakeCounts(r, Count)
     for _, v in ipairs(vend) do
       local short = v.need * buy - v.have
       if short > 0 then
-        m.buyList[#m.buyList + 1] = { id = v.g.id, name = v.g.name, n = short, price = v.price }
+        m.buyList[#m.buyList + 1] = { id = v.g.id, name = v.g.name, n = short, price = v.price, usual = v.usual }
         if v.price and m.buyCost then m.buyCost = m.buyCost + v.price * short else m.buyCost = nil end
       end
     end
@@ -210,7 +214,8 @@ function FA.MakeTipLines(r, m)
     lines[#lines + 1] = GOLD .. ("Buy from a vendor and make %d:|r"):format(m.buy)
     for _, b in ipairs(m.buyList) do
       lines[#lines + 1] = ("  %d %s%s"):format(b.n, ItemName(b),
-        b.price and (GRAY .. "  " .. FA.Money(b.price * b.n) .. "|r") or (GRAY .. "  (meet a vendor to see the price)|r"))
+        b.price and (GRAY .. "  " .. (b.usual and "about " or "") .. FA.Money(b.price * b.n) .. "|r")
+          or (GRAY .. "  (meet a vendor to see the price)|r"))
     end
     if m.buyCost and #m.buyList > 1 then lines[#lines + 1] = GRAY .. "Total: " .. FA.Money(m.buyCost) .. "|r" end
     if m.fetch and #m.fetch > 0 then

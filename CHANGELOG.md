@@ -1,5 +1,15 @@
 # ForeverArtisan changelog
 
+## 0.9.28 (2026-10-18)
+- New (beta): **Disenchanting.** Hover a green, blue or purple weapon or armor piece to see what it disenchants into, the chance of each, and what that's worth at the Auction House, with "Worth more disenchanted" or "Worth more sold". Where a greater essence and three lesser ones sell for different amounts, it says which way to combine or split. It works for every item, Forever's new ones too, because it follows the game's disenchant rules by item level and quality. Shows for every character, since greens often go to an enchanter alt or friend. `/fa disenchant off` hides it.
+- Your disenchants are saved and checked against the usual table, to catch where Forever's differs. The Enchanting Craft log tab lists each one with what it gave, plus the totals; one that didn't match shows in red. `/fa disenchant log` lists them in chat. Thanks to the player who suggested it.
+- Market tab: hovering a craft also shows what it would bring disenchanted, against its materials.
+- New: **Best return** in every profession's Best crafts and on the Market tab: crafts ranked by return on the materials (+150% means 1g of materials brings back 2g 50s). Every row shows both the profit per craft and the return, so pocket-change crafts stand out. Recipe tooltips show the return too. Thanks to the player who suggested it.
+- New: **Hide crafts making under** a minimum you choose: type 50s, 1g or 1g 20s. It applies to Best crafts in every profession and to the Market tab. Empty shows everything.
+- Vendor materials like thread, dye, vials and flux have a price before you've met a vendor that sells them (the usual vendor price, marked "about"), so Cheapest to level, plans and shopping lists include recipes that use them. A vendor you meet shows their own price. Thanks to the player who asked.
+- Enchants show their own icon in the Craft log, plans and Recipe book instead of a question mark.
+- The Modules tab's "Works best with" hover says everything each optional addon adds.
+
 ## 0.9.27 (2026-10-17)
 - "Make now" counts more than your bags. Open your bank once and recipes you could make with your bank's mats show "6 with bank mats". When vendor mats like Coarse Thread are all you're missing, a row shows "buy Coarse Thread: make 10", or "bank + vendor mats: make 8" when it also needs a bank trip. With Syndicator, a recipe you have none of but your alts have enough for shows "Peacebloom on alts". Thanks to the player who suggested it.
 - Hover a "Make now" row for what to buy (how many and the cost), what to take out of your bank, and which alts hold more of the mat you're short on, with how many more crafts that adds (with Syndicator).

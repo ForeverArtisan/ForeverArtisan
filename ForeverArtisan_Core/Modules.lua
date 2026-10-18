@@ -526,8 +526,8 @@ local function buildModulesTab(p)
     GameTooltip:AddLine("All optional and free on CurseForge and Wago. ForeverArtisan reads what they know; it works fine without them.", 1, 1, 1, true)
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("Auctionator" .. (hasA and " (installed)" or " (not installed)"), 1, 0.82, 0)
-    GameTooltip:AddLine(hasA and "After a full scan, every price in plans, shopping lists and Best crafts is current."
-      or "One scan prices the whole Auction House. Without it, prices come from Auction House pages you browse.", 1, 1, 1, true)
+    GameTooltip:AddLine(hasA and "After a full scan, every price is current: plans, shopping lists, Make now and the Market tab. Recipe watch reads its scans too, for recipes you and your alts don't know."
+      or "One scan prices the whole Auction House, and recipe watch reads it for recipes you and your alts don't know. Without it, prices come from Auction House pages you browse.", 1, 1, 1, true)
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("Questie" .. ((st == "missing") and " (not installed)" or (st == "off") and " (installed, turned off)"
       or (st == "loading" or st == "reading") and " (installed, still loading its data)" or " (installed)"), 1, 0.82, 0)
@@ -536,14 +536,14 @@ local function buildModulesTab(p)
       or (st == "missing") and "Every profession trainer in the game in search and Nearest trainer, not just the ones you've met."
       or "Reading its database...", 1, 1, 1, true)
     if st ~= "missing" and st ~= "off" then
-      GameTooltip:AddLine("Also: where recipes and materials come from, in recipe books and shopping lists.", 1, 1, 1, true)
+      GameTooltip:AddLine("Also: who sells, drops or gives each recipe and material, in Trade Contacts search, recipe books and shopping lists, and the vendor price to compare in recipe watch.", 1, 1, 1, true)
     end
     local ss = FA.SyndicatorStatus and FA.SyndicatorStatus() or "missing"
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("Syndicator" .. ((ss == "missing") and " (not installed)" or (ss == "off") and " (installed, turned off)" or " (installed)"), 1, 0.82, 0)
-    GameTooltip:AddLine((ss == "missing") and "Comes with Baganator. Shopping lists show what your other characters hold, so you mail it over instead of buying."
+    GameTooltip:AddLine((ss == "missing") and "Comes with Baganator, or on its own (no bag window, so it works next to any bag addon). Shopping lists and Make now show what your alts hold, so you mail it over instead of buying."
       or (ss == "off") and "Turned off: /fa alts on."
-      or "Shopping lists show what your other characters hold (bags, bank, mailbox). /fa alts off turns it off.", 1, 1, 1, true)
+      or "Shopping lists and Make now show what your alts hold (bags, bank, mailbox), who has it and how many more crafts it adds. Alts show by full name. /fa alts off turns it off.", 1, 1, 1, true)
     local gs = FA.GatherStatus and FA.GatherStatus() or "missing"
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("GatherMate2" .. ((gs == "missing") and " (not installed)" or (gs == "off") and " (installed, turned off)"
@@ -794,7 +794,7 @@ end
 
 local function marketData()
   local rows, read = {}, 0
-  if FA.MarketRows then rows, read = FA.MarketRows() end
+  if FA.MarketRows then rows, read = FA.MarketRows(ForeverArtisanSettings and ForeverArtisanSettings.marketSort) end
   local hide = ForeverArtisanSettings and ForeverArtisanSettings.marketHideShaky
   local data = {}
   for _, row in ipairs(rows) do
@@ -831,9 +831,14 @@ function refreshMarket()
         .. GREY .. "  " .. row.prof.name .. "|r")
       local tag = FA.HouseTag and FA.HouseCompare and FA.HouseTag(FA.HouseCompare(rec.itemId, rec.makes))
       local tr = FA.PriceTrend(rec.itemId)
+      -- profit and return on every row; the one it's sorted by comes first
+      local money = (row.profit >= 0 and (GREEN .. "+" .. FA.Money(row.profit)) or (RED .. FA.Money(row.profit))) .. "|r"
+      local ret = row.ret and ((row.ret >= 0 and GREEN or RED) .. FA.ReturnText(row.ret) .. "|r") or ""
+      local byReturn = ForeverArtisanSettings and ForeverArtisanSettings.marketSort == "return"
+      local both = byReturn and (ret ~= "" and (ret .. GREY .. "  ·  |r") or "") .. money
+        or money .. (ret ~= "" and (GREY .. "  ·  |r" .. ret) or "")
       r.right:SetText(((tr.dir == "up" or tr.dir == "down") and (ARROW[tr.dir] .. " ") or "")
-        .. (row.profit >= 0 and (GREEN .. "+" .. FA.Money(row.profit)) or (RED .. FA.Money(row.profit))) .. "|r"
-        .. (tag and (GOLD .. "  " .. tag .. "|r") or ""))
+        .. both .. (tag and (GOLD .. "  " .. tag .. "|r") or ""))
       r.dot:SetText(MARKET_DOT[(row.conf or {}).level or "shaky"])
       r:Show()
     else
@@ -843,8 +848,12 @@ function refreshMarket()
   p.clickHint:SetShown(#data > 0)
   p.empty:SetText(#data > 0 and ""
     or (read == 0 and "Learn a crafting profession and open its window once, so ForeverArtisan can read your recipes.")
+    or (FA.MinProfit and FA.MinProfit() and ("Nothing makes at least " .. FA.Money(FA.MinProfit()) .. " a craft. Lower or clear the minimum below."))
     or "No prices yet for what you craft. Visit the Auction House, or scan with Auctionator.")
   p.hide:SetChecked(ForeverArtisanSettings and ForeverArtisanSettings.marketHideShaky and true or false)
+  local byReturn = ForeverArtisanSettings and ForeverArtisanSettings.marketSort == "return"
+  p.sortBtn:SetText(byReturn and "Sort: best return" or "Sort: most profit")
+  if p.min.Sync and not p.min:HasFocus() then p.min:Sync() end
 end
 
 ---------------------------------------------------------------- Market: one craft's price trend
@@ -1347,6 +1356,9 @@ local function buildMarketTab(p)
       if row.sale then GameTooltip:AddDoubleLine("Sells for (Auction House)", FA.Money(row.sale * (row.r.makes or 1)), 1, 1, 1, 1, 1, 1) end
       if row.vend then GameTooltip:AddDoubleLine("Vendor pays", FA.Money(row.vend * (row.r.makes or 1)), 1, 1, 1, 1, 1, 1) end
       GameTooltip:AddDoubleLine("Profit after the cut", FA.Money(row.profit), 1, 1, 1, 1, 1, 1)
+      if row.ret then GameTooltip:AddDoubleLine("Return on the materials", FA.ReturnText(row.ret), 1, 1, 1, 1, 1, 1) end
+      -- what one craft would bring disenchanted instead (Core Disenchant.lua, beta)
+      if FA.DisenchantRowLines then pcall(FA.DisenchantRowLines, GameTooltip, row.r.itemId, row.r.makes, row.cost) end
       GameTooltip:AddLine(" ")
       local col = c.level == "good" and GREEN or c.level == "ok" and "|cffffff00" or GREY
       GameTooltip:AddLine(col .. (MARKET_CONF[c.level or "shaky"]) .. "|r")
@@ -1375,6 +1387,27 @@ local function buildMarketTab(p)
     ForeverArtisanSettings.marketHideShaky = self:GetChecked() and true or nil
     p.off = 0
     refreshMarket()
+  end)
+  -- sort: most profit or best return (return on the materials); both show on every row
+  p.sortBtn = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
+  p.sortBtn:SetSize(138, 22); p.sortBtn:SetPoint("TOPLEFT", 160, MARKET_TOP - MARKET_ROWS * 24 - 6)
+  p.sortBtn:SetScript("OnClick", function()
+    ForeverArtisanSettings = ForeverArtisanSettings or {}
+    ForeverArtisanSettings.marketSort = ForeverArtisanSettings.marketSort ~= "return" and "return" or nil
+    p.off = 0
+    refreshMarket()
+  end)
+  FA.UI.Tip(p.sortBtn, function()
+    GameTooltip:AddLine("Most profit or best return")
+    GameTooltip:AddLine("Best return: +150% means 1g of materials brings back 2g 50s. Every row shows both the profit per craft and the return.", 1, 1, 1, true)
+  end)
+  -- the player's own minimum profit per craft (shared with every profession's Best crafts)
+  local ml = Txt(p, "GameFontHighlightSmall", 306, MARKET_TOP - MARKET_ROWS * 24 - 11, 64, "Hide under")
+  p.min = FA.UI.MoneyBox(p, 70, function() return FA.MinProfit() end, function(v) FA.SetMinProfit(v); p.off = 0; refreshMarket() end)
+  p.min:SetPoint("TOPLEFT", 372, MARKET_TOP - MARKET_ROWS * 24 - 7)
+  FA.UI.Tip(p.min, function()
+    GameTooltip:AddLine("Minimum profit per craft")
+    GameTooltip:AddLine("Type an amount like 50s, 1g or 1g 20s (a number alone is silver). Crafts that make less are hidden here and in every profession's Best crafts. Empty shows everything.", 1, 1, 1, true)
   end)
   -- say it big, right above the list: rows open a price chart
   p.clickHint = Txt(p, "GameFontNormal", 16, -82, 428,
@@ -1549,6 +1582,8 @@ NEWS = {
     .. "and the lure button picks the best lure you can use. The Discord is live: come help shape ForeverArtisan." },
   { "0.9.26", "Fixed a long game hitch during full Auction House scans from some auction addons." },
   { "0.9.27", "Make now counts your bank and vendor mats, and recipe watch finds recipes on the Auction House for you and your alts (/fa market)." },
+  { "0.9.28", "Disenchanting (beta) on item tooltips and the Enchanting Craft log. Best crafts and the Market tab sort by best return, "
+    .. "you can hide crafts that make less than an amount you choose, and vendor materials have a price right away." },
 }
 
 local function verNum(v)
@@ -1733,6 +1768,7 @@ local function help()
   print("  /fa market  - your most profitable crafts, every profession in one list")
   print("  /fa new  - what's new in recent releases")
   if FA.RECIPE_WATCH_READY then print("  /fa recipewatch on | quiet | off  - recipes you or your alts don't know, noted when you see them on the Auction House (quiet: no chat)") end
+  print("  /fa disenchant on | off | log  - what greens, blues and purples disenchant into and what that's worth, on item tooltips (beta)")
   print("  /fa nameplates on | off  - the game's friendly nameplates (job titles in town need them; also shows them over players)")
   print("  /fa titles on | off | auto  - job titles under NPC names (auto leaves them to Plater and other nameplate addons)")
   print("  /fa prices on | off  - Auction House prices on item tooltips (off while Auctionator shows its own)")

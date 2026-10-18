@@ -16,6 +16,14 @@ local view = { tab = "main", logOff = 0, guideOff = 0, bookShow = "all" }
 ---------------------------------------------------------------- shared style kit (ForeverArtisan Core)
 local K = FA.UI.Kit(ns, view)
 local Text, Button, Check, Icon, Header = K.Text, K.Button, K.Check, K.Icon, K.Header
+-- a recipe's icon: the item it makes, or for an enchant (no item) the recipe's own icon or its spell's
+local function RIcon(r)
+  if not r then return Icon(nil) end
+  if r.itemId then return Icon(r.itemId) end
+  if r.icon then return r.icon end
+  local tex = r.id and ((C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(r.id)) or (GetSpellTexture and GetSpellTexture(r.id)))
+  return tex or Icon(nil)
+end
 local MakeRows, Fill, Wheel = K.MakeRows, K.Fill, K.Wheel
 local function S() return ns.DB().settings end
 
@@ -138,7 +146,7 @@ local function RefreshMainPage(p)
     for _, r in pairs(c.recipes) do n = n + 1; if r.learned then learned = learned + 1 end end
     p.find:SetText(GREEN .. ("%d recipes read, %d learned|r"):format(n, learned))
     for _, e in ipairs((ns.MakeNow())) do
-      list[#list + 1] = { id = e.r.itemId, icon = Icon(e.r.itemId), recipe = e.r,
+      list[#list + 1] = { id = e.r.itemId, icon = RIcon(e.r), recipe = e.r,
         left = ns.COLOR_CODE[e.color] .. e.r.name .. "|r",
         right = (#e.missing > 0 and (RED .. "needs " .. table.concat(e.missing, ", ") .. "|r"))
           or (e.make > 0 and (GREEN .. "can make " .. e.make .. "|r"
@@ -267,7 +275,7 @@ local function RefreshProgressPage(p)
       tipExtra[#tipExtra + 1] = ("Also makes %d %s along the way (counted in the skill range)."):format(n, sr.name)
     end
     table.sort(extra)
-    plan[#plan + 1] = { id = st.r.itemId, icon = Icon(st.r.itemId),
+    plan[#plan + 1] = { id = st.r.itemId, icon = RIcon(st.r),
       left = ns.COLOR_CODE[c] .. st.r.name .. "|r  " .. GRAY .. "x" .. st.crafts
         .. (#extra > 0 and ("  + " .. table.concat(extra, ", ")) or "") .. "|r",
       right = GRAY .. ("skill %d-%d"):format(st.from, st.to) .. "|r",
@@ -341,16 +349,45 @@ local function LogData()
   for _, x in ipairs(list) do
     local r = c.recipes[x.name]
     local col = ns.ColorFor(r, skill)
-    data[#data + 1] = { id = r and r.itemId, icon = Icon(r and r.itemId),
+    data[#data + 1] = { id = r and r.itemId, icon = RIcon(r),
       left = ns.COLOR_CODE[col] .. x.name .. "|r",
       right = ("x%d%s"):format(x.e.n, x.e.lo and (GRAY .. "  ·  at skill " .. (x.e.lo == x.e.hi and x.e.lo or (x.e.lo .. "-" .. x.e.hi)) .. "|r") or "") }
+  end
+  -- your disenchants (Core Disenchant.lua, every character): what each gave, and the totals
+  if FA.DisenchantLogView then
+    local ok, rows, totals, n, good = pcall(FA.DisenchantLogView)
+    if ok and n and n > 0 then
+      if #data > 0 then data[#data + 1] = { noIcon = true, left = " ", right = "" } end
+      data[#data + 1] = { noIcon = true, left = GOLD .. "Disenchanted|r",
+        right = GRAY .. ("%d  ·  %d match%s the usual table"):format(n, good, good == 1 and "es" or "")
+          .. (n > good and (RED .. "  ·  " .. (n - good) .. (n - good == 1 and " doesn't" or " don't") .. "|r") or "") .. "|r",
+        tipTitle = "Your disenchants",
+        tip = "Every item you've disenchanted on any of your characters, newest first, and what it gave. "
+          .. "Each one is checked against the usual disenchant table, so a different one on Forever shows up in red. "
+          .. "/fa disenchant log lists them in chat." }
+      local parts = {}
+      for i = 1, math.min(4, #totals) do parts[#parts + 1] = totals[i].n .. " " .. totals[i].name end
+      if #totals > 4 then parts[#parts + 1] = "+" .. (#totals - 4) .. " more" end
+      local all = {}
+      for _, t in ipairs(totals) do all[#all + 1] = t.n .. " " .. t.name end
+      data[#data + 1] = { noIcon = true, left = "All of them", right = table.concat(parts, ", "),
+        tipTitle = "What came out of all of them", tip = table.concat(all, "\n") }
+      for _, e in ipairs(rows) do
+        local when = e.t and date and date("%b %d", e.t) or nil
+        data[#data + 1] = { id = e.id, icon = Icon(e.id), left = e.link or "?",
+          right = (e.ok and "" or RED) .. e.outText .. (e.ok and "" or "|r"),
+          tip = ("Item level %s %s%s\n"):format(tostring(e.il or "?"), e.w and "weapon" or "armor", when and (", " .. when) or "")
+            .. (e.expectText and ("Usually: " .. e.expectText .. "\n") or "")
+            .. (e.ok and (GREEN .. "Matches the usual table.|r") or (RED .. "Doesn't match the usual table.|r")) }
+      end
+    end
   end
   return data
 end
 
 local function BuildLogPage(p)
   p.header = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -4); p.header:SetWidth(430)
-  p.header:SetText("Everything you've made on this character. Colors are for your skill now.")
+  p.header:SetText("Everything you've made on this character, then your disenchants. Colors are for your skill now.")
   p.rows = MakeRows(p, LOG_ROWS, -24, false)
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -100, p, "TOP"); p.empty:SetJustifyH("CENTER")
   local reset = Button(p, "Reset log", 110, function(self)
@@ -434,7 +471,7 @@ local function BookData()
       tip = GOLD .. "Where to get it|r\n" .. table.concat(lines, "\n")
         .. (npc and ("\n|cff80c0ffClick for a waypoint|r") or "") .. "\n\n" .. tip
     end
-    data[#data + 1] = { id = r.itemId, icon = Icon(r.itemId), recipe = r,
+    data[#data + 1] = { id = r.itemId, icon = RIcon(r), recipe = r,
       left = ns.COLOR_CODE[col] .. r.name .. "|r",
       right = (function()
         local g = (r.grayAt and ("gray at " .. r.grayAt)) or (ns.GrayAt(r) and ("gray at ~" .. ns.GrayAt(r))) or nil
@@ -508,9 +545,10 @@ end
 -- visits; the dot says how much to trust each price. Never searches, posts or buys.
 local BEST_ROWS = 14
 local BEST_MODES = {
-  { "profit", "Most profit", 100, "Recipes you know, ranked by profit per craft after the Auction House's cut." },
-  { "level", "Cheapest to level", 140, "Recipes that still give skill-ups, cheapest per point first." },
-  { "both", "Profit + skill-ups", 140, "Crafts that level you and pay for themselves." },
+  { "profit", "Most profit", 86, "Ranked by profit per craft after the Auction House's cut, with the return." },
+  { "return", "Best return", 86, "Ranked by return: +150% means 1g of materials brings back 2g 50s." },
+  { "level", "Cheapest to level", 120, "Recipes that still give skill-ups, cheapest per point first." },
+  { "both", "Profit + skill-ups", 124, "Crafts that level you and pay for themselves." },
 }
 local DOT = {
   good = "|TInterface\\COMMON\\Indicator-Green:14|t",
@@ -551,12 +589,16 @@ local function BestData()
         right = row.perPoint > 0 and (FA.Money(math.floor(row.perPoint + 0.5)) .. " a point")
           or (GREEN .. "earns " .. FA.Money(math.floor(-row.perPoint + 0.5)) .. " a point|r")
       else
-        -- a clearly better house replaces the "sells" price with where to sell
+        -- profit and return on every row, whichever sort is picked, so pocket-change crafts stand out;
+        -- a clearly better house adds where to sell
         local tag = FA.HouseTag and FA.HouseTag(FA.HouseCompare(r.itemId, r.makes))
-        right = (row.profit >= 0 and (GREEN .. "+" .. FA.Money(row.profit)) or (RED .. FA.Money(row.profit))) .. "|r"
-          .. (tag and (GOLD_TAG .. "  " .. tag .. "|r") or (GRAY .. "  sells " .. FA.Money(row.sale or row.vend or 0) .. "|r"))
+        local money = (row.profit >= 0 and (GREEN .. "+" .. FA.Money(row.profit)) or (RED .. FA.Money(row.profit))) .. "|r"
+        local ret = row.ret and ((row.ret >= 0 and GREEN or RED) .. FA.ReturnText(row.ret) .. "|r") or (GRAY .. "free mats|r")
+        if mode == "return" then right = ret .. GRAY .. "  ·  |r" .. money
+        else right = money .. GRAY .. "  ·  |r" .. ret end
+        if tag then right = right .. GOLD_TAG .. "  " .. tag .. "|r" end
       end
-      data[#data + 1] = { id = r.itemId, icon = Icon(r.itemId), recipe = r,
+      data[#data + 1] = { id = r.itemId, icon = RIcon(r), recipe = r,
         left = (ns.COLOR_CODE[col] or "") .. r.name .. ((r.makes or 1) > 1 and (" x" .. r.makes) or "") .. "|r",
         right = right, tail = DOT[c.level or "shaky"],
         tip = ConfLines(c) .. "\n\n" .. ReagentTip(r) }  -- ReagentTip ends with "What it's worth" and "Where to sell"
@@ -572,7 +614,7 @@ local function BuildBestPage(p)
     local b = Button(p, m[2], m[3], function()
       S().bestMode = m[1]; view.bestOff = 0; ns.OnChange()
     end)
-    if prev then b:SetPoint("LEFT", prev, "RIGHT", 6, 0) else b:SetPoint("TOPLEFT", 20, -4) end
+    if prev then b:SetPoint("LEFT", prev, "RIGHT", 4, 0) else b:SetPoint("TOPLEFT", 16, -4) end
     b.value, b.label = m[1], m[2]
     p.modeBtns[#p.modeBtns + 1] = b
     prev = b
@@ -592,6 +634,19 @@ local function BuildBestPage(p)
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -150, p, "TOP"); p.empty:SetJustifyH("CENTER"); p.empty:SetWidth(400)
   p.hide = K.Check(p, "Hide shaky prices", 16, -(80 + BEST_ROWS * 24 + 4),
     function() return S().bestHideShaky end, function(v) S().bestHideShaky = v or nil; view.bestOff = 0 end)
+  -- the player's own minimum profit per craft (every profession and the Market tab share it)
+  p.minLabel = Text(p, "GameFontHighlightSmall", "TOPLEFT", 200, -(80 + BEST_ROWS * 24 + 9))
+  p.minLabel:SetText("Hide crafts making under")
+  p.min = K.MoneyBox(p, 74, function() return FA.MinProfit() end,
+    function(v) FA.SetMinProfit(v); view.bestOff = 0; ns.OnChange() end)
+  p.min:SetPoint("LEFT", p.minLabel, "RIGHT", 8, 0)
+  if K.Tip then
+    K.Tip(p.min, function()
+      GameTooltip:AddLine("Minimum profit per craft")
+      GameTooltip:AddLine("Type an amount like 50s, 1g or 1g 20s (a number alone is silver). "
+        .. "Crafts that make less are hidden here and on the Market tab. Empty shows everything.", 1, 1, 1, true)
+    end)
+  end
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 16, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText(GOLD_TAG .. "Gold:|r a goblin Auction House (Booty Bay, Gadgetzan, Everlook) pays that much more a craft. Hover for both houses. Dots: green steady, yellow check it, gray shaky. Click to open the recipe (at the Auction House: search it).")
   Wheel(p, "bestOff", function() return (p.count or 0) - BEST_ROWS end)
@@ -616,12 +671,14 @@ local function RefreshBestPage(p)
   view.bestOff = math.min(view.bestOff or 0, math.max(0, #data - BEST_ROWS))
   Fill(p.rows, data, view.bestOff)
   if p.hide.Sync then p.hide:Sync() end
+  if p.min and p.min.Sync and not (p.min.HasFocus and p.min:HasFocus()) then p.min:Sync() end
   p.empty:SetText(#data > 0 and "" or (not ns.Knows() and "This character hasn't learned Enchanting.")
     or (not ns.HasRecipes() and "Open your Enchanting window once so I can read your recipes.")
     or (mode ~= "profit" and (function() local b, _, c = ns.Skill(); return b and c and c > 0 and b >= c end)()
       and "You're at this rank's cap: train the next rank and skill-up crafts show here again.")
     or (mode == "level" and "Nothing that still gives skill-ups has prices yet. Visit the Auction House, or scan with Auctionator.")
     or (mode == "both" and "None of your skill-up recipes pays for itself at today's prices.")
+    or (FA.MinProfit() and ("Nothing makes at least " .. FA.Money(FA.MinProfit()) .. " a craft. Lower or clear the minimum below."))
     or "No prices yet for what you craft. Visit the Auction House, or scan with Auctionator.")
 end
 
@@ -670,6 +727,7 @@ local function ShowTab(name)
   for k, b in pairs(tabs) do b:SetEnabled(k ~= name) end
   if REFRESH[name] then REFRESH[name](pages[name]) end
 end
+ns.ShowTab = ShowTab -- for the tests
 
 local function Build()
   local order = { { "main", "Enchanting" }, { "progress", "Progress" }, { "log", "Craft log" }, { "guide", "Recipe book" }, { "best", "Best crafts" } }
