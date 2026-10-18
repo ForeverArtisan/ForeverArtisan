@@ -1584,6 +1584,8 @@ NEWS = {
   { "0.9.27", "Make now counts your bank and vendor mats, and recipe watch finds recipes on the Auction House for you and your alts (/fa market)." },
   { "0.9.28", "Disenchanting (beta) on item tooltips and the Enchanting Craft log. Best crafts and the Market tab sort by best return, "
     .. "you can hide crafts that make less than an amount you choose, and vendor materials have a price right away." },
+  { "0.9.29", "Plan ahead: open a profession you don't have and the Progress tab lists what to save to level it. "
+    .. "Best crafts has a Disenchant sort, Cheapest to level counts disenchanting, and Make now scrolls." },
 }
 
 local function verNum(v)

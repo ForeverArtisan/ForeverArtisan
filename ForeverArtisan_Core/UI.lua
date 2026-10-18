@@ -614,24 +614,41 @@ function UI.Kit(ns, view)
         r:Hide()
       end
     end
-    -- every scrolling list says when there's more below (mouse wheel to see it)
+    -- every scrolling list says when there's more below. The line is a button too, for when a mouse
+    -- wheel acts up: click it to go down a page, or at the end of the list, back to the top.
     local last = rows[#rows]
     local holder = last and last.GetParent and last:GetParent()
     if holder and holder.CreateFontString then
       if not rows.more then
-        rows.more = holder:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        rows.more:SetPoint("TOPRIGHT", last, "BOTTOMRIGHT", -6, -1)
+        local b = CreateFrame("Button", nil, holder)
+        b:SetHeight(14); b:SetPoint("TOPRIGHT", last, "BOTTOMRIGHT", -6, -1)
+        b:SetNormalFontObject("GameFontNormalSmall"); b:SetHighlightFontObject("GameFontHighlightSmall")
+        b:SetScript("OnClick", function(self)
+          -- the same as turning the wheel over the list: its rows (ScrollRows) or the page (Wheel)
+          local first = rows[1]
+          local fn, owner = first and first:GetScript("OnMouseWheel"), first
+          if not fn then fn, owner = holder:GetScript("OnMouseWheel"), holder end
+          if not fn then return end
+          if self.toTop then fn(owner, 1000) else fn(owner, -math.max(1, math.floor(#rows / 3))) end
+        end)
+        rows.more = b
       end
+      local b = rows.more
       local below = #data - (offset or 0) - #rows
       if below > 0 then
-        rows.more:SetText(("%d more below, scroll down"):format(below))
-        rows.more:Show()
+        b.toTop = nil
+        b:SetText(("%d more below: scroll or click"):format(below))
+        b:Show()
       elseif (offset or 0) > 0 then
-        rows.more:SetText(FA.GRAY .. "end of list, scroll up for the top|r")
-        rows.more:Show()
+        b.toTop = true
+        b:SetText(FA.GRAY .. "end of list: click for the top|r")
+        b:Show()
       else
-        rows.more:Hide()
+        b:Hide()
       end
+      local fs = b.GetFontString and b:GetFontString()
+      local w = fs and fs.GetStringWidth and fs:GetStringWidth()
+      b:SetWidth((type(w) == "number" and w > 0) and (w + 4) or 220)
     end
   end
 

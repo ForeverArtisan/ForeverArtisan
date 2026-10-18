@@ -381,14 +381,22 @@ end
 -- Returns steps { r, cooks, from, to }, shopping { id, name, need, have, source }, stuckAt
 function ns.Plan(target)
   local skill = Skill()
-  if not skill then return {}, {}, nil end
+  local recs, ahead = CharRec().recipes, nil
+  if not skill then
+    -- planning ahead: this character doesn't have it, so from skill 1 with an alt's recipes or the
+    -- recipes seen on the Forever beta (SeedRecipes.lua)
+    local src, from, who
+    if ForeverArtisan.AheadRecipes then src, from, who = ForeverArtisan.AheadRecipes(db and db.chars, ns.SeedRecipes) end
+    if not src then return {}, {}, nil, nil, nil, nil, { none = true } end
+    recs, skill, ahead = src, 1, { from = from, who = who }
+  end
   local _, _, maxr = Skill()
-  target = math.min(tonumber(target) or (skill + 25), 300)
+  target = math.min(tonumber(target) or (ahead and 75 or (skill + 25)), 300)
   local learned = {}
-  for _, r in pairs(CharRec().recipes) do if r.learned then learned[#learned + 1] = r end end
+  for _, r in pairs(recs) do if r.learned then learned[#learned + 1] = r end end
   -- plus recipes a trainer you've met still teaches (they join the plan at the skill they need)
   local untrained = 0
-  if ForeverArtisan.PlanRecipes then learned, untrained = ForeverArtisan.PlanRecipes("Cooking", CharRec().recipes) end
+  if ForeverArtisan.PlanRecipes then learned, untrained = ForeverArtisan.PlanRecipes("Cooking", recs) end
   -- what you can make from your bags doesn't change while planning: count once
   local canMake = {}
   for _, r in ipairs(learned) do canMake[r] = ns.Makeable(r) > 0 end
@@ -463,7 +471,7 @@ function ns.Plan(target)
     for _, r in ipairs(learned) do if r.train then any = true end end
     if not any and ForeverArtisan.TrainHint then hint = ForeverArtisan.TrainHint("Cooking", untrained) end
   end
-  return steps, shopping, stuck, target, maxr, hint
+  return steps, shopping, stuck, target, maxr, hint, ahead
 end
 
 ---------------------------------------------------------------- where to learn it

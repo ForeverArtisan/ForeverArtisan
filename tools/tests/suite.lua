@@ -6,6 +6,7 @@ local ROOT = arg[1]
 date=os.date tinsert=table.insert wipe=function(t) for k in pairs(t) do t[k]=nil end return t end
 strtrim=function(s) return (s:gsub("^%s+",""):gsub("%s+$","")) end
 local frames, noop = {}, function() end
+local fonts = {} -- every font string (and texture) made, for tests that check page text
 local function obj()
   local o={scripts={},attrs={},_w=470,_h=578}
   return setmetatable(o,{__index=function(t,k)
@@ -13,9 +14,10 @@ local function obj()
     if k=="HookScript" then return function(s,n,fn) s.scripts[n]=fn end end
     if k=="GetScript" then return function(s,n) return s.scripts[n] end end
     if k=="SetAttribute" then return function(s,a,v) s.attrs[a]=v end end
-    if k=="CreateFontString" or k=="CreateTexture" or k=="CreateLine" then return function() return obj() end end
+    if k=="CreateFontString" or k=="CreateTexture" or k=="CreateLine" then return function() local x=obj(); fonts[#fonts+1]=x; return x end end
     if k=="SetText" then return function(s,v) s._text=v end end
     if k=="GetText" then return function(s) return s._text end end
+    if k=="GetParent" then return function(s) return rawget(s,"_parent") end end
     if k=="GetPoint" then return function() return "CENTER",nil,"CENTER",0,0 end end
     if k=="IsShown" or k=="IsVisible" then return function(s) return s._shown end end
     if k=="Show" then return function(s) s._shown=true end end
@@ -34,7 +36,7 @@ local function obj()
     return noop end})
 end
 local U; U=setmetatable({},{__index=function() return U end,__call=function() return nil end})
-CreateFrame=function(kind,name) local f=obj(); frames[#frames+1]=f; if name then _G[name]=f end; return f end
+CreateFrame=function(kind,name,parent) local f=obj(); f._parent=parent; frames[#frames+1]=f; if name then _G[name]=f end; return f end
 UIParent=obj(); WorldFrame=obj(); GameTooltip=obj(); ItemRefTooltip=obj(); Minimap=obj(); UISpecialFrames={}
 local chat={}
 DEFAULT_CHAT_FRAME={AddMessage=function(_,m) chat[#chat+1]=m; print("CHAT:",(tostring(m):gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r",""))) end}
@@ -898,7 +900,7 @@ do
   local data={} for i=1,10 do data[i]={left="r"..i} end
   K.Fill(rows, data, 0)
   print("MORE", rows.more and rows.more._text)
-  assert(rows.more and rows.more._text=="7 more below, scroll down", "more-below hint")
+  assert(rows.more and rows.more._text=="7 more below: scroll or click", "more-below hint")
   K.Fill(rows, data, 7)
   assert(rows.more._text:find("end of list"), "end of list hint")
   K.Fill(rows, {data[1]}, 0)
@@ -1502,6 +1504,43 @@ do
   end
   print("WINDOWS ok", n, sized)
 end
+-- Make now on the first tab scrolls with the mouse wheel and shows more rows in a taller window
+do
+  local aid=loadedFrames["ForeverArtisan_FirstAid"].ns
+  local oldNow=aid.MakeNow
+  aid.MakeNow=function() local t={} for i=1,30 do t[i]={r={name="Fake "..i,itemId=1251,reagents={}},color="orange",missing={},make=1,stations={}} end return t end
+  for _,f in ipairs(frames) do if f._text=="First Aid" and f.scripts.OnClick then f.scripts.OnClick(f) end end
+  local function shown()
+    local list={} for _,f in ipairs(frames) do
+      local t=f.left and f._shown and f.left._text
+      local i=t and tonumber(t:match("Fake (%d+)")) if i then list[#list+1]=i end
+    end table.sort(list) return list end
+  local first=shown()
+  assert(#first==9 and first[1]==1, "make now: 9 rows from the top, got "..#first)
+  local row for _,f in ipairs(frames) do if f.left and f._shown and f.left._text and f.left._text:find("Fake 1|r",1,true) then row=f end end
+  assert(row and row.scripts.OnMouseWheel, "make now rows take the mouse wheel")
+  row.scripts.OnMouseWheel(row,-1)
+  local after=shown()
+  assert(after[1]==4 and #after==9, "make now scrolled 3: "..tostring(after[1]))
+  -- the "more below" line is a button too: a page down per click, and back to the top at the end
+  local mb for _,f in ipairs(frames) do local t=rawget(f,"_text") if f._shown and type(t)=="string" and t=="18 more below: scroll or click" then mb=f end end
+  assert(mb, "more-below button")
+  mb.scripts.OnClick(mb)
+  assert(shown()[1]==13, "click: a page down: "..tostring(shown()[1]))
+  for _=1,10 do if tostring(rawget(mb,"_text")):find("click for the top") then break end mb.scripts.OnClick(mb) end
+  local endBtn for _,f in ipairs(frames) do local t=rawget(f,"_text") if f._shown and type(t)=="string" and t:find("click for the top") then endBtn=f end end
+  assert(endBtn and shown()[9]==30, "at the end of the list: "..tostring(endBtn).." "..tostring(shown()[9]).." "..tostring(rawget(mb,"_text")))
+  endBtn.scripts.OnClick(endBtn)
+  assert(shown()[1]==1, "click at the end: back to the top")
+  row.scripts.OnMouseWheel(row,-1)
+  for _,f in ipairs(frames) do if f.scripts.OnSizeChanged then f.scripts.OnSizeChanged(f,470,578+24*5) end end
+  local tall=shown()
+  assert(#tall==14, "taller window: 14 make now rows, got "..#tall)
+  for _,f in ipairs(frames) do if f.scripts.OnSizeChanged then f.scripts.OnSizeChanged(f,470,578) end end
+  assert(#shown()==9, "back to 9 rows")
+  aid.MakeNow=oldNow aid.OnChange()
+  print("MAKE NOW SCROLL ok")
+end
 -- prices on item tooltips, and Train lines that set a waypoint
 do
   local FA=ForeverArtisan
@@ -1773,6 +1812,22 @@ do
   assert(#rows==2 and rows[1].r.name=="Cheap Thing" and rows[1].perPoint<0, "cheapest to level: one that earns money first")
   rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "both")
   assert(#rows==1 and rows[1].r.name=="Cheap Thing", "both: skill-ups that pay")
+  -- 0.9.29: disenchanting. "Loser" sells for 9c but disenchants for 4s: it levels you for profit,
+  -- and tops the Disenchant sort
+  local oDV=FA.DisenchantValue
+  FA.DisenchantValue=function(id) if id==991001 then return 400 end end
+  rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "level")
+  assert(rows[1].r.name=="Loser" and rows[1].viaDE and math.abs(rows[1].perPoint+200)<0.001, "leveling counts disenchanting")
+  assert(not rows[2].viaDE, "selling still wins where it pays more")
+  rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "both")
+  assert(#rows==2, "both: a craft that pays when disenchanted counts")
+  rows=FA.BestCrafts(recipes, nil, "disenchant")
+  assert(#rows==1 and rows[1].r.name=="Loser" and rows[1].deProfit==100 and math.abs(rows[1].deRet-1/3)<0.001, "disenchant sort")
+  FA.SetMinProfit(101)
+  assert(#FA.BestCrafts(recipes, nil, "disenchant")==0, "the minimum applies to the disenchant profit")
+  FA.SetMinProfit(nil)
+  assert(table.concat(FA.CraftValueLines(recipes.C),"\n"):find("Disenchanted: about"), "recipe tooltip: disenchant value")
+  FA.DisenchantValue=oDV
   local src=table.concat(FA.PriceSourceLines(),"\n")
   assert(src:find("own Auction House visits") and src:find("Works best with Auctionator"), "source line without Auctionator: "..src)
   _G.Auctionator={API={v1={}}} AUCTIONATOR_SAVEDVARS={TimeOfLastBrowseScan=time()}
@@ -1787,8 +1842,14 @@ do
   assert(ck.lastBest and #ck.lastBest>=2, "best tab rendered: "..tostring(ck.lastBest and #ck.lastBest))
   assert(ck.lastBest[1].left:find("Pricey Thing") and ck.lastBest[1].tail:find("Indicator"), "row with a confidence dot")
   assert(ck.lastBest[1].right:find("%%"), "profit rows show the return too: "..ck.lastBest[1].right)
-  for _,f in pairs(frames) do if f._text=="Best return" and f.scripts.OnClick then f.scripts.OnClick(f) end end
+  for _,f in pairs(frames) do if f._text=="Return" and f.scripts.OnClick then f.scripts.OnClick(f) end end
   assert(ck.DB().settings.bestMode=="return" and ck.lastBest[1].right:find("^|c%x+%+%d+%%"), "best return: % first: "..tostring(ck.lastBest[1] and ck.lastBest[1].right))
+  -- the Disenchant sort: only in professions that craft weapons and armor; elsewhere a saved one shows Profit
+  local deBtns=0
+  for _,f in pairs(frames) do if f._text=="Disenchant" and f.scripts.OnClick then local ok,err=pcall(f.scripts.OnClick,f) assert(ok,"disenchant mode: "..tostring(err)) deBtns=deBtns+1 end end
+  assert(deBtns==5, "Disenchant button in 5 professions: "..deBtns)
+  ck.DB().settings.bestMode="disenchant" ck.OnChange()
+  assert(ck.lastBest[1].right:find("^|c%x+%+%d+s"), "cooking has no Disenchant sort: profit first: "..tostring(ck.lastBest[1] and ck.lastBest[1].right))
   -- the minimum box: typed money, saved for every profession
   local mbox for _,f in pairs(frames) do if f.Sync and f.hint and f.scripts.OnEditFocusLost and f._w==74 then mbox=f end end
   assert(mbox, "min profit box on Best crafts")
@@ -3032,5 +3093,101 @@ do
   run("FAENCH",""); ens.ShowTab("log")
   C_Timer=oldT; ForeverArtisanSettings.deLog=nil
   print("disenchant chat loot ok")
+end
+-- 0.9.29: the disenchant tooltip always shows what the item sells for, and says "About even" when close
+do
+  local FA=ForeverArtisan
+  local oldGI, oldAH = GetItemInfo, FA.AHPrice
+  local PR={}
+  GetItemInfo=function(item)
+    local id=type(item)=="number" and item or tonumber(tostring(item):match("item:(%d+)") or item)
+    if id==9001 then return "Test Vest",nil,2,20,15,"Armor","Cloth",1,"INVTYPE_CHEST",134400,40,4 end
+    return oldGI(item)
+  end
+  FA.AHPrice=function(id) return PR[id] end
+  local function tip()
+    local lines={} local tt={AddLine=function(_,a) lines[#lines+1]=a end, AddDoubleLine=function(_,a,b) lines[#lines+1]=a.." = "..b end}
+    FA.DisenchantTipLines(tt, 9001) return table.concat(lines,"\n") end
+  PR[10940]=100 PR[10938]=300
+  local value=FA.DisenchantValue(9001)
+  assert(value and value>0, "test vest has a disenchant value")
+  -- no AH price for the item: the vendor price, said so
+  local t=tip()
+  assert(t:find("Sold as it is") and t:find("vendor, no AH price yet"), "vendor only: "..t)
+  -- AH price close to the disenchant value: about even, and the price after the cut is shown
+  PR[9001]=math.floor(value/0.95+0.5)
+  t=tip()
+  assert(t:find("AH, after the 5%% cut") and t:find("About even"), "about even: "..t)
+  local sale=FA.DisenchantSale(9001)
+  assert(math.abs(sale-value)<=1, "sale is the AH price after the cut")
+  PR[9001]=value*3
+  assert(tip():find("Worth more sold as it is"), "selling wins")
+  PR[9001]=math.floor(value/3)
+  assert(tip():find("Worth more disenchanted"), "disenchanting wins")
+  GetItemInfo, FA.AHPrice = oldGI, oldAH
+  print("disenchant sale line ok")
+end
+-- 0.9.29: planning ahead. Without Tailoring the Progress tab plans from skill 1 with the beta recipes;
+-- the shopping list is the raw materials (bolts are crafted along the way)
+do
+  local FA=ForeverArtisan
+  local tl=loadedFrames["ForeverArtisan_Tailoring"].ns
+  local oldPL=FA.ProfessionListLoaded FA.ProfessionListLoaded=function() return true end
+  assert(not tl.Skill(), "the tester has no Tailoring")
+  local steps, shop, stuck, target, _, _, ahead = tl.Plan(75)
+  assert(ahead and ahead.from=="beta", "plans ahead with the beta recipes")
+  assert(#steps>0 and steps[1].from==1, "from skill 1: "..tostring(steps[1] and steps[1].from))
+  local linen, bolt, trains, starterTrain
+  for _,e in ipairs(shop) do
+    if e.id==2589 then linen=e end
+    if e.id==2996 then bolt=e end
+    if e.train then trains=(trains or 0)+1 if e.train.at==1 and not e.price then starterTrain=e end end
+  end
+  assert(linen and linen.need>0, "Linen Cloth to save")
+  assert(not bolt or bolt.craft, "bolts are crafted from the linen, not bought")
+  assert(trains and trains>0, "trainer recipes on the way")
+  for _,st in ipairs(steps) do
+    if st.train then assert(st.train.who:find("seen on the Forever beta"), "beta trainer named") end
+  end
+  print("AHEAD tailoring", #steps, "steps to", steps[#steps].to, "stuck", stuck)
+  if os.getenv("AHEAD_DUMP") then
+    for _,mod in ipairs({"Tailoring","Leatherworking","Blacksmithing","Alchemy","Enchanting","Engineering","Cooking","FirstAid"}) do
+      local n=loadedFrames["ForeverArtisan_"..mod].ns
+      if not n.Skill() then
+        local st,sh,stk=n.Plan(tonumber(os.getenv("AHEAD_DUMP")))
+        print("== "..mod.." stuck", stk)
+        for _,x in ipairs(st) do print("  ", x.r.name, x.crafts, x.from, x.to, x.train and ("train "..x.train.at) or "") end
+        for _,e in ipairs(sh) do if not e.train then print("    shop", e.name, e.need, e.craft and ("craft "..e.craft) or "") end end
+      else print("== "..mod.." known by tester") end
+    end
+  end
+  -- the Progress tab shows it
+  if not (ForeverArtisanTailoringFrame and ForeverArtisanTailoringFrame._shown) then run("FATAILOR","") end
+  for _,f in ipairs(frames) do if f._text=="Progress" and f.scripts.OnClick then f.scripts.OnClick(f) end end
+  local said for _,f in ipairs(fonts) do local t=rawget(f,"_text") if type(t)=="string" and t:find("Planning ahead from skill 1") then said=t end end
+  assert(said and said:find("Forever beta"), "Progress tab says it's planning ahead")
+  -- the first tab's Start planning button (shown without the profession) opens the Progress tab
+  local btns=0
+  for _,f in ipairs(frames) do if rawget(f,"_text")=="Start planning" and f.scripts.OnClick then
+    local ok,err=pcall(f.scripts.OnClick,f) assert(ok,"start planning: "..tostring(err)) btns=btns+1 end end
+  assert(btns==8, "Start planning in all 8 crafting windows: "..btns)
+  -- an alt that read the window: its recipes are used instead
+  local db=ForeverArtisanTailoringDB
+  local alt={recipes={}}
+  for name,r in pairs(tl.SeedRecipes()) do alt.recipes[name]={name=name,itemId=r.itemId,reagents=r.reagents,grayAt=r.grayAt,learned=true} end
+  db.chars["Seamstress-Realm-0001"]=alt
+  local _,_,_,_,_,_,a2 = tl.Plan(75)
+  assert(a2.from=="alt" and a2.who=="Seamstress-Realm-0001", "alt's recipes")
+  db.chars["Seamstress-Realm-0001"]=nil
+  -- Engineering plans ahead from the beta capture; with no recipes on file at all, it says how to get them
+  local en=loadedFrames["ForeverArtisan_Engineering"].ns
+  local est,_,_,_,_,_,a4 = en.Plan(75)
+  assert(a4 and a4.from=="beta" and #est>0, "Engineering plans ahead")
+  local oldSeed=en.SeedRecipes en.SeedRecipes=function() return {} end
+  local _,_,_,_,_,_,a3 = en.Plan(75)
+  assert(a3 and a3.none, "no recipes on file: nothing to plan")
+  en.SeedRecipes=oldSeed
+  FA.ProfessionListLoaded=oldPL
+  print("planning ahead ok")
 end
 print("SUITE OK")

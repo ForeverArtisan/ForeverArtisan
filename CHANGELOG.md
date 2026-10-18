@@ -1,5 +1,15 @@
 # ForeverArtisan changelog
 
+## 0.9.29 (2026-10-18)
+- New: **plan ahead for a profession you don't have yet.** Open its window on any character (`/fa eng`, `/fa lw` ...) and click **Start planning**, or go to the Progress tab: it plans from skill 1 to the skill you type, and the shopping list is the raw materials to save while you level something else. Materials the plan makes along the way (bolts, leather, tubes) count as crafted. It uses the recipes seen on the Forever beta, or an alt's once one has opened that window, with trainer levels from the beta. Past the trainer recipes we know, it says to open a higher-rank trainer's list (no need to learn the profession). Thanks to the player who suggested it.
+- New: **Disenchant** sort in Best crafts (Blacksmithing, Leatherworking, Tailoring, Engineering, Enchanting): crafts ranked by what they disenchant into, minus the materials. Recipe tooltips show the disenchant value too.
+- New: **Cheapest to level counts disenchanting.** When what you make is worth more disenchanted than sold, the cost per point uses that, and the row says "disenchant it". Level + profit counts it too. Thanks to the player who asked.
+- The disenchant tooltip always shows what the item sells for as it is (the Auction House after its cut, or the vendor), and says "About even" when the two are close.
+- Best crafts buttons are shorter (Profit, Return, Cheapest to level, Level + profit) to make room for Disenchant.
+- Plans: something an earlier step of the plan makes (Copper Tubes, Light Leather) shows as made by the plan, not something to buy.
+- Fixed: the Make now list on each profession's first tab now scrolls with the mouse wheel (it said "scroll down" but didn't), and shows more recipes when you drag the window taller. Gathering modules' "Logged here" list scrolls too. Thanks to the player who caught it.
+- The "more below" line under every list is also a button: click it to go down a page, or back to the top at the end (handy when a mouse wheel acts up).
+
 ## 0.9.28 (2026-10-18)
 - New (beta): **Disenchanting.** Hover a green, blue or purple weapon or armor piece to see what it disenchants into, the chance of each, and what that's worth at the Auction House, with "Worth more disenchanted" or "Worth more sold". Where a greater essence and three lesser ones sell for different amounts, it says which way to combine or split. It works for every item, Forever's new ones too, because it follows the game's disenchant rules by item level and quality. Shows for every character, since greens often go to an enchanter alt or friend. `/fa disenchant off` hides it.
 - Your disenchants are saved and checked against the usual table, to catch where Forever's differs. The Enchanting Craft log tab lists each one with what it gave, plus the totals; one that didn't match shows in red. `/fa disenchant log` lists them in chat. Thanks to the player who suggested it.

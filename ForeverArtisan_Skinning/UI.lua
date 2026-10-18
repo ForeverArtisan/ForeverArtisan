@@ -41,6 +41,8 @@ local function BuildMainPage(p)
 
   p.zoneHead = Text(p, "GameFontNormal", "TOPLEFT", 16, -158)
   p.rows = MakeRows(p, 7, -178, false)
+  -- mouse wheel over the list scrolls it
+  K.ScrollRows(p.rows, "nowOff", function() return (p.nowCount or 0) - #p.rows end)
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 20, -182); p.empty:SetWidth(420)
 
   p.checks = {
@@ -108,7 +110,9 @@ local function RefreshMainPage(p)
       left = it.name or ns.ItemName(id), right = ("x%d"):format(it.n) }
   end
   table.sort(list, function(a, b) return a.n > b.n end)
-  Fill(p.rows, list, 0)
+  p.nowCount = #list
+  view.nowOff = math.max(0, math.min(view.nowOff or 0, #list - #p.rows))
+  Fill(p.rows, list, view.nowOff)
   p.empty:SetText(#list == 0 and "Nothing logged in this spot yet." or "")
   for _, c in ipairs(p.checks) do c:Sync() end
 end

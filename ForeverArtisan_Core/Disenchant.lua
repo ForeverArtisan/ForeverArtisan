@@ -16,7 +16,10 @@ local PREFIX = FA.Prefix and FA.Prefix() or "ForeverArtisan: "
 local AH_CUT = 0.95
 local DE_SPELL = 13262
 -- newer clients moved these into C_Item / C_Spell (Forever has no global GetItemInfo)
-local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+local function GetItemInfo(...)   -- looked up each call (C_Item first), not saved at load
+  local f = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+  if f then return f(...) end
+end
 local function SpellName(id)
   if C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(id) end
   if GetSpellInfo then return (GetSpellInfo(id)) end
@@ -183,6 +186,18 @@ function FA.DisenchantValue(item)
   return math.floor(total + 0.5), missing, res
 end
 
+-- What the item sells for as it is: the Auction House after its cut, or the vendor if that pays more.
+-- Returns copper (0 when neither is known) and words for where ("AH, after the 5% cut", "vendor", "no AH price yet").
+function FA.DisenchantSale(item)
+  local id = itemIdOf(item)
+  local ah = id and ahPrice(id)
+  local vendor = GetItemInfo and select(11, GetItemInfo(item)) or 0
+  local net = ah and math.floor(ah * AH_CUT + 0.5) or 0
+  if net > 0 and net >= vendor then return net, "AH, after the 5% cut" end
+  if vendor and vendor > 0 then return vendor, ah and "vendor pays more" or "vendor, no AH price yet" end
+  return 0, "no AH price yet"
+end
+
 ---------------------------------------------------------------- who sees it
 
 local function settings()
@@ -278,17 +293,19 @@ function FA.DisenchantTipLines(tt, item)
       tt:AddLine("    " .. GREEN .. words .. (gain and gain > 0 and (": +" .. money(gain) .. (lesser and " each" or " a greater")) or "") .. "|r", 1, 1, 1, true)
     end
   end
-  -- worth more as mats, or as the item?
+  -- the item itself: what it sells for (always shown, to check the math), then which way wins
   local id = itemIdOf(item)
-  if priced and id then
-    local ah = ahPrice(id)
-    local vendor = GetItemInfo and select(11, GetItemInfo(item))
-    local sale = math.max(ah and ah * AH_CUT or 0, vendor or 0)
-    if sale > 0 then
+  if id then
+    local sale, words = FA.DisenchantSale(item)
+    tt:AddDoubleLine("  Sold as it is", sale > 0 and (money(sale) .. GRAY .. " (" .. words .. ")|r") or (GRAY .. words .. "|r"),
+      0.8, 0.8, 0.8, 0.8, 0.8, 0.8)
+    if priced and sale > 0 then
       if value > sale * 1.1 then
         tt:AddLine("  " .. GREEN .. "Worth more disenchanted (" .. money(value - sale) .. " more than selling it)|r", 1, 1, 1, true)
       elseif sale > value * 1.1 then
-        tt:AddLine("  " .. GRAY .. "Worth more sold as it is (" .. money(sale) .. ")|r", 1, 1, 1, true)
+        tt:AddLine("  " .. GRAY .. "Worth more sold as it is (" .. money(sale - value) .. " more)|r", 1, 1, 1, true)
+      else
+        tt:AddLine("  " .. GRAY .. "About even: disenchant it or sell it|r", 1, 1, 1, true)
       end
     end
   end

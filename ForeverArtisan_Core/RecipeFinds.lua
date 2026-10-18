@@ -359,8 +359,15 @@ function ForeverArtisan.PlanRecipes(prof, recipes, skip)
         list[#list + 1] = r
       elseif r.reagents and #r.reagents > 0 then
         local t = ForeverArtisan.TrainableRecipe(prof, r.name)
+        local st = r.seedTrain -- planning ahead: what a trainer taught it at on the Forever beta
+        if not t and st and not st.starter then
+          t = { at = st.at, cost = st.cost, who = "a " .. prof .. " trainer (seen on the Forever beta)" }
+        end
         if t then
           list[#list + 1] = setmetatable({ learned = true, train = t, base = r }, { __index = r })
+        elseif st and st.starter then
+          -- comes with the profession: known from the start
+          list[#list + 1] = setmetatable({ learned = true, base = r }, { __index = r })
         else
           unknown = unknown + 1
         end
@@ -368,6 +375,30 @@ function ForeverArtisan.PlanRecipes(prof, recipes, skip)
     end
   end
   return list, unknown
+end
+
+-- Planning ahead for a profession this character doesn't have: the recipes of the character (an alt)
+-- that read the most of that profession's window, or else the recipes seen on the Forever beta
+-- (seedFn: the module's ns.SeedRecipes). Every recipe comes back unlearned, with the beta trainer level
+-- when known (seedTrain), so PlanRecipes picks them up. Returns recipes, "alt" or "beta", the alt's key.
+function ForeverArtisan.AheadRecipes(chars, seedFn)
+  local seed = (seedFn and seedFn()) or {}
+  local best, bestN, bestKey
+  for key, c in pairs(chars or {}) do
+    local n = 0
+    for _, r in pairs(type(c) == "table" and c.recipes or {}) do
+      if r.reagents and #r.reagents > 0 then n = n + 1 end
+    end
+    if n >= 20 and (not bestN or n > bestN) then best, bestN, bestKey = c.recipes, n, key end
+  end
+  local src = best or seed
+  if not next(src) then return nil end
+  local out = {}
+  for name, r in pairs(src) do
+    local sd = seed[name]
+    out[name] = setmetatable({ learned = false, seedTrain = r.seedTrain or (sd and sd.seedTrain) }, { __index = r })
+  end
+  return out, best and "alt" or "beta", bestKey
 end
 
 -- one line under a short plan, when meeting a trainer would help

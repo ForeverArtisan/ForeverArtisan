@@ -544,11 +544,19 @@ end
 local PLAN_LIMIT = 6000 -- crafts; stops a plan built on a nearly-gray recipe from running forever
 function ns.Plan(target)
   local skill = Skill()
-  if not skill then return {}, {}, nil end
+  local recs, ahead = CharRec().recipes, nil
+  if not skill then
+    -- planning ahead: this character doesn't have it, so from skill 1 with an alt's recipes or the
+    -- recipes seen on the Forever beta (SeedRecipes.lua)
+    local src, from, who
+    if ForeverArtisan.AheadRecipes then src, from, who = ForeverArtisan.AheadRecipes(db and db.chars, ns.SeedRecipes) end
+    if not src then return {}, {}, nil, nil, nil, nil, { none = true } end
+    recs, skill, ahead = src, 1, { from = from, who = who }
+  end
   local _, _, maxr = Skill()
-  target = math.min(tonumber(target) or (skill + 25), 300)
+  target = math.min(tonumber(target) or (ahead and 75 or (skill + 25)), 300)
   local learned, makes = {}, {}
-  for _, r in pairs(CharRec().recipes) do
+  for _, r in pairs(recs) do
     if r.learned then
       if not Skipped(r) then learned[#learned + 1] = r end
       -- a material counts as "craft it yourself" only if you have the tools for it now
@@ -558,6 +566,7 @@ function ns.Plan(target)
   end
 
   local stock, used, crafted, names = {}, {}, {}, {}
+  local stepMade, stepVia = {}, {} -- what the plan's own steps make (tubes, bolts), used later in the plan
   local function Have(id) if stock[id] == nil then stock[id] = Own(id) end; return stock[id] end
   local s, total, cur = skill, 0, nil
   local Craft
@@ -581,6 +590,9 @@ function ns.Plan(target)
     s = s + ns.Chance(r, math.floor(s)) * (r.ups or 1)
     total = total + 1
     if r.itemId then stock[r.itemId] = Have(r.itemId) + (r.makes or 1) end
+    if depth == 0 and r.itemId then
+      stepMade[r.itemId] = (stepMade[r.itemId] or 0) + (r.makes or 1); stepVia[r.itemId] = r
+    end
     if depth > 0 then
       if r.itemId then crafted[r.itemId] = (crafted[r.itemId] or 0) + 1 end
       cur.sub[r] = (cur.sub[r] or 0) + 1
@@ -604,7 +616,15 @@ function ns.Plan(target)
   -- what you can make from your bags doesn't change while planning: count once, not on every pass
   -- plus recipes a trainer you've met still teaches (they join the plan at the skill they need)
   local cands, untrained = learned, 0
-  if ForeverArtisan.PlanRecipes then cands, untrained = ForeverArtisan.PlanRecipes(PROF, CharRec().recipes, Skipped) end
+  if ForeverArtisan.PlanRecipes then cands, untrained = ForeverArtisan.PlanRecipes(PROF, recs, Skipped) end
+  -- planning ahead nothing is learned yet: materials one of these recipes makes (bolts, leather) count
+  -- as crafted along the way, so the list is the raw materials to save
+  -- (tools you don't own yet don't matter here: they're on the list to get)
+  if ahead then
+    for _, r in ipairs(cands) do
+      if r.itemId and not makes[r.itemId] then makes[r.itemId] = r end
+    end
+  end
   local canMake = {}
   for _, r in ipairs(cands) do canMake[r] = ns.Makeable(r) > 0 end
   -- what each recipe's materials cost in money, looked up once per plan
@@ -672,6 +692,10 @@ function ns.Plan(target)
       local parts = {}
       for _, g in ipairs(e.via.reagents or {}) do parts[#parts + 1] = ItemName(g.id, g.name) end
       e.source = ("Craft %d yourself: %s (%s)"):format(e.craft, e.via.name, table.concat(parts, " + "))
+    elseif stepMade[id] and stepMade[id] >= n - math.max(0, e.have) then
+      -- an earlier step of this plan makes them: nothing to buy
+      e.craft, e.via = math.ceil(math.min(n, stepMade[id]) / (stepVia[id].makes or 1)), stepVia[id]
+      e.source = ("Made by the plan itself: the %s step makes them."):format(stepVia[id].name)
     else
       e.source = ns.SourceFor(id, e.name)
     end
@@ -694,7 +718,7 @@ function ns.Plan(target)
     for _, r in ipairs(cands) do if r.train then any = true end end
     if not any and ForeverArtisan.TrainHint then hint = ForeverArtisan.TrainHint(PROF, untrained) end
   end
-  return steps, shopping, stuck, target, maxr, hint
+  return steps, shopping, stuck, target, maxr, hint, ahead
 end
 
 ---------------------------------------------------------------- where to learn it

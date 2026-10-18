@@ -715,6 +715,8 @@ function FA.CraftValueLines(r)
       makes > 1 and (", makes " .. makes) or "", src, FA.AgeText(age))
   end
   if vend then lines[#lines + 1] = "Vendors pay " .. FA.Money(vend) .. " each" end
+  local de = FA.DisenchantValue and FA.DisenchantValue(r.itemId)
+  if de and de > 0 then lines[#lines + 1] = "Disenchanted: about " .. FA.Money(de) .. " each in materials (after the cut)" end
   if cost then
     -- the Auction House keeps 5% of a sale (your faction's house), so profit is what you'd actually get
     local best, where = nil, nil
@@ -785,8 +787,9 @@ end
 
 ---------------------------------------------------------------- Best crafts
 -- Rank a module's learned recipes. mode: "profit" (most profit per craft after the Auction House
--- cut), "level" (cheapest per skill point, recipes that still give skill-ups) or "both" (skill-ups
--- that also make money). chanceOf(r) is the module's skill-up chance for the recipe right now.
+-- cut), "return" (profit per copper of materials), "level" (cheapest per skill point, recipes that
+-- still give skill-ups; what you get back is the better of selling and disenchanting), "both" (skill-ups
+-- that also make money) or "disenchant" (crafted to disenchant: what it disenchants into minus materials). chanceOf(r) is the module's skill-up chance for the recipe right now.
 -- Rows: { r, cost, sale, vend, chance, profit, perPoint, conf }
 -- recipes Best crafts leaves out: Basic Campfire makes a kit, but it needs Flint and Tinder and has a
 -- cooldown, so it's no way to earn or level
@@ -810,13 +813,27 @@ function FA.BestCrafts(recipes, chanceOf, mode)
       if cost and best > 0 then row.profit = best - cost end
       -- return on the materials (profit for each copper they cost); none when they cost nothing
       if row.profit and cost > 0 then row.ret = row.profit / cost end
-      if cost and ch > 0 then row.perPoint = (cost - best) / ch end
-      local keep = (mode == "level" and row.perPoint) or (mode == "both" and row.perPoint and (row.profit or 0) > 0)
+      -- what the crafted item disenchants into (greens and up, weapons and armor), for every one it makes
+      local de = FA.DisenchantValue and FA.DisenchantValue(r.itemId)
+      if de and de > 0 then
+        row.de = de * n
+        if cost then
+          row.deProfit = row.de - cost
+          if cost > 0 then row.deRet = row.deProfit / cost end
+        end
+      end
+      -- leveling: what you get back is the better of selling it and disenchanting it
+      local back = best
+      if row.de and row.de > best then back, row.viaDE = row.de, true end
+      if cost and ch > 0 then row.perPoint = (cost - back) / ch end
+      local keep = (mode == "level" and row.perPoint) or (mode == "both" and row.perPoint and row.perPoint < 0)
         or (mode == "return" and row.ret)
+        or (mode == "disenchant" and row.deProfit)
         or ((mode == "profit" or not mode) and row.profit)
       -- the player's own minimum ("hide crafts that make less than"), for every list that's about profit
       local min = FA.MinProfit()
-      if keep and min and mode ~= "level" and (row.profit or 0) < min then keep = false end
+      local made = (mode == "disenchant" and row.deProfit) or row.profit
+      if keep and min and mode ~= "level" and (made or 0) < min then keep = false end
       if keep then
         row.conf = FA.PriceConfidence(r.itemId)
         out[#out + 1] = row
@@ -829,6 +846,8 @@ function FA.BestCrafts(recipes, chanceOf, mode)
     elseif mode == "return" then
       if a.ret ~= b.ret then return a.ret > b.ret end
       if a.profit ~= b.profit then return a.profit > b.profit end
+    elseif mode == "disenchant" then
+      if a.deProfit ~= b.deProfit then return a.deProfit > b.deProfit end
     elseif a.profit ~= b.profit then return a.profit > b.profit end
     return (a.r.name or "") < (b.r.name or "")
   end)

@@ -50,7 +50,17 @@ local function ReagentTip(r, m)
 end
 
 ---------------------------------------------------------------- page 1: Leatherworking
-local NOW_ROWS = 9
+local NOW_ROWS, NOW_MAX = 9, 22   -- at the normal window height / when it's dragged taller
+-- A taller window shows more Make now rows; the tooltip checkbox moves down under them.
+-- True when the row count changed.
+local function LayoutMain(p, extra)
+  local n = math.min(NOW_MAX, NOW_ROWS + math.floor(math.max(0, extra or 0) / ROW_H))
+  if p.rows and #p.rows == n then return false end
+  p.rows = K.Visible(p.nowAll, n, p.rows)
+  local c = p.checks and p.checks[1]
+  if c then c:ClearAllPoints(); c:SetPoint("TOPLEFT", 16, -412 - (n - NOW_ROWS) * ROW_H) end
+  return true
+end
 -- Click a recipe you know: open the game's Leatherworking window on it (the window itself opens from a
 -- secure button, "Open window", top right; this only works once the window is open or the client allows it).
 local function OpenOnRecipe(r)
@@ -80,18 +90,23 @@ local function BuildMainPage(p)
   p.sess = Text(p, "GameFontHighlight", "TOPLEFT", 18, -108); p.sess:SetWidth(430)
   p.last = Text(p, "GameFontHighlightSmall", "TOPLEFT", 18, -128); p.last:SetWidth(430)
 
-  Header(p, -158, "Make now")
-  Text(p, "GameFontDisableSmall", "TOPLEFT", 90, -160):SetText("recipes that still give skill-ups")
-  p.rows = MakeRows(p, NOW_ROWS, -178, false)
+  p.nowHead = Header(p, -158, "Make now")
+  p.nowSub = Text(p, "GameFontDisableSmall", "TOPLEFT", 90, -160); p.nowSub:SetText("recipes that still give skill-ups")
+  p.nowAll = MakeRows(p, NOW_MAX, -178, false)
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 20, -182); p.empty:SetWidth(420)
   p.open = FA.UI.ProfessionButton(p, "Leatherworking", 240); p.open:SetPoint("TOPLEFT", 20, -208)
+  -- not learned: plan ahead (the Progress tab plans from skill 1 and lists what to save)
+  p.planBtn = FA.UI.Button(p, "Start planning", 120, function() if ns.ShowTab then ns.ShowTab("progress") end end)
+  p.planBtn:SetPoint("TOPLEFT", 20, -180); p.planBtn:Hide()
+  p.planTxt = Text(p, "GameFontDisableSmall", "LEFT", 10, 0, p.planBtn, "RIGHT"); p.planTxt:Hide()
+  p.planTxt:SetText("see what to save before you learn Leatherworking")
   -- always there once you know the profession: opens the game's own window
   p.openTop = FA.UI.ProfessionButton(p, "Leatherworking", 110, "Open window", 22); p.openTop:SetPoint("TOPRIGHT", -16, -4)
   FA.UI.Tip(p.openTop, function()
     GameTooltip:AddLine("Open your Leatherworking window")
     GameTooltip:AddLine("Opening it also refreshes your recipes here.", 1, 1, 1, true)
   end)
-  for _, row in ipairs(p.rows) do
+  for _, row in ipairs(p.nowAll) do
     row:SetScript("OnClick", function(self) if self.data and self.data.recipe then OpenOnRecipe(self.data.recipe) end end)
   end
 
@@ -99,6 +114,9 @@ local function BuildMainPage(p)
     Check(p, "Show Leatherworking info on material tooltips", 16, -412,
       function() return S().tooltips end, function(v) S().tooltips = v end),
   }
+  -- mouse wheel over the list scrolls it
+  K.ScrollRows(p.nowAll, "nowOff", function() return (p.nowCount or 0) - #p.rows end)
+  LayoutMain(p, 0)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("/fa lw next  ·  /fa lw plan 225  ·  open your Leatherworking window to refresh recipes")
 end
@@ -153,11 +171,17 @@ local function RefreshMainPage(p)
   else
     p.find:SetText(""); p.empty:SetText("")
   end
-  Fill(p.rows, list, 0)
+  p.nowCount = #list
+  view.nowOff = math.max(0, math.min(view.nowOff or 0, #list - #p.rows))
+  Fill(p.rows, list, view.nowOff)
 
   ns.RefreshSession(p)
   p.open:ShowIf(knows and not ns.HasRecipes())
   p.openTop:ShowIf(knows and ns.HasRecipes())
+  p.planBtn:SetShown(not knows); p.planTxt:SetShown(not knows)
+  -- without the profession the heading is about planning ahead, not what you can make
+  p.nowHead:SetText(FA.GOLD .. (knows and "Make now" or "Plan ahead") .. "|r")
+  p.nowSub:SetText(knows and "recipes that still give skill-ups" or "")
   -- not learned: say where to learn it
   p.learnFrom = nil
   if not i.rank then
@@ -246,16 +270,27 @@ local function RefreshProgressPage(p)
   end
   if i.rank then p.rate:SetText(("%d craft%s since your last skill-up  ·  "):format(i.sinceUp or 0, (i.sinceUp or 0) == 1 and "" or "s") .. (p.rate:GetText() or "")) end
   p.open:ShowIf(ns.Knows() and not ns.HasRecipes())
-  if not (ns.Knows() and ns.HasRecipes()) then
+  -- without the profession, the plan plans ahead (from skill 1, with an alt's or the beta's recipes)
+  local ahead = not ns.Knows()
+  if ns.Knows() and not ns.HasRecipes() then
     Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); p.note:SetText(""); p.cost:SetText(""); p.target:SetTextColor(1, 1, 1)
     p.empty:SetText(ns.Knows() and "Open your Leatherworking window once so I can read your recipes." or "")
     return
   end
   p.empty:SetText("")
-  local default = math.min((i.max and i.max > i.rank) and i.max or (i.rank + 25), 300)
+  local default = ahead and 75 or math.min((i.max and i.max > i.rank) and i.max or (i.rank + 25), 300)
   local target = view.target or default
   if not p.target:HasFocus() then p.target:SetText(tostring(target)) end
-  local steps, shopping, stuck, _, _, hint = ns.Plan(target)
+  local steps, shopping, stuck, _, _, hint, aheadInfo = ns.Plan(target)
+  if aheadInfo and aheadInfo.none then
+    Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); p.note:SetText(""); p.cost:SetText(""); p.target:SetTextColor(1, 1, 1)
+    p.empty:SetText("No Leatherworking recipes on file yet. Learn it at a trainer on any character, open the Leatherworking window once (you can drop it again), and this tab plans ahead for it.")
+    return
+  end
+  if aheadInfo then
+    p.rate:SetText(GRAY .. "Planning ahead from skill 1 with " .. (aheadInfo.from == "alt" and ("recipes your alt " .. (aheadInfo.who or "?"):match("^[^-]+") .. " has seen")
+      or "recipes from the Forever beta") .. ". The list is what to save.|r")
+  end
 
   local plan = {}
   for _, st in ipairs(steps) do
@@ -295,15 +330,19 @@ local function RefreshProgressPage(p)
     unreachable = true
   end
   if stuck and stuck < target then
-    notes[#notes + 1] = YELLOW .. ("Your recipes stop giving skill-ups at %d. Learn new recipes to go further.|r"):format(stuck)
-    if hint then notes[#notes + 1] = GRAY .. hint .. "|r" end
+    if aheadInfo then
+      notes[#notes + 1] = YELLOW .. ("Trainer recipes we know of stop giving skill-ups at %d. Open a higher-rank Leatherworking trainer's list (no need to learn it) to plan further.|r"):format(stuck)
+    else
+      notes[#notes + 1] = YELLOW .. ("Your recipes stop giving skill-ups at %d. Learn new recipes to go further.|r"):format(stuck)
+      if hint then notes[#notes + 1] = GRAY .. hint .. "|r" end
+    end
     unreachable = true
   end
   p.note:SetText(table.concat(notes, "\n"))
   if unreachable then p.target:SetTextColor(1, .4, .4) else p.target:SetTextColor(1, 1, 1) end
 
   -- training first: what you can learn now in one line, then the rest by the skill you need
-  local shop = FA.TrainShopRows and FA.TrainShopRows(shopping, i.rank) or {}
+  local shop = FA.TrainShopRows and FA.TrainShopRows(shopping, i.rank or (ahead and 1)) or {}
   for _, e in ipairs(shopping) do
     if not e.train then
     local done = e.have >= e.need
@@ -508,10 +547,11 @@ end
 -- visits; the dot says how much to trust each price. Never searches, posts or buys.
 local BEST_ROWS = 14
 local BEST_MODES = {
-  { "profit", "Most profit", 86, "Ranked by profit per craft after the Auction House's cut, with the return." },
-  { "return", "Best return", 86, "Ranked by return: +150% means 1g of materials brings back 2g 50s." },
-  { "level", "Cheapest to level", 120, "Recipes that still give skill-ups, cheapest per point first." },
-  { "both", "Profit + skill-ups", 124, "Crafts that level you and pay for themselves." },
+  { "profit", "Profit", 62, "Ranked by profit per craft after the Auction House's cut, with the return." },
+  { "return", "Return", 62, "Ranked by return: +150% means 1g of materials brings back 2g 50s." },
+  { "level", "Cheapest to level", 118, "Skill-ups, cheapest per point first. Counts selling or disenchanting." },
+  { "both", "Level + profit", 100, "Crafts that level you and pay for themselves." },
+  { "disenchant", "Disenchant", 84, "Crafted to disenchant: what it disenchants into, minus the materials." },
 }
 local DOT = {
   good = "|TInterface\\COMMON\\Indicator-Green:14|t",
@@ -520,7 +560,11 @@ local DOT = {
 }
 local CONF_WORD = { good = "steady price", ok = "price looks fair, check it", shaky = "shaky price: old, few listed or swinging" }
 
-local function BestMode() return S().bestMode or "profit" end
+local function BestMode()
+  local m = S().bestMode
+  for _, x in ipairs(BEST_MODES) do if x[1] == m then return m end end
+  return "profit"
+end
 
 local function ConfLines(c)
   if not c then return "" end
@@ -549,8 +593,12 @@ local function BestData()
       local col = ns.ColorFor(r, skill)
       local right
       if mode == "level" then
-        right = row.perPoint > 0 and (FA.Money(math.floor(row.perPoint + 0.5)) .. " a point")
-          or (GREEN .. "earns " .. FA.Money(math.floor(-row.perPoint + 0.5)) .. " a point|r")
+        right = (row.perPoint > 0 and (FA.Money(math.floor(row.perPoint + 0.5)) .. " a point")
+          or (GREEN .. "earns " .. FA.Money(math.floor(-row.perPoint + 0.5)) .. " a point|r"))
+          .. (row.viaDE and (GRAY .. "  ·  disenchant it|r") or "")
+      elseif mode == "disenchant" then
+        local money = (row.deProfit >= 0 and (GREEN .. "+" .. FA.Money(row.deProfit)) or (RED .. FA.Money(row.deProfit))) .. "|r"
+        right = money .. GRAY .. "  ·  |r" .. (row.deRet and ((row.deRet >= 0 and GREEN or RED) .. FA.ReturnText(row.deRet) .. "|r") or (GRAY .. "free mats|r"))
       else
         -- profit and return on every row, whichever sort is picked, so pocket-change crafts stand out;
         -- a clearly better house adds where to sell
@@ -595,10 +643,10 @@ local function BuildBestPage(p)
     end)
   end
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -150, p, "TOP"); p.empty:SetJustifyH("CENTER"); p.empty:SetWidth(400)
-  p.hide = K.Check(p, "Hide shaky prices", 16, -(80 + BEST_ROWS * 24 + 4),
+  p.hide = K.Check(p, "Hide shaky prices", 16, -(80 + BEST_ROWS * 24 + 18),
     function() return S().bestHideShaky end, function(v) S().bestHideShaky = v or nil; view.bestOff = 0 end)
   -- the player's own minimum profit per craft (every profession and the Market tab share it)
-  p.minLabel = Text(p, "GameFontHighlightSmall", "TOPLEFT", 200, -(80 + BEST_ROWS * 24 + 9))
+  p.minLabel = Text(p, "GameFontHighlightSmall", "TOPLEFT", 200, -(80 + BEST_ROWS * 24 + 23))
   p.minLabel:SetText("Hide crafts making under")
   p.min = K.MoneyBox(p, 74, function() return FA.MinProfit() end,
     function(v) FA.SetMinProfit(v); view.bestOff = 0; ns.OnChange() end)
@@ -641,6 +689,7 @@ local function RefreshBestPage(p)
       and "You're at this rank's cap: train the next rank and skill-up crafts show here again.")
     or (mode == "level" and "Nothing that still gives skill-ups has prices yet. Visit the Auction House, or scan with Auctionator.")
     or (mode == "both" and "None of your skill-up recipes pays for itself at today's prices.")
+    or (mode == "disenchant" and "Nothing you craft disenchants for prices known yet. Disenchanting needs green or better weapons and armor, and Auction House prices for the dust, essences and shards.")
     or (FA.MinProfit() and ("Nothing makes at least " .. FA.Money(FA.MinProfit()) .. " a craft. Lower or clear the minimum below."))
     or "No prices yet for what you craft. Visit the Auction House, or scan with Auctionator.")
 end
@@ -690,6 +739,7 @@ local function ShowTab(name)
   for k, b in pairs(tabs) do b:SetEnabled(k ~= name) end
   if REFRESH[name] then REFRESH[name](pages[name]) end
 end
+ns.ShowTab = ShowTab
 
 local function Build()
   local order = { { "main", "Leatherworking" }, { "progress", "Progress" }, { "log", "Craft log" }, { "guide", "Recipe book" }, { "best", "Best crafts" } }
@@ -701,14 +751,16 @@ local function Build()
   BuildBestPage(pages.best)
   -- drag the corner to make the window taller: the Progress tab shows more of the plan and list
   K.Tall(f, "height", 900, function(extra)
+    local main = LayoutMain(pages.main, extra)
     if LayoutProgress(pages.progress, extra) and view.tab == "progress" then ns.OnChange() end
+    if main and view.tab == "main" then ns.OnChange() end
   end, "pos")
 
   f:SetScript("OnUpdate", function(self, el)
     self.t = (self.t or 0) + el
     if self.t > 5 then self.t = 0; if view.tab == "main" then ns.RefreshSession(pages.main) end end
   end)
-  f:HookScript("OnShow", function() view.bookFind = ""; view.bookShow, view.guideOff, view.planOff, view.shopOff = "all", 0, 0, 0 end)
+  f:HookScript("OnShow", function() view.bookFind = ""; view.bookShow, view.guideOff, view.planOff, view.shopOff, view.nowOff = "all", 0, 0, 0, 0 end)
   f:Hide()
   ShowTab("main")
 end
