@@ -779,6 +779,24 @@ function FA.MarketKnows(profName, recipeName)
   return nil
 end
 
+-- The same for another of your characters (its key in the module's saved data): true / false, or nil when
+-- that character hasn't opened the profession window with ForeverArtisan (its recipes aren't known).
+function FA.MarketKnowsChar(profName, key, recipeName)
+  for _, p in ipairs(market) do
+    if p.name == profName and p.byChar then
+      local ok, chars = pcall(p.byChar)
+      local c = ok and type(chars) == "table" and chars[key]
+      if not (c and type(c.recipes) == "table" and next(c.recipes)) then return nil end
+      local want = recipeName:lower()
+      for _, r in pairs(c.recipes) do
+        if r.name and r.name:lower() == want then return r.learned and true or false end
+      end
+      return false
+    end
+  end
+  return nil
+end
+
 -- Every profession's Best crafts in one list, by profit after the cut: rows from FA.BestCrafts,
 -- each with .prof (the module). Second value: how many professions had recipes to read.
 function FA.MarketRows()

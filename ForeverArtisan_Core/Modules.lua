@@ -314,8 +314,9 @@ local function refreshPanel()
     -- installed and used: check mark + name. Installed but off: name (off). Missing: gray name.
     local broken = {}
     for _, a in ipairs(FA.AddonHealth and FA.AddonHealth() or {}) do if a.state == "broken" then broken[a.name] = true end end
-    local function show(name, installed, on)
+    local function show(name, installed, on, loading)
       if broken[name] then return name .. RED .. " (can't read)|r" end
+      if loading then return name .. GREY .. " (loading)|r" end
       if not installed then return GREY .. name .. "|r" end -- gray = not installed (the tooltip says so)
       if not on then return name .. GREY .. " (off)|r" end
       return CHECK .. name
@@ -324,7 +325,7 @@ local function refreshPanel()
     local gs = FA.GatherStatus and FA.GatherStatus() or "missing"
     panel.works.text:SetText(GOLD .. "Works best with|r" .. GREY .. "  (hover for what each adds)|r\n"
       .. show("Auctionator", type(_G.Auctionator) == "table", true)
-      .. GREY .. "  ·  |r" .. show("Questie", st ~= "missing" and st ~= "incompatible", st ~= "off")
+      .. GREY .. "  ·  |r" .. show("Questie", st ~= "missing" and st ~= "incompatible", st ~= "off", st == "loading" or st == "reading")
       .. GREY .. "  ·  |r" .. show("Syndicator", FA.SyndicatorStatus and FA.SyndicatorStatus() ~= "missing", not (FA.SyndicatorStatus and FA.SyndicatorStatus() == "off"))
       .. "\n" .. show("GatherMate2", gs ~= "missing", gs ~= "off")
       .. GREY .. "  ·  |r" .. show("TomTom", type(rawget(_G, "TomTom")) == "table", true))
@@ -528,7 +529,8 @@ local function buildModulesTab(p)
     GameTooltip:AddLine(hasA and "After a full scan, every price in plans, shopping lists and Best crafts is current."
       or "One scan prices the whole Auction House. Without it, prices come from Auction House pages you browse.", 1, 1, 1, true)
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Questie" .. ((st == "missing") and " (not installed)" or (st == "off") and " (installed, turned off)" or " (installed)"), 1, 0.82, 0)
+    GameTooltip:AddLine("Questie" .. ((st == "missing") and " (not installed)" or (st == "off") and " (installed, turned off)"
+      or (st == "loading" or st == "reading") and " (installed, still loading its data)" or " (installed)"), 1, 0.82, 0)
     GameTooltip:AddLine((st == "on") and (n .. " profession trainers for your faction from its database, in search and Nearest trainer. Click to turn off.")
       or (st == "off") and "Click to show every profession trainer from its database again."
       or (st == "missing") and "Every profession trainer in the game in search and Nearest trainer, not just the ones you've met."
@@ -1015,8 +1017,30 @@ function showWatch()
   p.watching = true
   for _, w in ipairs(p.listParts) do w:Hide() end
   v:Show()
-  local list = FA.RecipeWatchList and FA.RecipeWatchList() or {}
+  local all = FA.RecipeWatchList and FA.RecipeWatchList() or {}
   local tr = FA.LearnedTrades and FA.LearnedTrades() or {}
+  -- who's on the list (you first, then most recipes), and the one picked with the filter button
+  local counts, order = {}, {}
+  for _, e in ipairs(all) do
+    local k = e.who or "you"
+    if not counts[k] then counts[k] = 0; order[#order + 1] = k end
+    counts[k] = counts[k] + 1
+  end
+  table.sort(order, function(a, b)
+    if (a == "you") ~= (b == "you") then return a == "you" end
+    if counts[a] ~= counts[b] then return counts[a] > counts[b] end
+    return a < b
+  end)
+  v.order, v.counts = order, counts
+  if v.filter and not counts[v.filter] then v.filter = nil end
+  local list = all
+  if v.filter then
+    list = {}
+    for _, e in ipairs(all) do if (e.who or "you") == v.filter then list[#list + 1] = e end end
+  end
+  v.filterBtn:SetText(v.filter and ((v.filter == "you" and "You" or v.filter) .. " (" .. counts[v.filter] .. ")  >")
+    or ("All characters (" .. #all .. ")  >"))
+  v.filterBtn:SetShown(#order > 1 or v.filter ~= nil)
   v.data = list
   v.off = math.max(0, math.min(v.off or 0, #list - WATCH_ROWS))
   for i, r in ipairs(v.rows) do
@@ -1024,13 +1048,21 @@ function showWatch()
     r.e = e
     if e then
       local req = FA.RecipeWatchReq and FA.RecipeWatchReq(e)
-      local have = tr[e.prof:lower()] and tr[e.prof:lower()].rank
+      -- the skill of whoever it's for (you, or the alt in e.who)
+      local have = e.whoRank or (tr[e.prof:lower()] and tr[e.prof:lower()].rank)
       r.icon:SetTexture(FA.UI.Icon(e.id))
-      r.left:SetText((e.ready and "" or GREY) .. e.name .. "|r")
+      -- "Recipe: " / "Pattern: " is dropped here (the title says what they are), so the name and who it's
+      -- for fit; the hover shows the whole item
+      local short = e.name:gsub("^%a+: ", "")
+      -- "for Medz" only on the All list: once you've picked a character, every row is theirs
+      r.left:SetText((e.ready and "" or GREY) .. short .. "|r" .. ((e.who and not v.filter) and (GOLD .. "  for " .. e.who .. "|r") or ""))
       local npcText, cheaper = FA.RecipeNpcText and FA.RecipeNpcText(e)
       r.right:SetText(FA.Money(e.price) .. GREY .. " AH|r"
         .. (npcText and ((cheaper and GREEN or GREY) .. "  ·  " .. npcText .. "|r") or "")
         .. (req and (GREY .. "  ·  " .. ((have and have < req) and (RED .. "needs " .. req .. "|r") or ("needs " .. req))) or "") .. "|r")
+      -- the name takes whatever the prices leave
+      local rw = r.right.GetStringWidth and r.right:GetStringWidth()
+      r.left:SetWidth(math.max(160, 388 - (tonumber(rw) or 200)))
       r:Show()
     else
       r:Hide()
@@ -1038,7 +1070,7 @@ function showWatch()
   end
   v.empty:SetShown(#list == 0)
   v.hint:SetText(GREY .. (#list > WATCH_ROWS and ("Scroll for more. ") or "")
-    .. "Green: cheaper at a trainer or vendor (hover for who). Red: your skill is too low for it. Click to search the Auction House, right-click for a waypoint.|r")
+    .. "Green: cheaper at a trainer or vendor (hover for who). Red: the skill is too low for it. Click to search the Auction House, right-click for a waypoint.|r")
 end
 
 local function buildWatch(p)
@@ -1049,7 +1081,28 @@ local function buildWatch(p)
   v.back = CreateFrame("Button", nil, v, "UIPanelButtonTemplate")
   v.back:SetSize(80, 22); v.back:SetPoint("TOPLEFT", 16, -4); v.back:SetText("< Back")
   v.back:SetScript("OnClick", hideWatch)
-  v.title = Txt(v, "GameFontNormal", 104, -8, 330, GOLD .. "Recipes you don't know, on the Auction House|r")
+  v.title = Txt(v, "GameFontNormal", 104, -8, 170, GOLD .. "Recipes on the AH|r")
+  -- one character at a time: All, then each of yours on the list (click to step, right-click to go back)
+  v.filterBtn = CreateFrame("Button", nil, v, "UIPanelButtonTemplate")
+  v.filterBtn:SetSize(170, 22); v.filterBtn:SetPoint("TOPRIGHT", -16, -4)
+  v.filterBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  v.filterBtn:SetScript("OnClick", function(_, button)
+    local list = { false }
+    for _, k in ipairs(v.order or {}) do list[#list + 1] = k end
+    local at = 1
+    for i, k in ipairs(list) do if k == (v.filter or false) then at = i end end
+    at = button == "RightButton" and (at - 2) % #list + 1 or at % #list + 1
+    v.filter = list[at] or nil
+    v.off = 0
+    showWatch()
+  end)
+  v.filterBtn:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine("Show one character's recipes")
+    GameTooltip:AddLine("Click for the next character, right-click to go back.", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  v.filterBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
   v.rows = {}
   for i = 1, WATCH_ROWS do
     local r = CreateFrame("Button", nil, v)
@@ -1081,6 +1134,9 @@ local function buildWatch(p)
       GameTooltip:SetItemByID(self.e.id)
       GameTooltip:AddLine(" ")
       GameTooltip:AddLine("Auction House: " .. FA.Money(self.e.price) .. " (cheapest seen)", 1, 1, 1)
+      local e = self.e
+      GameTooltip:AddLine("For: " .. (e.who or "you") .. " (" .. e.prof .. (e.whoRank and (" " .. e.whoRank) or "") .. ")"
+        .. ((e.others or 0) > 0 and ("  ·  " .. e.others .. " more of your characters could use it") or ""), 0.83, 0.66, 0.31, true)
       local npcText, cheaper, src = nil, nil, nil
       if FA.RecipeNpcText then npcText, cheaper, src = FA.RecipeNpcText(self.e) end
       if src then
@@ -1492,6 +1548,7 @@ NEWS = {
   { "0.9.25", "Modules tab: legacy points and crafting cooldowns. Trade Contacts finds recipes too, "
     .. "and the lure button picks the best lure you can use. The Discord is live: come help shape ForeverArtisan." },
   { "0.9.26", "Fixed a long game hitch during full Auction House scans from some auction addons." },
+  { "0.9.27", "Make now counts your bank and vendor mats, and recipe watch finds recipes on the Auction House for you and your alts (/fa market)." },
 }
 
 local function verNum(v)
@@ -1675,7 +1732,7 @@ local function help()
   print("  /fa discord  - the ForeverArtisan Discord (" .. FA.DISCORD .. ")")
   print("  /fa market  - your most profitable crafts, every profession in one list")
   print("  /fa new  - what's new in recent releases")
-  if FA.RECIPE_WATCH_READY then print("  /fa recipewatch on | off  - recipes you don't know, noted when you see them on the Auction House") end
+  if FA.RECIPE_WATCH_READY then print("  /fa recipewatch on | quiet | off  - recipes you or your alts don't know, noted when you see them on the Auction House (quiet: no chat)") end
   print("  /fa nameplates on | off  - the game's friendly nameplates (job titles in town need them; also shows them over players)")
   print("  /fa titles on | off | auto  - job titles under NPC names (auto leaves them to Plater and other nameplate addons)")
   print("  /fa prices on | off  - Auction House prices on item tooltips (off while Auctionator shows its own)")
@@ -1747,11 +1804,14 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     local r = (rest or ""):lower()
     ForeverArtisanSettings = ForeverArtisanSettings or {}
     if r == "off" then ForeverArtisanSettings.recipeWatchOff = true
-    elseif r == "on" then ForeverArtisanSettings.recipeWatchOff = nil end
+    elseif r == "on" then ForeverArtisanSettings.recipeWatchOff, ForeverArtisanSettings.recipeWatchQuiet = nil, nil
+    elseif r == "quiet" then ForeverArtisanSettings.recipeWatchOff, ForeverArtisanSettings.recipeWatchQuiet = nil, true end
     local list = FA.RecipeWatchList and FA.RecipeWatchList() or {}
-    print(PREFIX .. "Recipe watch " .. (ForeverArtisanSettings.recipeWatchOff and "off" or "on") .. ". "
-      .. (#list > 0 and (#list .. " recipe" .. (#list == 1 and "" or "s") .. " you don't know seen on the Auction House (/fa > Market, hover the gold line).") or "Nothing seen yet.")
-      .. GREY .. " /fa recipewatch on | off|r")
+    local state = ForeverArtisanSettings.recipeWatchOff and "off"
+      or ForeverArtisanSettings.recipeWatchQuiet and "quiet (the Market list, no chat lines)" or "on"
+    print(PREFIX .. "Recipe watch " .. state .. ". "
+      .. (#list > 0 and (#list .. " recipe" .. (#list == 1 and "" or "s") .. " you don't know seen on the Auction House (type /fa market and click the gold line).") or "Nothing seen yet.")
+      .. GREY .. " /fa recipewatch on | quiet | off|r")
   elseif lower == "nameplates" or lower == "plates" then
     if (rest or ""):lower():match("^%s*off") then
       if FA.TurnOffFriendlyPlates then FA.TurnOffFriendlyPlates() end

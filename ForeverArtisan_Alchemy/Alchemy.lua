@@ -42,6 +42,13 @@ local function Count(id)
 end
 ns.Count = Count
 
+-- bags plus your bank (as of your last visit, Core Stock.lua): what the plan and shopping list count as yours
+local function Own(id)
+  local B = ForeverArtisan and ForeverArtisan.BankCount
+  return Count(id) + ((B and type(id) == "number") and (B(id)) or 0)
+end
+ns.Own = Own
+
 -- item class / subclass (Trade Goods 7: 5 cloth, 6 leather, 7 metal & stone, 9 herb)
 local function ItemKind(id)
   local InstantAPI = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
@@ -434,7 +441,8 @@ function ns.SourceFor(id, name)
   if hint then return "Vendor: " .. hint .. " (none in your Trade Contacts yet)" end
   local w = BestLogged(ForeverArtisanHerbalismDB, id)
   if w then return "Herb: " .. w .. ", from your Herbalism log" end
-  w = BestLogged(ForeverArtisanSkinningDB, id)
+  -- (not for cloth: a corpse looted right after a skin can land in the Skinning log)
+  w = not (ForeverArtisan.IsCloth and ForeverArtisan.IsCloth(id, name)) and BestLogged(ForeverArtisanSkinningDB, id) or nil
   if w then return "Skin: " .. w .. ", from your Skinning log" end
   w = BestLogged(ForeverArtisanMiningDB, id)
   if w then return "Mine: " .. w .. ", from your Mining log" end
@@ -511,8 +519,13 @@ function ns.MakeNow()
         missing = missing, stations = ns.Stations(r) }
     end
   end
+  -- your bags first, then with your bank mats, then once you buy vendor mats (Core Stock.lua)
+  for _, e in ipairs(out) do
+    e.m = (ForeverArtisan.MakeCounts and not (e.missing and #e.missing > 0)) and ForeverArtisan.MakeCounts(e.r, Count) or { bags = e.make, bank = e.make }
+    e.tier = e.make > 0 and 3 or e.m.bank > 0 and 2 or e.m.buy and 1 or 0
+  end
   table.sort(out, function(a, b)
-    if (a.make > 0) ~= (b.make > 0) then return a.make > 0 end
+    if a.tier ~= b.tier then return a.tier > b.tier end
     if a.chance ~= b.chance then return a.chance > b.chance end
     return (a.r.grayAt or 0) > (b.r.grayAt or 0)
   end)
@@ -542,7 +555,7 @@ function ns.Plan(target)
   end
 
   local stock, used, crafted, names = {}, {}, {}, {}
-  local function Have(id) if stock[id] == nil then stock[id] = Count(id) end; return stock[id] end
+  local function Have(id) if stock[id] == nil then stock[id] = Own(id) end; return stock[id] end
   local s, total, cur = skill, 0, nil
   local Craft
   -- make sure n of id are on hand, crafting the shortfall when you know a recipe for it
@@ -650,7 +663,7 @@ function ns.Plan(target)
     end
   end
   for id, n in pairs(used) do
-    local e = { id = id, name = ItemName(id, names[id]), need = n, have = Count(id) }
+    local e = { id = id, name = ItemName(id, names[id]), need = n, have = Own(id) }
     if crafted[id] then
       e.craft, e.via = crafted[id], makes[id]
       local parts = {}

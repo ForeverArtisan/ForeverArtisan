@@ -134,7 +134,12 @@ function ns.QuestieStatus()
   if state.status == "ready" then return "on", Fitting(state.list) end
   if state.status == "building" then return "reading", 0 end
   if Lib() then return "installed", 0 end
-  return rawget(_G, "LibQuestieDB") and "incompatible" or "missing", 0
+  if rawget(_G, "LibQuestieDB") then return "incompatible", 0 end
+  -- Questie is loaded but its database isn't ready yet (it builds it after login): not "missing"
+  local loaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or IsAddOnLoaded
+  local ok, isLoaded = pcall(loaded or function() end, "Questie")
+  if (ok and isLoaded) or type(rawget(_G, "Questie")) == "table" then return "loading", 0 end
+  return "missing", 0
 end
 
 -- the /fa panel's "Works best with" line reads this (Core can't see Trade Contacts' ns)

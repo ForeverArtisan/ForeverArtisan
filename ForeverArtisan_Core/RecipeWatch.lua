@@ -1,7 +1,9 @@
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
 -- ForeverArtisan: Core: recipe watch. While you look at the Auction House (or Auctionator scans it),
--- recipe items for a profession you have, that you don't know yet, are noted with their cheapest price.
--- One chat line after the scan names the new ones, and the /fa Market tab lists them (hover).
+-- recipe items for a profession you or one of your alts has (same realm and faction: you can mail it),
+-- that they don't know yet, are noted with their cheapest price. One chat line after the scan names the
+-- new ones ("for Boomz" on an alt's), and the /fa Market tab lists them.
+-- An alt counts once it has logged in and opened that profession's window with ForeverArtisan.
 -- It only reads what the Auction House already showed you; it never searches or buys.
 --   FA.NoteRecipeListing(id, name, unitPrice)   Prices.lua calls this for each item on a page
 --   FA.RecipeWatchList()                        { { id, name, prof, price, at }, ... } cheapest first
@@ -25,8 +27,8 @@ local function Store()
   s.recipeWatch = s.recipeWatch or {}
   return s.recipeWatch
 end
--- held back until 0.9.26 (with your alts' recipes): the code ships, but stays off and out of sight
-FA.RECIPE_WATCH_READY = false
+-- on since 0.9.27 (with your alts' recipes); off hides all of it (the tests flip it)
+FA.RECIPE_WATCH_READY = true
 function FA.RecipeWatchOn() return FA.RECIPE_WATCH_READY and not Settings().recipeWatchOff end
 
 local function Strip(name)
@@ -42,6 +44,53 @@ local function Trades()
     tradesCache, tradesAt = (FA.LearnedTrades and FA.LearnedTrades() or {}), now
   end
   return tradesCache
+end
+
+-- Who could use this recipe: you, and your alts on this realm and faction that have the profession and
+-- don't know it. { { me = true | name, key, rank }, ... }. An alt whose recipes haven't been read is skipped.
+local function Candidates(prof, base)
+  local out, lower = {}, prof:lower()
+  local mine = Trades()[lower]
+  if mine and not (FA.MarketKnows and FA.MarketKnows(prof, base)) then
+    out[#out + 1] = { me = true, rank = mine.rank }
+  end
+  local acct = Settings().account
+  local chars = acct and acct.chars
+  if type(chars) ~= "table" or not FA.MarketKnowsChar then return out end
+  local myKey = FA.MyCharKey and FA.MyCharKey()
+  local realm = GetRealmName and GetRealmName()
+  -- an older record of this same character ("Name-Realm", saved before keys had the character's ID)
+  -- isn't an alt: its recipes are out of date
+  local myName = UnitName and UnitName("player")
+  local myOldKey = (type(myName) == "string" and type(realm) == "string") and (myName .. "-" .. realm) or nil
+  local faction = UnitFactionGroup and UnitFactionGroup("player")
+  for key, c in pairs(chars) do
+    if key ~= myKey and key ~= myOldKey and type(c) == "table" and c.realm == realm and c.faction == faction
+      and type(c.trades) == "table" and c.trades[lower] then
+      if FA.MarketKnowsChar(prof, key, base) == false then
+        out[#out + 1] = { name = c.fullName or c.name or "?", key = key, rank = c.trades[lower] }
+      end
+    end
+  end
+  return out
+end
+FA.RecipeWatchWho = Candidates
+
+-- Which of them it's for: someone who can learn it now first (you before an alt), else the highest skill.
+-- Fills e.who (nil for you), e.whoRank, e.ready, e.others (how many more could use it).
+local function Pick(e, who)
+  local req = FA.RecipeWatchReq and FA.RecipeWatchReq(e)
+  local best, bestReady
+  for _, c in ipairs(who) do
+    local ready = not (req and c.rank and c.rank < req)
+    local better = not best
+      or (ready and not bestReady)
+      or (ready == bestReady and ((c.me and not best.me) or (not best.me and (c.rank or 0) > (best.rank or 0))))
+    if better then best, bestReady = c, ready end
+  end
+  if not best then return false end
+  e.who, e.whoRank, e.ready, e.others = (not best.me) and best.name or nil, best.rank, bestReady, #who - 1
+  return true
 end
 
 -- Another way to get it: a trainer or vendor you've met (Trade Contacts, with the price you saw), or a
@@ -80,29 +129,45 @@ end
 
 local fresh, announced, flushAt = {}, {}, nil
 
+-- A recipe gets a chat line once, saved across sessions (not every login): when it's new, when its price
+-- has dropped by a quarter since that line, or when someone's skill has just reached it. Only recipes
+-- someone can learn now; the rest wait in the Market list. /fa recipewatch quiet: the list, no chat.
+local CHEAPER = 0.75
 local function Flush()
   flushAt = nil
-  -- chat only names recipes you can learn now; the others wait in the Market list (and get a line
-  -- on a later scan, once your skill is high enough)
-  local list, tr = {}, Trades()
+  local list = {}
   for id in pairs(fresh) do
     local e = Store()[id]
-    if e and not announced[id] then
-      local req = FA.RecipeWatchReq and FA.RecipeWatchReq(e)
-      local have = tr[e.prof:lower()] and tr[e.prof:lower()].rank
-      if not (req and have and have < req) then announced[id] = true; list[#list + 1] = e end
+    if e and not announced[id] and Pick(e, Candidates(e.prof, Strip(e.name) or e.name)) then
+      if not e.ready then
+        e.waited = true -- seen, but nobody's skill is high enough yet
+      elseif not e.toldPrice then
+        e.why = e.waited and "now" or nil
+        list[#list + 1] = e
+      elseif e.price <= e.toldPrice * CHEAPER then
+        e.why = "was"
+        list[#list + 1] = e
+      end
     end
   end
   wipe(fresh)
   if #list == 0 or not FA.RecipeWatchOn() then return end
+  for _, e in ipairs(list) do
+    announced[e.id] = true
+    e.wasPrice, e.toldPrice, e.waited = e.toldPrice, e.price, nil
+  end
+  if Settings().recipeWatchQuiet then return end
   table.sort(list, function(a, b) return a.price < b.price end)
   local parts = {}
   for i = 1, math.min(3, #list) do
     local npcText, cheaper = FA.RecipeNpcText(list[i])
-    parts[i] = list[i].name .. " " .. FA.Money(list[i].price)
+    local e = list[i]
+    parts[i] = e.name .. (e.who and (" for " .. e.who) or "") .. " " .. FA.Money(e.price)
+      .. ((e.why == "was" and e.wasPrice) and (" (was " .. FA.Money(e.wasPrice) .. ")") or "")
+      .. (e.why == "now" and (" (" .. (e.who or "you") .. " can learn it now)") or "")
       .. (npcText and (cheaper and (" (cheaper: " .. npcText .. ")") or (" (" .. npcText .. ")")) or "")
   end
-  print(PREFIX .. ("%d recipe%s you don't know %s on the Auction House: %s%s. %sThe full list: /fa > Market, click the gold line at the top.|r"):format(
+  print(PREFIX .. ("%d recipe%s you don't know %s on the Auction House: %s%s. %sThe full list: type /fa market and click the gold line at the top. /fa recipewatch quiet: no chat.|r"):format(
     #list, #list == 1 and "" or "s", #list == 1 and "is" or "are", table.concat(parts, ", "),
     #list > 3 and (" and " .. (#list - 3) .. " more") or "", GRAY))
 end
@@ -118,14 +183,16 @@ function FA.NoteRecipeListing(id, name, unit)
     if classID and classID ~= 9 then return end
     prof = SUBCLASS[subID]
   end
-  if not prof or not Trades()[prof:lower()] then return end -- a profession this character has
-  local knows = FA.MarketKnows and FA.MarketKnows(prof, base)
+  if not prof then return end
   local w = Store()
-  if knows then w[id] = nil; return end
+  -- you or an alt has the profession and doesn't know it
+  if #Candidates(prof, base) == 0 then return end
   local e = w[id]
   local now = time()
   if not e or unit < e.price or now - (e.at or 0) > 600 then
-    w[id] = { id = id, name = name, prof = prof, price = unit, at = now }
+    -- a new price keeps what chat already said about it
+    w[id] = { id = id, name = name, prof = prof, price = unit, at = now,
+      toldPrice = e and e.toldPrice, waited = e and e.waited }
   else
     e.at = now
   end
@@ -139,16 +206,15 @@ end
 function FA.RecipeWatchList()
   local w, out, now = Store(), {}, time()
   for id, e in pairs(w) do
-    local knows = FA.MarketKnows and FA.MarketKnows(e.prof, Strip(e.name) or e.name)
-    if now - (e.at or 0) > KEEP or knows then w[id] = nil
-    elseif Trades()[e.prof:lower()] then out[#out + 1] = e end
+    if now - (e.at or 0) > KEEP then w[id] = nil
+    else
+      local who = Candidates(e.prof, Strip(e.name) or e.name)
+      -- nobody here who could use it (learned since, or it's for a character on another realm):
+      -- hidden, and it ages out like the rest (the list is shared by all your characters)
+      if #who > 0 and Pick(e, who) then out[#out + 1] = e end
+    end
   end
-  -- ones you could learn now first (your skill is high enough), then by price
-  local tr = Trades()
-  for _, e in ipairs(out) do
-    local req, have = FA.RecipeWatchReq(e), tr[e.prof:lower()] and tr[e.prof:lower()].rank
-    e.ready = not (req and have and have < req)
-  end
+  -- ones someone can learn now first (skill high enough), then by price
   table.sort(out, function(a, b)
     if a.ready ~= b.ready then return a.ready end
     return a.price < b.price
@@ -193,7 +259,8 @@ function FA.RecipeWatchLines()
   local tip = { "Recipes you don't know, on the Auction House",
     ("%d recipe%s, %d you can learn now. Last seen %s."):format(#list, #list == 1 and "" or "s", ready, Ago(now - newest)),
     "|cff80c0ffClick to see the list.|r" }
-  tip[#tip + 1] = GRAY .. "From the Auction House pages you looked at (or Auctionator's scan). It may have sold since. /fa recipewatch off turns this off.|r"
+  tip[#tip + 1] = GRAY .. "From the Auction House pages you looked at (or Auctionator's scan). It may have sold since. "
+    .. "Your alts on this realm and faction count once they've opened that profession's window with ForeverArtisan. /fa recipewatch quiet: no chat. /fa recipewatch off turns this off.|r"
   return GOLD .. #list .. " recipe" .. (#list == 1 and "" or "s") .. " for you on the AH  >|r", tip
 end
 

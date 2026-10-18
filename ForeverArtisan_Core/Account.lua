@@ -43,6 +43,15 @@ function FA.NoteCharacter()
   local c = Me()
   local name = UnitName and UnitName("player")
   if Plain(name) and type(name) == "string" then c.name = name end
+  -- the full name ("Boomz Dynamitez"): the game gives addons only the first, Syndicator knows the rest
+  local S = rawget(_G, "Syndicator")
+  if type(S) == "table" and type(S.API) == "table" and type(S.API.GetCurrentCharacter) == "function" then
+    local ok, cur = pcall(S.API.GetCurrentCharacter)
+    if ok and type(cur) == "string" and cur ~= "" then
+      local full = cur:gsub("%-[^%-]*$", "")
+      if c.name and full:sub(1, #c.name) == c.name then c.fullName = full end
+    end
+  end
   local cname, token
   if UnitClass then cname, token = UnitClass("player") end
   if Plain(token) and type(token) == "string" then c.class, c.className = token, cname end
@@ -55,8 +64,20 @@ function FA.NoteCharacter()
     if t and t.rank then profs[p] = t.rank end
   end
   c.profs = profs
+  -- every profession with its skill (Cooking and First Aid too), and where this character lives:
+  -- recipe watch uses these for your alts on the same realm and faction (what you can mail)
+  local trades = {}
+  for k, t in pairs(known) do if type(k) == "string" and t.rank then trades[k] = t.rank end end
+  c.trades = trades
+  local realm = GetRealmName and GetRealmName()
+  if Plain(realm) and type(realm) == "string" then c.realm = realm end
+  local fac = UnitFactionGroup and UnitFactionGroup("player")
+  if Plain(fac) and type(fac) == "string" then c.faction = fac end
   c.seen = time and time() or 0
 end
+
+-- this character's key in the account list (the same key the profession modules use)
+function FA.MyCharKey() local _, key = Me(); return key end
 
 ---------------------------------------------------------------- legacy points
 local function Reached(value, steps)

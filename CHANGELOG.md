@@ -1,5 +1,16 @@
 # ForeverArtisan changelog
 
+## 0.9.27 (2026-10-17)
+- "Make now" counts more than your bags. Open your bank once and recipes you could make with your bank's mats show "6 with bank mats". When vendor mats like Coarse Thread are all you're missing, a row shows "buy Coarse Thread: make 10", or "bank + vendor mats: make 8" when it also needs a bank trip. With Syndicator, a recipe you have none of but your alts have enough for shows "Peacebloom on alts". Thanks to the player who suggested it.
+- Hover a "Make now" row for what to buy (how many and the cost), what to take out of your bank, and which alts hold more of the mat you're short on, with how many more crafts that adds (with Syndicator).
+- The Progress plan and shopping lists count your bank too, so mats in the bank aren't crafted or bought again. Shopping rows show "· 23 in bank" while your bags alone are short.
+- New: **Recipe watch**. While you browse the Auction House (or Auctionator scans it), recipes that you or your alts (same realm and faction) don't know yet are noted with their price. One chat line after the scan names the ones someone can learn now (with "for" and the alt's name). Each recipe is named once, and again only if it gets a quarter cheaper or someone's skill reaches it. `/fa recipewatch quiet` keeps the list without chat lines, `/fa recipewatch off` turns it off.
+- Recipe watch list: type `/fa market` and click the gold line at the top. Cheapest first, recipes the skill is too low for at the bottom with the skill they need in red, and the price at a trainer or vendor you've met (green when that's cheaper). The button at the top shows one character at a time. Click a row with the Auction House open to search for it. An alt counts once it has logged in and opened that profession's window with ForeverArtisan.
+- Alts show by first and last name with Syndicator, so two characters with the same first name are told apart.
+- Fixed: "on alts" counts could include the character you're playing.
+- Fixed: cloth could show "Skin:" as where to get it, when you looted a corpse right after skinning.
+- Fixed: right after login, the Modules tab could show Questie as not installed while it was still loading. It now says "loading".
+
 ## 0.9.26 (2026-10-17)
 - Fixed: a full Auction House scan that uses the game's full-scan list (some auction addons' "full scan") could hitch the game for 30 to 90 seconds. ForeverArtisan's `/fa ahtest` listener started a new read of the list every time the game updated it, thousands of times per scan. Now one read runs at a time. Thanks to the player who traced it.
 

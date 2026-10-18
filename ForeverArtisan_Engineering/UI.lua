@@ -19,7 +19,7 @@ local Text, Button, Check, Icon, Header = K.Text, K.Button, K.Check, K.Icon, K.H
 local MakeRows, Fill, Wheel = K.MakeRows, K.Fill, K.Wheel
 local function S() return ns.DB().settings end
 
-local function ReagentTip(r)
+local function ReagentTip(r, m)
   local lines = {}
   for _, t in ipairs(r.tools or {}) do
     if t.station then
@@ -33,8 +33,14 @@ local function ReagentTip(r)
     local have = ns.Count(g.id)
     local col = have >= (g.n or 1) and GREEN or RED
     lines[#lines + 1] = ("%s%d/%d|r %s"):format(col, math.min(have, g.n or 1), g.n or 1, ns.ItemName(g.id, g.name))
+      .. ((FA.BankCount and have < (g.n or 1) and FA.BankCount(g.id) > 0) and (GRAY .. "  (" .. FA.BankCount(g.id) .. " in your bank)|r") or "")
   end
   -- what one craft costs and what it sells for (Auction House or vendor)
+  local more = (m and FA.MakeTipLines) and FA.MakeTipLines(r, m) or {}
+  if #more > 0 then
+    lines[#lines + 1] = " "
+    for _, l in ipairs(more) do lines[#lines + 1] = l end
+  end
   local value = FA.CraftValueLines and FA.CraftValueLines(r) or {}
   if #value > 0 then
     lines[#lines + 1] = " "
@@ -137,8 +143,8 @@ local function RefreshMainPage(p)
         right = (#e.missing > 0 and (RED .. "needs " .. table.concat(e.missing, ", ") .. "|r"))
           or (e.make > 0 and (GREEN .. "can make " .. e.make .. "|r"
             .. (#e.stations > 0 and (GRAY .. "  ·  at " .. e.stations[1]:lower() .. "|r") or "")))
-          or (GRAY .. "missing materials|r"),
-        tip = ReagentTip(e.r) }
+          or ((e.m and FA.MakeText and FA.MakeText(e.m)) or (GRAY .. "missing materials|r")),
+        tip = ReagentTip(e.r, e.m) }
     end
     p.empty:SetText(#list == 0 and "None of your recipes give skill-ups right now. Learn new ones or train." or "")
   elseif knows then
@@ -305,6 +311,10 @@ local function RefreshProgressPage(p)
     -- what your other characters hold (Syndicator), when it could save you buying
     local altNote, altTip = "", nil
     if not done and FA.AltShopText then altNote, altTip = FA.AltShopText(e.id, e.need - e.have, e.craft) end
+    -- what's in your bank (as of your last visit): shown while your bags alone are short, done or not
+    -- (10 / 10 with all 10 in the bank still means a trip to the bank)
+    local inBank = (not e.tool and e.id and FA.BankCount and ns.Count(e.id) < e.need) and FA.BankCount(e.id) or 0
+    if inBank > 0 then altNote = GREEN .. "  ·  " .. inBank .. " in bank|r" .. altNote end
     shop[#shop + 1] = { id = e.id, icon = Icon(e.id), name = e.name,
       left = (done and GREEN or "") .. e.name .. (done and "|r" or "") .. (e.tool and (GRAY .. "  (tool)|r") or ""),
       right = ("%s%d / %d|r"):format(done and GREEN or YELLOW, math.min(e.have, e.need), e.need)
@@ -620,6 +630,8 @@ if FA.RegisterMarket then
   FA.RegisterMarket({
     name = "Engineering",
     recipes = function() return ns.Knows() and ns.HasRecipes() and ns.CharRec().recipes or nil end,
+    -- every character's recipes, by character key (recipe watch for your alts)
+    byChar = function() local d = ns.DB and ns.DB(); return d and d.chars end,
     color = function(r)
       local base, bonus = ns.Skill()
       return ns.COLOR_CODE[ns.ColorFor(r, base and (base + (bonus or 0)))] or ""

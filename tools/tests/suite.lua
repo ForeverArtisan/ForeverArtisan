@@ -619,6 +619,24 @@ do
   local bolt for _,e in ipairs(sh) do if e.id==2996 then bolt=e end end
   print("TAILOR PLAN", #st, bolt and bolt.need, bolt and bolt.craft)
   assert(bolt and bolt.craft, "bolts are crafted, not bought")
+  -- the Progress plan counts your bank too: bolts in the bank aren't crafted again
+  do
+    local tl2=loadedFrames["ForeverArtisan_Tailoring"].ns
+    ForeverArtisanSettings.bank=nil
+    local _,sh1=tl2.Plan(80)
+    local b1 for _,e in ipairs(sh1) do if e.id==2996 then b1=e end end
+    assert(b1, "bolts on the shopping list")
+    TEST_BAGS={[-1]={2996}}
+    local oldInfo=GetContainerItemInfo
+    GetContainerItemInfo=function() return 1, 20 end
+    ForeverArtisan._SetBankOpen(true); ForeverArtisan.ReadBank(); ForeverArtisan._SetBankOpen(false)
+    GetContainerItemInfo=oldInfo; TEST_BAGS=nil
+    local _,sh2=tl2.Plan(80)
+    local b2 for _,e in ipairs(sh2) do if e.id==2996 then b2=e end end
+    print("PLAN BANK", b1.have, b1.craft, b2 and b2.have, b2 and b2.craft)
+    assert(b2 and b2.have==b1.have+20 and (b2.craft or 0) < (b1.craft or 0), "bank bolts counted, fewer to craft")
+    ForeverArtisanSettings.bank=nil
+  end
   -- Blacksmithing: copper bars and rough stone; ore and stone sources
   NAMES[2770]="Copper Ore"; NAMES[2835]="Rough Stone"; NAMES[2840]="Copper Bar"
   local BR={[2660]={name="Rough Sharpening Stone",learned=true,maxTrivialLevel=65,relativeDifficulty=0,out=2862,reag={{2835,1}}},
@@ -2229,6 +2247,24 @@ do
   assert(note:find("11 on alts") and tip:find("instead of crafting"), "craft rows show alts too")
   assert(FA.AltShopText(2589, 0)=="" , "nothing missing: no note")
   assert(FA.AltStock(9999)==nil, "nobody has it")
+  -- Forever names: you're "Boomz Dynamitez", UnitName says "Boomz"; another alt is "Boomz Dynamite"
+  UnitName=function() return "Boomz" end
+  local inv={characters={{character="Boomz Dynamitez",realmNormalized="PvE",bags=0,bank=8,mail=0},
+    {character="Boomz Dynamite",realmNormalized="PvE",bags=3,bank=0,mail=0}},guilds={}}
+  Syndicator.API.GetInventoryInfoByItemID=function() return inv end
+  Syndicator.API.GetCurrentCharacter=function() return "Boomz Dynamitez-PvE" end
+  total, list = FA.AltStock(2450)
+  assert(total==3 and #list==1 and list[1].name=="Boomz Dynamite", "your own bank isn't 'on alts': "..tostring(total))
+  -- an older Syndicator without GetCurrentCharacter: first name and the same bags count
+  Syndicator.API.GetCurrentCharacter=nil
+  COUNTS[2450]=0
+  total, list = FA.AltStock(2450)
+  assert(total==3 and list[1].name=="Boomz Dynamite", "fallback: first name plus matching bags")
+  COUNTS[2450]=nil
+  UnitName=function() return "Tester" end
+  Syndicator.API.GetInventoryInfoByItemID=function(id) if id==2589 then return { characters={
+      {character="Tester",bags=3,bank=0,mail=0}, {character="Altie",bags=5,bank=4,mail=0}, {character="Banky",bags=0,bank=0,mail=2} }, guilds={} } end
+      return { characters={}, guilds={} } end
   run("FOREVERARTISAN","alts off")
   assert(FA.AltStock(2589)==nil and FA.SyndicatorStatus()=="off", "alts off")
   run("FOREVERARTISAN","alts on")
@@ -2642,8 +2678,7 @@ do
   end
   C_Item=setmetatable({GetItemInfoInstant=inst}, {__index=oldC}); GetItemInfoInstant=inst
   FA.MarketKnows=function(prof, name) return name=="Known Stew" end
-  assert(FA.RECIPE_WATCH_READY==false and FA.RecipeWatchLines()==nil, "held back for 0.9.26: off and out of sight")
-  FA.RECIPE_WATCH_READY=true
+  assert(FA.RECIPE_WATCH_READY==true, "on since 0.9.27")
   ForeverArtisanSettings.recipeWatch=nil; FA._RecipeWatchReset()
   local oldTimer=C_Timer; C_Timer={After=function() end, NewTicker=function() return {Cancel=function() end} end}
   FA.NoteRecipeListing(9999, "Recipe: Beer Basted Boar Ribs", 6000)
@@ -2694,14 +2729,217 @@ do
   FA.MarketKnows=function() return true end
   assert(#FA.RecipeWatchList()==0, "once you learn it, it drops off")
   FA.MarketKnows=function() return false end
+  ForeverArtisanSettings.recipeWatch=nil
   SlashCmdList.FOREVERARTISAN("recipewatch off")
   FA.NoteRecipeListing(9999, "Recipe: Beer Basted Boar Ribs", 4000)
   assert(#FA.RecipeWatchList()==0, "off: nothing noted")
   SlashCmdList.FOREVERARTISAN("recipewatch on")
   SlashCmdList.FOREVERARTISAN("") -- the panel draws the new lines without errors
+  -- 0.9.27: your alts (same realm and faction, recipes read) count too
+  ForeverArtisanSettings.recipeWatch=nil; FA._RecipeWatchReset()
+  FA.NoteCharacter()
+  local myKey=FA.MyCharKey()
+  Syndicator={API={GetCurrentCharacter=function() return "Tester Smith-Beta" end, GetInventoryInfoByItemID=function() return {characters={}} end}}
+  FA.NoteCharacter()
+  assert(ForeverArtisanSettings.account.chars[myKey].fullName=="Tester Smith", "full name from Syndicator")
+  Syndicator=nil
+  local me=ForeverArtisanSettings.account.chars[myKey]
+  assert(me.realm=="Beta" and me.faction=="Horde" and me.trades.tailoring==74 and me.trades.cooking==50, "this character's realm, faction and trades saved")
+  ForeverArtisanSettings.account.chars.lw={name="Hide",fullName="Hide Tanner",realm="Beta",faction="Horde",trades={leatherworking=120}}
+  ForeverArtisanSettings.account.chars.lw2={name="Lowbie",realm="Beta",faction="Horde",trades={leatherworking=20}}
+  ForeverArtisanSettings.account.chars.ally={name="Other",realm="Beta",faction="Alliance",trades={leatherworking=200}}
+  ForeverArtisanSettings.account.chars.unread={name="Unread",realm="Beta",faction="Horde",trades={leatherworking=250}}
+  local oldKC=FA.MarketKnowsChar
+  FA.MarketKnowsChar=function(prof,key,name)
+    if key=="lw" or key=="lw2" or key=="ally" then return name=="Known Kit" end
+    return nil -- not read on that character
+  end
+  FA.RecipeWatchReq=function(e) return e.id==9998 and 100 or nil end
+  C_Timer={After=function() end, NewTicker=function() return {Cancel=function() end} end}
+  FA.NoteRecipeListing(9998, "Pattern: Thick Armor Kit", 500)
+  local who=FA.RecipeWatchWho("Leatherworking","Thick Armor Kit")
+  local names={} for _,c in ipairs(who) do names[#names+1]=c.name end
+  assert(#who==2 and not table.concat(names,","):find("Other") and not table.concat(names,","):find("Unread"), "alts on this realm and faction, recipes read: "..table.concat(names,","))
+  wl=FA.RecipeWatchList()
+  local kit for _,e in ipairs(wl) do if e.id==9998 then kit=e end end
+  assert(kit and kit.who=="Hide Tanner" and kit.ready and kit.whoRank==120 and kit.others==1, "for the alt who can learn it now (full name)")
+  said={} print=function(...) said[#said+1]=tostring((...)) end
+  FA._RecipeWatchFlush()
+  print=oldPrint
+  assert(#said==1 and said[1]:find("Thick Armor Kit for Hide Tanner"), "chat says who it's for: "..tostring(said[1]))
+  -- the list row says who it's for (and one of yours, so the filter has two characters)
+  FA.NoteRecipeListing(9999, "Recipe: Beer Basted Boar Ribs", 6000)
+  SlashCmdList.FOREVERARTISAN("market")
+  pm.watch:GetScript("OnMouseUp")(pm.watch)
+  local rowKit for _,r in ipairs(pm.wview.rows) do if r.e and r.e.id==9998 then rowKit=r end end
+  assert(rowKit and rowKit.left._text:find("for Hide Tanner"), "row: for Hide: "..tostring(rowKit and rowKit.left._text))
+  rowKit:GetScript("OnEnter")(rowKit)
+  -- filter by character: All, then each one on the list
+  local fb=pm.wview.filterBtn
+  assert(fb:IsShown() and fb._text:find("All characters"), "filter: all: "..tostring(fb._text))
+  fb:GetScript("OnClick")(fb, "LeftButton")
+  assert(pm.wview.filter and fb._text:find(pm.wview.filter == "you" and "You" or pm.wview.filter, 1, true), "filter: one character: "..tostring(fb._text))
+  for _,r in ipairs(pm.wview.rows) do if r.e then assert((r.e.who or "you")==pm.wview.filter and not r.left._text:find(" for "), "only that character's rows, no 'for'") end end
+  fb:GetScript("OnClick")(fb, "RightButton")
+  assert(pm.wview.filter==nil, "right-click: back to all")
+  pm.wview.back:GetScript("OnClick")(pm.wview.back)
+  -- an old "Name-Realm" record of this same character isn't an alt
+  ForeverArtisanSettings.account.chars["Tester-Beta"]={name="Tester",realm="Beta",faction="Horde",trades={leatherworking=300}}
+  local oldKC2=FA.MarketKnowsChar
+  FA.MarketKnowsChar=function(prof,key,name) if key=="Tester-Beta" then return false end return oldKC2(prof,key,name) end
+  for _,c in ipairs(FA.RecipeWatchWho("Leatherworking","Thick Armor Kit")) do assert(c.key~="Tester-Beta", "your old record isn't an alt") end
+  FA.MarketKnowsChar=oldKC2; ForeverArtisanSettings.account.chars["Tester-Beta"]=nil
+  -- only the lowbie could use it: listed, but not ready (red), and no chat line
+  ForeverArtisanSettings.account.chars.lw.trades.leatherworking=nil
+  wl=FA.RecipeWatchList() kit=nil for _,e in ipairs(wl) do if e.id==9998 then kit=e end end
+  assert(kit and kit.who=="Lowbie" and not kit.ready, "the lowbie: needs 100")
+  -- learned on the alt: hidden
+  FA.MarketKnowsChar=function() return true end
+  wl=FA.RecipeWatchList() kit=nil for _,e in ipairs(wl) do if e.id==9998 then kit=e end end
+  assert(not kit, "learned: hidden")
+  -- chat once per recipe, across sessions: a new login doesn't repeat it
+  FA.MarketKnowsChar=oldKC; FA.RecipeWatchReq=function() return nil end
+  ForeverArtisanSettings.recipeWatch=nil; FA._RecipeWatchReset()
+  local function scan(price)
+    said={} print=function(...) said[#said+1]=tostring((...)) end
+    FA.NoteRecipeListing(9999, "Recipe: Beer Basted Boar Ribs", price)
+    FA._RecipeWatchFlush()
+    print=oldPrint
+    return said[1]
+  end
+  assert(scan(6000), "new: a line")
+  FA._RecipeWatchReset() -- a new session
+  assert(not scan(6000), "same recipe next login: quiet")
+  assert(not scan(5000), "a bit cheaper: quiet")
+  FA._RecipeWatchReset()
+  local l = scan(4000)
+  assert(l and l:find("was"), "a quarter cheaper: a line with the old price: "..tostring(l))
+  FA._RecipeWatchReset()
+  -- someone's skill reaches it: a line then
+  ForeverArtisanSettings.recipeWatch=nil
+  FA.RecipeWatchReq=function() return 999 end
+  assert(not scan(6000), "nobody can learn it yet: quiet")
+  FA.RecipeWatchReq=function() return nil end
+  FA._RecipeWatchReset()
+  l = scan(6000)
+  assert(l and l:find("can learn it now"), "skill reached it: "..tostring(l))
+  -- quiet: the list, no chat
+  ForeverArtisanSettings.recipeWatch=nil; FA._RecipeWatchReset()
+  SlashCmdList.FOREVERARTISAN("recipewatch quiet")
+  assert(not scan(6000) and #FA.RecipeWatchList()>0, "quiet: listed, no chat")
+  SlashCmdList.FOREVERARTISAN("recipewatch on")
+  assert(not ForeverArtisanSettings.recipeWatchQuiet, "on: chat back")
+  FA.MarketKnowsChar=oldKC; FA.RecipeWatchReq=oldReq; C_Timer=oldTimer
+  for _,k in ipairs({"lw","lw2","ally","unread"}) do ForeverArtisanSettings.account.chars[k]=nil end
+  print("0.9.27 recipe watch for alts ok")
+  -- cloth is never a skin: not from the Skinning log in shopping lists
+  NAMES[2589]="Linen Cloth"
+  assert(FA.IsCloth(nil,"Linen Cloth") and not FA.IsCloth(nil,"Bolt of Linen Cloth") and not FA.IsCloth(nil,"Light Leather"), "cloth by name")
+  local oldSk=ForeverArtisanSkinningDB
+  ForeverArtisanSkinningDB={zones={["Durotar"]={zone="Durotar",items={[2589]={n=15,hauls=5}}}}}
+  local src=loadedFrames["ForeverArtisan_Tailoring"].ns.SourceFor(2589,"Linen Cloth")
+  assert(not src:find("^Skin"), "cloth: not 'Skin:': "..src)
+  ForeverArtisanSkinningDB=oldSk
+
+  -- Questie loaded, its database not ready yet: "loading", not "not installed"
+  local oldQ, oldIAL = rawget(_G,"Questie"), IsAddOnLoaded
+  local cns=loadedFrames["ForeverArtisan_Contacts"].ns
+  local oldQDB, oldLQ = FA.QDB, rawget(_G,"LibQuestieDB")
+  cns.QuestieReset(); FA.QDB=nil; LibQuestieDB=nil
+  Questie=nil
+  local oldIAL2=C_AddOns.IsAddOnLoaded; C_AddOns.IsAddOnLoaded=function(n) return n~="Questie" end
+  assert(FA.QuestieStatus()=="missing", "no Questie: missing, got "..tostring(FA.QuestieStatus()))
+  Questie={}
+  assert(FA.QuestieStatus()=="loading", "Questie loaded, data not ready: loading, got "..tostring(FA.QuestieStatus()))
+  SlashCmdList.FOREVERARTISAN("modules")
+  local wt=FA._WorksText and FA._WorksText() or (_G.ForeverArtisanPanel and _G.ForeverArtisanPanel.works and _G.ForeverArtisanPanel.works.text._text) or ""
+  Questie=oldQ; FA.QDB=oldQDB; LibQuestieDB=oldLQ; C_AddOns.IsAddOnLoaded=oldIAL2
+  print("0.9.27 Questie loading ok", (tostring(wt):gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r","")))
   C_Item, GetItemInfoInstant, FA.MarketKnows = oldC, oldI, oldKnows
   FA.LearnedTrades, ForeverArtisanSettings.account, ForeverArtisanSettings.recipeWatch = oldLT, oldAcct, nil
-  FA.RECIPE_WATCH_READY=false
   print("0.9.25 recipe watch ok")
+end
+-- 0.9.27: bank mats and vendor mats in "Make now"
+do
+  local FA=ForeverArtisan
+  local oldV=FA.Vendors
+  FA.Vendors={hitsForLink=function(_,name)
+    if name=="Coarse Thread" then return {{npc={n="Tamar"},item={id=2320,p=10,stack=1}}} end
+    if name=="Rare Spice" then return {{npc={n="Tamar"},item={id=7777,p=50,stack=1,limited=2}}} end
+    return {} end}
+  FA._StockReset()
+  ForeverArtisanSettings.bank=nil
+  local r={name="Linen Bag",reagents={{id=2996,name="Bolt of Linen Cloth",n=3},{id=2320,name="Coarse Thread",n=3}}}
+  local C=function(id) return COUNTS[id] or 0 end
+  COUNTS[2996]=30; COUNTS[2320]=0
+  local m=FA.MakeCounts(r,C)
+  assert(m.bags==0 and m.bank==0 and m.buy==10 and #m.buyList==1 and m.buyList[1].n==30 and m.buyCost==300, "buy thread: make 10 "..tostring(m.buy))
+  local t=FA.MakeText(m); print("MAKE TEXT", t)
+  assert(t:find("buy Coarse Thread: make 10"), "row text")
+  local tip=table.concat(FA.MakeTipLines(r,m),"\n")
+  assert(tip:find("30 Coarse Thread") and tip:find("Open your bank once"), "tip: what to buy, bank hint")
+  -- limited stock isn't a vendor mat (it can sell out)
+  local isV=FA._VendorBuy(7777,"Rare Spice"); assert(not isV, "limited stock doesn't count")
+  -- the bank: read while it's open
+  TEST_BAGS={[-1]={2320,2320,2996},[5]={2996}}
+  local oldInfo=GetContainerItemInfo
+  GetContainerItemInfo=function(b,sl) return 1, 3 end
+  FA._SetBankOpen(true); FA.ReadBank(); FA._SetBankOpen(false)
+  GetContainerItemInfo=oldInfo; TEST_BAGS=nil
+  assert(FA.BankCount(2320)==6 and FA.BankCount(2996)==6 and FA.BankSeenAt(), "bank read: "..tostring(FA.BankCount(2320)))
+  COUNTS[2996]=0
+  m=FA.MakeCounts(r,C)
+  assert(m.bags==0 and m.bank==2 and not m.buy, "bank: make 2, buying adds nothing")
+  assert(FA.MakeText(m):find("2 with bank mats"), "bank row text")
+  COUNTS[2996]=30
+  m=FA.MakeCounts(r,C)
+  assert(m.bank==2 and m.buy==12 and m.buyList[1].n==30, "bank thread used first, then buy the rest")
+  assert(#m.fetch==2 and m.fetch[1].n==6 and m.fetch[2].n==6, "take the bank bolts and thread first")
+  assert(FA.MakeText(m):find("2 with bank mats"), "bank first on the row, buying in the hover")
+  assert(table.concat(FA.MakeTipLines(r,m),"\n"):find("take from your bank"), "tip says what to take from the bank")
+  -- bank Briarthorn plus bought vials and spices (the potion case)
+  COUNTS[2450]=0
+  ForeverArtisanSettings.bank[next(ForeverArtisanSettings.bank)].items[2450]=8
+  local pot={reagents={{id=2450,name="Briarthorn",n=1},{id=3371,name="Empty Vial",n=1},{id=2678,name="Mild Spices",n=2}}}
+  m=FA.MakeCounts(pot,C)
+  assert(m.buy==8 and #m.buyList==2 and #m.fetch==1 and m.fetch[1].n==8, "potion: bank herb, buy the rest")
+  assert(FA.MakeText(m):find("bank %+ vendor mats: make 8"), "potion row: "..FA.MakeText(m))
+  assert(#m.limits==1 and m.limits[1].id==2450, "Briarthorn caps it")
+  local oldAlt=FA.AltStock
+  FA.AltStock=function(id) if id==2450 then return 12, {{name="Boomz Dynamitez-PvE",n=5},{name="Kaz Stone-PvE",n=3},{name="Mo Bell",n=2},{name="Boomz Dynamite-PvE",n=1},{name="Pip",n=1}} end end
+  local ptip=table.concat(FA.MakeTipLines(pot,m),"\n")
+  assert(ptip:find("%(12 more crafts, mail them over%)"), "alts in crafts: 8 here + 12 on alts, 1 each: 12 more: "..ptip)
+  assert(ptip:find("12 more Briarthorn on your alts") and ptip:find("Boomz Dynamitez: 5") and ptip:find("  Kaz Stone: 3") and ptip:find("  Mo Bell: 2") and not ptip:find("PvE") and not ptip:find("Pip") and ptip:find("and 2 more"), "alts by name, top 3: "..ptip)
+  assert(m.buy==8, "alts don't change the count")
+  -- nothing on this character, but alts have it: the row says so, the count stays 0
+  ForeverArtisanSettings.bank[next(ForeverArtisanSettings.bank)].items[2450]=nil
+  m=FA.MakeCounts(pot,C)
+  assert(m.bags==0 and m.bank==0 and not m.buy, "nothing here")
+  assert(FA.MakeText(m) and FA.MakeText(m):find("Briarthorn on alts"), "row: on alts: "..tostring(FA.MakeText(m)))
+  -- alts with too few for one craft: no "on alts" on the row, and the hover says so
+  local sash={reagents={{id=2996,name="Bolt of Linen Cloth",n=12},{id=2321,name="Fine Thread",n=2}}}
+  COUNTS[2996]=0; ForeverArtisanSettings.bank[next(ForeverArtisanSettings.bank)].items[2996]=nil
+  FA.AltStock=function(id) if id==2996 then return 11, {{name="Chama",n=4},{name="Styzza",n=4},{name="Boomz",n=3}} end end
+  local ms=FA.MakeCounts(sash,C)
+  assert(FA.MakeText(ms)==nil, "11 of 12 on alts: plain missing materials")
+  local stip=table.concat(FA.MakeTipLines(sash,ms),"\n")
+  assert(stip:find("not enough for one %(needs 12%)") and stip:find("Chama: 4"), "hover: not enough: "..stip)
+  FA.AltStock=function(id) if id==2996 then return 12, {{name="Chama",n=12}} end end
+  assert(FA.MakeText(ms):find("Bolt of Linen Cloth on alts"), "12 on alts: enough for one")
+  COUNTS[2996]=nil
+  FA.AltStock=function() return nil end
+  assert(FA.MakeText(m)==nil, "no alts: plain missing materials")
+  FA.AltStock=oldAlt
+  -- every mat from a vendor: no count (it would be unlimited)
+  m=FA.MakeCounts({reagents={{id=2320,name="Coarse Thread",n=1}}},C)
+  assert(not m.buy, "all vendor: no buy count")
+  -- the Tailoring page draws it (rows and tips)
+  local tl=loadedFrames["ForeverArtisan_Tailoring"].ns
+  COUNTS[2320]=0
+  for _,e in ipairs(tl.MakeNow()) do assert(e.m and e.tier, "MakeNow has counts") end
+  SlashCmdList.FOREVERARTISAN("")
+  COUNTS[2996]=nil; COUNTS[2320]=nil; ForeverArtisanSettings.bank=nil
+  FA.Vendors=oldV; FA._StockReset()
+  print("0.9.27 bank and vendor mats ok")
 end
 print("SUITE OK")

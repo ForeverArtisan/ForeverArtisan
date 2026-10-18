@@ -394,7 +394,8 @@ local function LogSkin(chatItems)
   end
   for _, li in ipairs(list) do
     local id, name, qty, quality, link = li.id, li.name, li.qty or 1, li.quality, li.link
-    do
+    -- cloth comes from a corpse looted in the same moment (auto loot), never from skinning
+    if not (ForeverArtisan.IsCloth and ForeverArtisan.IsCloth(id, name)) then
       entry.items[#entry.items + 1] = { id = id, n = qty }
       local it = z.items[id]
       if not it then it = { name = name, q = quality, n = 0, hauls = 0 }; z.items[id] = it end
@@ -537,6 +538,8 @@ end
 local function OnChatLoot(msg, guid)
   local li = ForeverArtisan.ParseSelfLoot(msg, guid)
   if not li then return end
+  -- cloth is a corpse looted in the same moment (auto loot), never a skin: leave the skin waiting
+  if ForeverArtisan.IsCloth and ForeverArtisan.IsCloth(li.id, li.name) then return end
   local now = GetTime()
   if pending and pending.ok and now - pending.t < 6 then
     LogSkin({ li })

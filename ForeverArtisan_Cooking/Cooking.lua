@@ -36,6 +36,13 @@ local function Count(id)
 end
 ns.Count = Count
 
+-- bags plus your bank (as of your last visit, Core Stock.lua): what the plan and shopping list count as yours
+local function Own(id)
+  local B = ForeverArtisan and ForeverArtisan.BankCount
+  return Count(id) + ((B and type(id) == "number") and (B(id)) or 0)
+end
+ns.Own = Own
+
 ---------------------------------------------------------------- per character
 local function CharRec()
   db.chars = db.chars or {}
@@ -309,7 +316,8 @@ function ns.SourceFor(id, name)
   if hint then return "Vendor: " .. hint .. " (none in your Trade Contacts yet)" end
   local w = BestLogged(ForeverArtisanFishingDB, id)
   if w then return "Fish: " .. w end
-  w = BestLogged(ForeverArtisanSkinningDB, id)
+  -- (not for cloth: a corpse looted right after a skin can land in the Skinning log)
+  w = not (ForeverArtisan.IsCloth and ForeverArtisan.IsCloth(id, name)) and BestLogged(ForeverArtisanSkinningDB, id) or nil
   if w then return "Skin: " .. w end
   w = BestLogged(ForeverArtisanHerbalismDB, id)
   if w then return "Herb: " .. w end
@@ -356,8 +364,13 @@ function ns.CookNow()
       out[#out + 1] = { r = r, color = c, chance = ns.Chance(r, skill), make = ns.Makeable(r) }
     end
   end
+  -- your bags first, then with your bank mats, then once you buy vendor mats (Core Stock.lua)
+  for _, e in ipairs(out) do
+    e.m = (ForeverArtisan.MakeCounts and not (e.missing and #e.missing > 0)) and ForeverArtisan.MakeCounts(e.r, Count) or { bags = e.make, bank = e.make }
+    e.tier = e.make > 0 and 3 or e.m.bank > 0 and 2 or e.m.buy and 1 or 0
+  end
   table.sort(out, function(a, b)
-    if (a.make > 0) ~= (b.make > 0) then return a.make > 0 end
+    if a.tier ~= b.tier then return a.tier > b.tier end
     if a.chance ~= b.chance then return a.chance > b.chance end
     return (a.r.grayAt or 0) > (b.r.grayAt or 0)
   end)
@@ -431,7 +444,7 @@ function ns.Plan(target)
   end
   for _, e in pairs(need) do
     e.name = ItemName(e.id, e.name)
-    e.have = Count(e.id)
+    e.have = Own(e.id)
     e.source = ns.SourceFor(e.id, e.name)
     shopping[#shopping + 1] = e
   end

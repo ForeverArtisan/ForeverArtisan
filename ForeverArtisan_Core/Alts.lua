@@ -30,16 +30,42 @@ function FA.SyndicatorStatus()
   return "on"
 end
 
+-- Is this Syndicator entry the character you're playing? Forever names have a first and last name and
+-- UnitName gives only the first ("Boomz"), while Syndicator keeps the whole one ("Boomz Dynamitez"), so
+-- ask Syndicator who you are. Without that call: an exact name match, or a first-name match whose bags
+-- hold exactly what yours do.
+local function Base(n) return (tostring(n or ""):gsub("%-[^%-]*$", "")) end
+local function IsMe(A, c, itemId)
+  local name = c.character
+  if type(name) ~= "string" then return false end
+  if type(A.GetCurrentCharacter) == "function" then
+    local ok, cur = pcall(A.GetCurrentCharacter)
+    if ok and type(cur) == "string" and cur ~= "" then
+      if c.realmNormalized and name .. "-" .. c.realmNormalized == cur then return true end
+      return name == cur or Base(name) == Base(cur)
+    end
+  end
+  local me = UnitName and UnitName("player")
+  if type(me) ~= "string" or (FA.IsSecret and FA.IsSecret(me)) then return false end
+  if Base(name) == me then return true end
+  if Base(name):match("^(%S+)") == me and itemId then
+    local f = (C_Item and C_Item.GetItemCount) or GetItemCount
+    local ok, n = pcall(f, itemId)
+    return ok and n == (tonumber(c.bags) or 0)
+  end
+  return false
+end
+FA._AltIsMe = IsMe -- for the tests
+
 function FA.AltStock(itemId)
   if Off() or not itemId then return nil end
   local A = API()
   if not A then return nil end
   local ok, info = pcall(A.GetInventoryInfoByItemID, itemId, true, true)
   if not ok or type(info) ~= "table" or type(info.characters) ~= "table" then return nil end
-  local me = UnitName and UnitName("player")
   local total, list = 0, {}
   for _, c in ipairs(info.characters) do
-    if type(c) == "table" and c.character ~= me then
+    if type(c) == "table" and not IsMe(A, c, itemId) then
       local bags, bank, mail = tonumber(c.bags) or 0, tonumber(c.bank) or 0, tonumber(c.mail) or 0
       local n = bags + bank + mail
       if n > 0 then
