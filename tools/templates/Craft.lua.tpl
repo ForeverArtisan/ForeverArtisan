@@ -1,3 +1,6 @@
+-- RETIRED (Oct 19, 2026): DO NOT USE. Since Oct 12 every change to the crafting modules was made directly in
+-- ForeverArtisan_<Name>/<Name>.lua and UI.lua, and this template is weeks behind. Rebuilding from it would undo
+-- that work. The generated files are the source now. Kept for history only.
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
 -- ForeverArtisan: @@NAME@@
 -- Reads your recipes from the @@NAME@@ window, shows what you can make right now for skill-ups,

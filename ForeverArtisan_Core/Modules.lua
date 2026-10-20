@@ -1586,6 +1586,7 @@ NEWS = {
     .. "you can hide crafts that make less than an amount you choose, and vendor materials have a price right away." },
   { "0.9.29", "Plan ahead: open a profession you don't have and the Progress tab lists what to save to level it. "
     .. "Best crafts has a Disenchant sort, Cheapest to level counts disenchanting, and Make now scrolls." },
+  { "0.9.30", "Cheapest to level ranks by what the materials cost per skill-up. Hover a row for the chance and what selling would bring back." },
 }
 
 local function verNum(v)

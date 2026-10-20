@@ -1,3 +1,6 @@
+-- RETIRED (Oct 19, 2026): DO NOT USE. Since Oct 12 every change to the crafting modules was made directly in
+-- ForeverArtisan_<Name>/<Name>.lua and UI.lua, and this template is weeks behind. Rebuilding from it would undo
+-- that work. The generated files are the source now. Kept for history only.
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
 -- ForeverArtisan: @@NAME@@: window (/fa @@ALIAS@@) with @@NAME@@ / Progress / Craft log / Recipe book tabs
 -- Same window as First Aid; tools/build_crafts.py writes this file from a template.

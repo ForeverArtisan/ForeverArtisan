@@ -549,8 +549,8 @@ local BEST_ROWS = 14
 local BEST_MODES = {
   { "profit", "Profit", 62, "Ranked by profit per craft after the Auction House's cut, with the return." },
   { "return", "Return", 62, "Ranked by return: +150% means 1g of materials brings back 2g 50s." },
-  { "level", "Cheapest to level", 118, "Skill-ups, cheapest per point first. Counts selling or disenchanting." },
-  { "both", "Level + profit", 100, "Crafts that level you and pay for themselves." },
+  { "level", "Cheapest to level", 118, "Skill-ups by what the materials cost per point, cheapest first." },
+  { "both", "Level + profit", 100, "Skill-ups that pay for themselves, sold or disenchanted." },
 }
 local DOT = {
   good = "|TInterface\\COMMON\\Indicator-Green:14|t",
@@ -577,6 +577,26 @@ local function ConfLines(c)
 end
 
 local GOLD_TAG = FA.GOLD
+-- Cheapest to level hover: the skill-up chance in words, what selling or disenchanting would bring back,
+-- and that the chances are averages
+local function LevelTip(row)
+  local ch = row.chance or 0
+  local q = math.floor(ch * 4 + 0.5)
+  local words = (ch >= 0.99 and "every craft") or (q >= 4 and "almost every craft") or (q == 3 and "about 3 in 4 crafts")
+    or ("about 1 in %d crafts"):format(math.max(2, math.floor(1 / math.max(ch, 0.01) + 0.5)))
+  local lines = { GOLD_TAG .. "Skill-up chance:|r " .. words }
+  local net = row.netPerPoint
+  if net then
+    local how = row.netViaDE and "disenchant what you make" or "sell what you make"
+    lines[#lines + 1] = net >= 0 and ("If you " .. how .. ": about " .. FA.Money(math.floor(net + 0.5)) .. " a point")
+      or (GREEN .. "If you " .. how .. ": earns about " .. FA.Money(math.floor(-net + 0.5)) .. " a point|r")
+  end
+  if ch < 0.99 then
+    lines[#lines + 1] = GRAY .. "Chances are averages: luck can bring a streak of skill-ups, or a dozen crafts without one.|r"
+  end
+  return table.concat(lines, "\n")
+end
+
 local function BestData()
   local mode = BestMode()
   local base, bonus, cap = ns.Skill()
@@ -590,11 +610,12 @@ local function BestData()
     if not (S().bestHideShaky and c.level == "shaky") then
       local r = row.r
       local col = ns.ColorFor(r, skill)
-      local right
+      local right, levelTip
       if mode == "level" then
-        right = (row.perPoint > 0 and (FA.Money(math.floor(row.perPoint + 0.5)) .. " a point")
+        right = (row.perPoint >= 0 and (FA.Money(math.floor(row.perPoint + 0.5)) .. " a point")
           or (GREEN .. "earns " .. FA.Money(math.floor(-row.perPoint + 0.5)) .. " a point|r"))
           .. (row.viaDE and (GRAY .. "  ·  disenchant it|r") or "")
+        levelTip = LevelTip(row)
       elseif mode == "disenchant" then
         local money = (row.deProfit >= 0 and (GREEN .. "+" .. FA.Money(row.deProfit)) or (RED .. FA.Money(row.deProfit))) .. "|r"
         right = money .. GRAY .. "  ·  |r" .. (row.deRet and ((row.deRet >= 0 and GREEN or RED) .. FA.ReturnText(row.deRet) .. "|r") or (GRAY .. "free mats|r"))
@@ -611,7 +632,7 @@ local function BestData()
       data[#data + 1] = { id = r.itemId, icon = Icon(r.itemId), recipe = r,
         left = (ns.COLOR_CODE[col] or "") .. r.name .. ((r.makes or 1) > 1 and (" x" .. r.makes) or "") .. "|r",
         right = right, tail = DOT[c.level or "shaky"],
-        tip = ConfLines(c) .. "\n\n" .. ReagentTip(r) }  -- ReagentTip ends with "What it's worth" and "Where to sell"
+        tip = (levelTip and (levelTip .. "\n\n") or "") .. ConfLines(c) .. "\n\n" .. ReagentTip(r) }  -- ReagentTip ends with "What it's worth" and "Where to sell"
     end
   end
   return data

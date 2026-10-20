@@ -1809,18 +1809,24 @@ do
   FA.SetMinProfit(nil); recipes.F=nil
   assert(FA.MinProfit()==nil, "cleared")
   rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "level")
-  assert(#rows==2 and rows[1].r.name=="Cheap Thing" and rows[1].perPoint<0, "cheapest to level: one that earns money first")
+  -- Cheapest to level: what the materials cost per skill-up (20c, and 300c at a 50% chance), nothing off for selling;
+  -- the net figure (Cheap Thing sells for 95c after the cut) is kept for the hover
+  assert(#rows==2 and rows[1].r.name=="Cheap Thing" and rows[1].perPoint==20 and rows[1].netPerPoint==-75
+    and rows[2].perPoint==600, "cheapest to level: material cost per point")
   rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "both")
   assert(#rows==1 and rows[1].r.name=="Cheap Thing", "both: skill-ups that pay")
   -- 0.9.29: disenchanting. "Loser" sells for 9c but disenchants for 4s: it levels you for profit,
   -- and tops the Disenchant sort
   local oDV=FA.DisenchantValue
   FA.DisenchantValue=function(id) if id==991001 then return 400 end end
+  -- Cheapest to level doesn't move for it (materials only); the hover's net figure and Level + profit count it
   rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "level")
-  assert(rows[1].r.name=="Loser" and rows[1].viaDE and math.abs(rows[1].perPoint+200)<0.001, "leveling counts disenchanting")
-  assert(not rows[2].viaDE, "selling still wins where it pays more")
+  assert(rows[1].r.name=="Cheap Thing" and rows[2].r.name=="Loser" and rows[2].perPoint==600 and not rows[2].viaDE,
+    "a good disenchant or sale price doesn't lift a recipe in Cheapest to level")
+  assert(rows[2].netViaDE and math.abs(rows[2].netPerPoint+200)<0.001, "hover: disenchanting earns 2s a point")
   rows=FA.BestCrafts(recipes, function(r) return chance[r.name] or 0 end, "both")
-  assert(#rows==2, "both: a craft that pays when disenchanted counts")
+  local loser for _,x in ipairs(rows) do if x.r.name=="Loser" then loser=x end end
+  assert(#rows==2 and loser and loser.viaDE and math.abs(loser.perPoint+200)<0.001, "Level + profit counts disenchanting")
   rows=FA.BestCrafts(recipes, nil, "disenchant")
   assert(#rows==1 and rows[1].r.name=="Loser" and rows[1].deProfit==100 and math.abs(rows[1].deRet-1/3)<0.001, "disenchant sort")
   FA.SetMinProfit(101)
@@ -1861,6 +1867,12 @@ do
   assert(FA.MinProfit()==nil, "empty: no minimum")
   for _,f in pairs(frames) do if f._text=="Cheapest to level" and f.scripts.OnClick then f.scripts.OnClick(f) end end
   assert(ck.DB().settings.bestMode=="level", "mode remembered")
+  -- the row hover: skill-up chance in words, what selling would bring back, and the luck note
+  local oCh=ck.Chance ck.Chance=function() return 0.5 end ck.OnChange()
+  local lt = ck.lastBest[1] and ck.lastBest[1].tip or ""
+  ck.Chance=oCh
+  assert(lt:find("Skill%-up chance:") and lt:find("If you sell what you make"), "cheapest to level hover: "..lt)
+  assert(ck.lastBest[1].right:find("a point") and lt:find("about 1 in 2 crafts") and lt:find("luck"), "row shows the material cost a point, chance in words, luck note")
   -- Market: every profession's crafts in one list (Cooking's here), by profit, flagged beta before launch
   local mrows, nread = FA.MarketRows()
   assert(nread>=1 and mrows[1] and mrows[1].r.name=="Pricey Thing" and mrows[1].prof.name=="Cooking", "market ranks across professions")

@@ -1,4 +1,7 @@
-"""Writes the crafting modules that share the First Aid engine (Alchemy, Leatherworking, Blacksmithing,
+"""RETIRED (Oct 19, 2026): do not run. The templates are weeks behind the module files, which are now
+edited directly; running this would undo that work. It refuses to run unless given --i-know-it-is-retired.
+
+Writes the crafting modules that share the First Aid engine (Alchemy, Leatherworking, Blacksmithing,
 Tailoring, Engineering, Enchanting).
 
 usage (from the repo):  python tools\\build_crafts.py .
@@ -251,4 +254,8 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--i-know-it-is-retired" not in sys.argv:
+        sys.exit("build_crafts.py is retired (Oct 19, 2026): the templates are weeks behind the crafting modules, "
+                 "which are now edited directly. Running it would undo that work. Nothing was written.")
+    sys.argv = [a for a in sys.argv if a != "--i-know-it-is-retired"]
     main()

@@ -787,9 +787,9 @@ end
 
 ---------------------------------------------------------------- Best crafts
 -- Rank a module's learned recipes. mode: "profit" (most profit per craft after the Auction House
--- cut), "return" (profit per copper of materials), "level" (cheapest per skill point, recipes that
--- still give skill-ups; what you get back is the better of selling and disenchanting), "both" (skill-ups
--- that also make money) or "disenchant" (crafted to disenchant: what it disenchants into minus materials). chanceOf(r) is the module's skill-up chance for the recipe right now.
+-- cut), "return" (profit per copper of materials), "level" (what the materials cost per skill point,
+-- recipes that still give skill-ups; netPerPoint keeps the figure after selling or disenchanting),
+-- "both" (skill-ups that pay for themselves, sold or disenchanted) or "disenchant" (crafted to disenchant: what it disenchants into minus materials). chanceOf(r) is the module's skill-up chance for the recipe right now.
 -- Rows: { r, cost, sale, vend, chance, profit, perPoint, conf }
 -- recipes Best crafts leaves out: Basic Campfire makes a kit, but it needs Flint and Tinder and has a
 -- cooldown, so it's no way to earn or level
@@ -822,10 +822,20 @@ function FA.BestCrafts(recipes, chanceOf, mode)
           if cost > 0 then row.deRet = row.deProfit / cost end
         end
       end
-      -- leveling: what you get back is the better of selling it and disenchanting it
-      local back = best
-      if row.de and row.de > best then back, row.viaDE = row.de, true end
-      if cost and ch > 0 then row.perPoint = (cost - back) / ch end
+      -- what you'd get back is the better of selling it and disenchanting it
+      local back, viaDE = best, nil
+      if row.de and row.de > best then back, viaDE = row.de, true end
+      if cost and ch > 0 then
+        -- net of selling or disenchanting: Level + profit ranks by it, and Cheapest to level shows it on hover
+        row.netPerPoint, row.netViaDE = (cost - back) / ch, viaDE
+        if mode == "level" then
+          -- Cheapest to level: what the materials cost per skill-up, nothing taken off for selling
+          -- (resale is a guess, worst at launch when everyone sells the same crafts)
+          row.perPoint = cost / ch
+        else
+          row.perPoint, row.viaDE = row.netPerPoint, viaDE
+        end
+      end
       local keep = (mode == "level" and row.perPoint) or (mode == "both" and row.perPoint and row.perPoint < 0)
         or (mode == "return" and row.ret)
         or (mode == "disenchant" and row.deProfit)

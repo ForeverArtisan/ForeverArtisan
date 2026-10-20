@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.30 (2026-10-19)
+- Changed: **Cheapest to level** ranks by what the materials cost per skill-up, with nothing taken off for selling what you make. Resale is a guess, worst at launch when everyone sells the same crafts. Hover a row for the skill-up chance in words, what selling or disenchanting would bring back, and a note that chances are averages. Level + profit still counts selling and disenchanting. Thanks to the player who asked.
+
 ## 0.9.29 (2026-10-18)
 - New: **plan ahead for a profession you don't have yet.** Open its window on any character (`/fa eng`, `/fa lw` ...) and click **Start planning**, or go to the Progress tab: it plans from skill 1 to the skill you type, and the shopping list is the raw materials to save while you level something else. Materials the plan makes along the way (bolts, leather, tubes) count as crafted. It uses the recipes seen on the Forever beta, or an alt's once one has opened that window, with trainer levels from the beta. Past the trainer recipes we know, it says to open a higher-rank trainer's list (no need to learn the profession). Thanks to the player who suggested it.
 - New: **Disenchant** sort in Best crafts (Blacksmithing, Leatherworking, Tailoring, Engineering, Enchanting): crafts ranked by what they disenchant into, minus the materials. Recipe tooltips show the disenchant value too.
