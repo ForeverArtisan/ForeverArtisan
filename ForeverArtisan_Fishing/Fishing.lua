@@ -200,8 +200,12 @@ btn:SetAttribute("_onstate-combat", [[
 ]])
 RegisterStateDriver(btn, "combat", "[combat] fight; fish")
 
-btn:SetScript("PreClick", function(self)
-  if InCombatLockdown() then return end
+btn:SetScript("PreClick", function(self, _, down)
+  -- in combat this click equips your weapons: the off hand follows once the main hand is on
+  if InCombatLockdown() then
+    if ns.ExpectOffHand and (not GetCVarBool or down == GetCVarBool("ActionButtonUseKeyDown")) then ns.ExpectOffHand() end
+    return
+  end
   local text, mode = "/cast " .. FISHING, "cast"
   if db.settings.autoLure and PoleEquipped()
      and LureLeft() < LURE_MIN_LEFT and (GetTime() - lastLureAt) > LURE_GUARD then
@@ -487,6 +491,22 @@ swap:SetAttribute("_onstate-pole", [[
 ]])
 RegisterStateDriver(swap, "pole", "[equipped:" .. POLE_TYPE .. "] yes; no")
 ns.swapButton = swap
+-- before each swap (out of combat): note the weapons you're wearing right now, so the way back
+-- works even when they weren't readable at login, and say so when there's nothing to go back to
+swap:SetScript("PreClick", function(_, _, down)
+  if not db then return end
+  -- the button hears both the press and the release, but only one of them swaps (the
+  -- ActionButtonUseKeyDown setting): only that one counts, or the release after putting the
+  -- pole on looks like a swap back to weapons
+  if GetCVarBool and down ~= GetCVarBool("ActionButtonUseKeyDown") then return end
+  if ns.TrackGear then ns.TrackGear() end
+  if ns.ExpectOffHand then ns.ExpectOffHand() end
+  if InCombatLockdown() then return end
+  if ns.UpdateGear then ns.UpdateGear() end
+  if ns.PoleEquipped and ns.PoleEquipped() and (swap:GetAttribute("weaponmacro") or "") == "" then
+    say("No weapons to swap back to yet. Put them in the Main hand / Off hand slots on the Fishing tab (/fa fish), or wear them once.")
+  end
+end)
 
 local function IsPole(id)
   if not id then return false end
@@ -513,7 +533,7 @@ end
 local function Has(id)
   if not id then return false end
   if IsEquippedItem and IsEquippedItem(id) then return true end
-  return (GetItemCount and GetItemCount(id) or 0) > 0
+  return ItemCount(id) > 0
 end
 function ns.CharRec()
   if not db then return nil end
@@ -543,7 +563,12 @@ function ns.TrackGear()
   local c = ns.CharRec(); if not c then return end
   local mh, oh = GetInventoryItemID("player", 16), GetInventoryItemID("player", 17)
   if IsPole(mh) then c.pole = mh
-  elseif mh then c.lastGear = { mh = mh, oh = oh } end
+  elseif mh then
+    -- swapping back fires once per slot: the main hand can land before the off hand does, so
+    -- an empty off hand next to a one-hander keeps the off hand we already knew
+    if not oh and EquipLoc(mh) ~= "INVTYPE_2HWEAPON" and c.lastGear and c.lastGear.mh == mh then oh = c.lastGear.oh end
+    c.lastGear = { mh = mh, oh = oh }
+  end
 end
 
 -- effective set: slots you filled win, otherwise what you last wore
@@ -562,11 +587,57 @@ local function EquipName(id)
   return (f and f(id)) or ("item:" .. id)
 end
 
+-- The game won't put an off-hand item on while the two-handed pole is still in your hands, and
+-- both lines of the swap run in the same instant. So when the swap (or the fishing key in combat)
+-- heads back to weapons, the addon remembers the off hand and puts it on as soon as the main hand
+-- has landed (PLAYER_EQUIPMENT_CHANGED below). Weapons can be changed this way in combat too.
+function ns.ExpectOffHand()
+  if not PoleEquipped() then return end
+  local _, oh = ns.GearSet()
+  ns.pendingOH = oh and { id = oh, till = GetTime() + 4 } or nil
+  -- the equip event can come while the item is still locked mid-swap: keep trying a few times a second
+  if ns.pendingOH and C_Timer then
+    local function Try()
+      if not ns.pendingOH then return end
+      ns.FinishOffHand()
+      if ns.pendingOH then C_Timer.After(0.25, Try) end
+    end
+    C_Timer.After(0.25, Try)
+  end
+end
+function ns.FinishOffHand()
+  local p = ns.pendingOH
+  if not p then return end
+  if GetInventoryItemID("player", 17) == p.id then ns.pendingOH = nil; return end
+  if GetTime() > p.till then
+    ns.pendingOH = nil
+    -- still holding the pole: you went fishing, not back to weapons; nothing to report
+    if PoleEquipped() then return end
+    say(("Couldn't put %s back in your off hand (%s). Please tell us at %s"):format(ItemName(p.id), p.why or "no reason given",
+      ForeverArtisan.BUG_URL or "foreverartisan.app/bug"))
+    return
+  end
+  local mh = GetInventoryItemID("player", 16)
+  if not mh or IsPole(mh) or EquipLoc(mh) == "INVTYPE_2HWEAPON" then
+    -- what the main hand reads as, so a report says exactly what blocked it
+    p.why = ("main hand not on yet: %s, %s%s"):format(mh and ItemName(mh) or "empty", tostring(mh and EquipLoc(mh)),
+      (mh and IsPole(mh)) and ", reads as a pole" or "")
+    return
+  end
+  -- (no bag check: on Forever the old GetItemCount can say 0 for an item you have; just try)
+  local equip = (C_Item and C_Item.EquipItemByName) or EquipItemByName
+  if not equip then p.why = "no equip function"; return end
+  local ok, err = pcall(equip, p.id, 17)
+  p.why = ok and "the game didn't take it" or tostring(err)
+end
+
 local function WeaponMacro()
   local mh, oh = ns.GearSet()
   local lines = {}
-  if mh then lines[#lines + 1] = "/equip " .. EquipName(mh) end
+  -- off hand first: equipping it takes the two-handed pole off, so the main hand has a free slot.
+  -- (main hand first left the off hand blocked by the pole, so dual-wielders got only one weapon)
   if oh then lines[#lines + 1] = "/equipslot 17 " .. EquipName(oh) end
+  if mh then lines[#lines + 1] = "/equipslot 16 " .. EquipName(mh) end
   return table.concat(lines, "\n")
 end
 
@@ -913,7 +984,7 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3, ...)
     -- fires once per slot on a gear swap; only the weapon slots matter here
     return
   elseif e == "PLAYER_ENTERING_WORLD" or e == "PLAYER_EQUIPMENT_CHANGED" or e == "PLAYER_REGEN_ENABLED" then
-    if e == "PLAYER_EQUIPMENT_CHANGED" then ns.TrackGear(); CheckPole() end
+    if e == "PLAYER_EQUIPMENT_CHANGED" then ns.TrackGear(); CheckPole(); ns.FinishOffHand() end
     if e == "PLAYER_ENTERING_WORLD" then
       local c = ns.CharRec()
       if c and not c.adopted then ns.AdoptOldGear(c); c.adopted = true end
@@ -923,6 +994,8 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3, ...)
     -- at login the pole may not read as equipped yet: try again once gear has loaded
     if e == "PLAYER_ENTERING_WORLD" and C_Timer then
       C_Timer.After(3, function() if ns.EnvMissing() and not InCombatLockdown() then ns.UpdateEnv() end end)
+      -- the off hand (and sometimes the main hand) isn't readable right at login: note them again
+      C_Timer.After(3, function() ns.TrackGear(); if not InCombatLockdown() then ns.UpdateGear() end end)
     end
     if e ~= "PLAYER_REGEN_ENABLED" or pendingMode then UpdateMode() end
     if e ~= "PLAYER_REGEN_ENABLED" then UpdateModeSoon() end

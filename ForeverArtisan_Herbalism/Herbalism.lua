@@ -310,6 +310,8 @@ function ns.GoalRows()
   end
   return rows
 end
+-- the on-screen goals list (Core Tracker.lua) shows these too
+if ForeverArtisan and ForeverArtisan.Track then ForeverArtisan.Track.Goals("Herbalism", ns.GoalRows, ns.Knows, ns.RemoveGoal) end
 
 local function CheckGoals()
   for _, g in ipairs(db.goals) do

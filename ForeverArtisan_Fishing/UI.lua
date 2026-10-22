@@ -255,7 +255,11 @@ local function BuildFishingPage(p)
       function(_, id)
         if ns.GearFits(id, kind) then ns.SetGear(kind, id)
         elseif ns.IsRanged(id) then ns.say(RANGED_NOTE)
-        else ns.say(("That can't go in the %s slot."):format(LBL[kind]:lower())) end
+        else
+          -- say what kind of item it is, so a mismatch can be reported
+          local loc = select(4, ((C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant)(id))
+          ns.say(("That can't go in the %s slot (%s)."):format(LBL[kind]:lower(), _G[loc or ""] or loc or "unknown type"))
+        end
       end,
       function() ns.SetGear(kind, nil) end,
       function(self)
@@ -342,6 +346,8 @@ local function RefreshFishingPage(p)
       or (GRAY .. "Best (none in bags)|r"))
   end
 
+  -- what you're wearing right now counts as "last worn" (the slots fill in without dragging)
+  if ns.TrackGear then ns.TrackGear() end
   local mh, oh, poleId = ns.GearSet()
   local g = (ns.CharRec and ns.CharRec() or {}).gear or {}
   local eff = { pole = poleId, mh = mh, oh = oh }
@@ -443,11 +449,18 @@ local function RefreshProgressPage(p)
     else
       p.ghead:SetText(("Fish your learned Cooking recipes use (Cooking %d). Amount = enough for up to 25 skill-ups."):format(rank or 0))
     end
+    -- fish that are already goals say so (the goals list is one click away: Back to goals)
+    local isGoal = {}
+    for _, g in ipairs(ns.GoalRows()) do isGoal[g.id] = g end
     for _, sgt in ipairs(list) do
+      local g = isGoal[sgt.id]
       data[#data + 1] = { id = sgt.id, icon = Icon(sgt.id), left = sgt.name,
-        right = ("%s, gray at %d"):format(sgt.recipe, sgt.grayAt), act = "+ Goal",
+        right = g and (GREEN .. ("goal: %d / %d"):format(g.have, g.want) .. "|r")
+          or ("%s, gray at %d"):format(sgt.recipe, sgt.grayAt),
+        act = g and "Goal set" or "+ Goal", actOff = g and true or nil,
         tip = ("%d per %s. Add a goal for %d."):format(sgt.per, sgt.recipe, sgt.want),
-        onAct = function() ns.AddGoal(sgt.id, sgt.want, sgt.name) end }
+        -- add it and go back to the goals list, so you see it there
+        onAct = function() ns.AddGoal(sgt.id, sgt.want, sgt.name); view.gmode = "goals"; view.goffset = 0; ns.OnChange() end }
     end
     p.empty:SetText((#data == 0 and not why) and "None of your learned recipes need fish right now." or "")
   else
@@ -471,6 +484,7 @@ local function RefreshProgressPage(p)
       r.icon:SetTexture(d.icon); r.left:SetText(d.left); r.right:SetText(d.right)
       r.itemId, r.tip = d.id, d.tip
       r.act:SetText(d.act); r.act:SetScript("OnClick", d.onAct)
+      if r.act.SetEnabled then r.act:SetEnabled(not d.actOff) end
       r.goalIndex = d.goalIndex
       if r.edit then
         if d.want then

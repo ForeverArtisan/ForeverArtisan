@@ -1587,6 +1587,8 @@ NEWS = {
   { "0.9.29", "Plan ahead: open a profession you don't have and the Progress tab lists what to save to level it. "
     .. "Best crafts has a Disenchant sort, Cheapest to level counts disenchanting, and Make now scrolls." },
   { "0.9.30", "Cheapest to level ranks by what the materials cost per skill-up. Hover a row for the chance and what selling would bring back." },
+  { "0.9.31", "Track shopping list items on screen like quest objectives: right-click one, or Track all. Gathering goals show there too (/fa goals). "
+    .. "Fishing weapon swap now brings back your off hand: a second weapon, shield or orb." },
 }
 
 local function verNum(v)
@@ -1769,6 +1771,7 @@ local function help()
   print("  /fa bug  - where to report an error (" .. FA.BUG_URL .. ")")
   print("  /fa discord  - the ForeverArtisan Discord (" .. FA.DISCORD .. ")")
   print("  /fa market  - your most profitable crafts, every profession in one list")
+  print("  /fa goals  - show or hide the on-screen goals list (lock | unlock | reset | clear)")
   print("  /fa new  - what's new in recent releases")
   if FA.RECIPE_WATCH_READY then print("  /fa recipewatch on | quiet | off  - recipes you or your alts don't know, noted when you see them on the Auction House (quiet: no chat)") end
   print("  /fa disenchant on | off | log  - what greens, blues and purples disenchant into and what that's worth, on item tooltips (beta)")
@@ -1819,6 +1822,8 @@ SlashCmdList.FOREVERARTISAN = function(msg)
   elseif lower == "discord" then
     print(PREFIX .. "Discord: " .. FA.DISCORD .. "  " .. GREY .. "(copy it from the box on the Info tab)|r")
     showPanel("info")
+  elseif lower == "goals" or lower == "goal" or lower == "track" then
+    if FA.Track then FA.Track.Slash(rest) end
   elseif lower == "market" then
     showPanel("market")
   elseif lower == "beta" or lower == "welcome" or lower == "about" then

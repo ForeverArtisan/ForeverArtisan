@@ -221,12 +221,28 @@ local function BuildProgressPage(p)
   -- the shopping list moves down when the window is taller and the plan shows more rows
   p.shopBox = CreateFrame("Frame", nil, p); p.shopBox:SetSize(W, 20); p.shopBox:SetPoint("TOPLEFT", 0, -238)
   Header(p.shopBox, 0, "Shopping list")
-  Text(p.shopBox, "GameFontDisableSmall", "TOPLEFT", 120, -2):SetText("have / need  ·  hover for where to get it and price")
+  Text(p.shopBox, "GameFontDisableSmall", "TOPLEFT", 120, -2):SetText("have / need  ·  right-click: track on screen")
   p.shopAll = MakeRows(p.shopBox, SHOP_MAX, -20, false)
+  -- Track all: every item on the list goes on the on-screen goals list (Core Tracker.lua)
+  p.trackAll = Button(p.shopBox, "Track all", 90, function()
+    if not FA.Track then return end
+    if FA.Track.AllOn("First Aid") then FA.Track.UntrackAll("First Aid") else FA.Track.TrackAll("First Aid", view.shopping) end
+    if ns.OnChange then ns.OnChange() end
+  end)
+  p.trackAll:SetHeight(18); p.trackAll:SetPoint("TOPRIGHT", p.shopBox, "TOPRIGHT", -24, 2); p.trackAll:Hide()
+  K.Tip(p.trackAll, function()
+    GameTooltip:AddLine("Track on screen")
+    GameTooltip:AddLine("Puts the whole list on the on-screen goals list, like quest objectives. Right-click one item to track just that one. /fa goals shows or hides the list.", 1, 1, 1, true)
+  end)
   -- click a shopping list item at the Auction House: its name goes in the search box (you press Search)
   for _, r in ipairs(p.shopAll) do
-    r:SetScript("OnClick", function(self)
+    r:SetScript("OnClick", function(self, button)
       local d = self.data
+      -- right-click: put it on the on-screen goals list (or take it off)
+      if button == "RightButton" then
+        if d and d.entry and FA.Track then FA.Track.Toggle("First Aid", d.entry); if ns.OnChange then ns.OnChange() end end
+        return
+      end
       -- a Train line: waypoint to the trainer
       if d and d.waypoint and FA.Vendors and FA.Vendors.waypoint then FA.Vendors.waypoint(d.waypoint) return end
       if not (d and d.name) then return end
@@ -261,7 +277,7 @@ local function RefreshProgressPage(p)
   -- without the profession, the plan plans ahead (from skill 1, with an alt's or the beta's recipes)
   local ahead = not ns.Knows()
   if ns.Knows() and not ns.HasRecipes() then
-    Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); p.note:SetText(""); p.cost:SetText(""); p.target:SetTextColor(1, 1, 1)
+    Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); if p.trackAll then p.trackAll:Hide() end; p.note:SetText(""); p.cost:SetText(""); p.target:SetTextColor(1, 1, 1)
     p.empty:SetText(ns.Knows() and "Open your First Aid window once so I can read your recipes." or "")
     return
   end
@@ -271,7 +287,7 @@ local function RefreshProgressPage(p)
   if not p.target:HasFocus() then p.target:SetText(tostring(target)) end
   local steps, shopping, stuck, _, _, hint, aheadInfo = ns.Plan(target)
   if aheadInfo and aheadInfo.none then
-    Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); p.note:SetText(""); p.cost:SetText(""); p.target:SetTextColor(1, 1, 1)
+    Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); if p.trackAll then p.trackAll:Hide() end; p.note:SetText(""); p.cost:SetText(""); p.target:SetTextColor(1, 1, 1)
     p.empty:SetText("No First Aid recipes on file yet. Learn it at a trainer on any character, open the First Aid window once (you can drop it again), and this tab plans ahead for it.")
     return
   end
@@ -333,10 +349,11 @@ local function RefreshProgressPage(p)
     -- (10 / 10 with all 10 in the bank still means a trip to the bank)
     local inBank = (not e.tool and e.id and FA.BankCount and ns.Count(e.id) < e.need) and FA.BankCount(e.id) or 0
     if inBank > 0 then altNote = GREEN .. "  ·  " .. inBank .. " in bank|r" .. altNote end
-    shop[#shop + 1] = { id = e.id, icon = Icon(e.id), name = e.name,
-      left = (done and GREEN or "") .. e.name .. (done and "|r" or ""),
+    local tracked = FA.Track and FA.Track.IsTracked("First Aid", e.id)
+    shop[#shop + 1] = { id = e.id, icon = Icon(e.id), name = e.name, entry = e,
+      left = (tracked and "|TInterface\\RaidFrame\\ReadyCheck-Ready:12|t " or "") .. (done and GREEN or "") .. e.name .. (done and "|r" or ""),
       right = ("%s%d / %d|r"):format(done and GREEN or YELLOW, math.min(e.have, e.need), e.need) .. altNote .. cost,
-      tip = " \n" .. GOLD .. "Shopping list|r\n" .. e.source
+      tip = " \n" .. GOLD .. "Shopping list|r\n" .. e.source .. "\n|cff80c0ff" .. (tracked and "Right-click to stop tracking it on screen" or "Right-click to track it on screen") .. "|r"
         .. ((not e.craft and FA.VendorNPC and FA.VendorNPC(e.id, e.name)) and "\n|cff80c0ffClick for a waypoint to the vendor (at the Auction House: search it)|r" or "") .. ((FA.RowPriceLine and FA.RowPriceLine(e.id, e.name)) and ("\n" .. FA.RowPriceLine(e.id, e.name)) or "")
         .. (altTip and ("\n" .. altTip) or "") }
     end
@@ -344,6 +361,12 @@ local function RefreshProgressPage(p)
   p.shopCount = #shop
   view.shopOff = math.max(0, math.min(view.shopOff or 0, #shop - #p.shopRows))
   Fill(p.shopRows, shop, view.shopOff)
+  view.shopping = shopping
+  if FA.Track then
+    FA.Track.Sync("First Aid", shopping)
+    p.trackAll:SetText(FA.Track.AllOn("First Aid") and "Untrack all" or "Track all")
+    p.trackAll:SetShown(#shop > 0)
+  end
   p.cost:SetText(FA.ShopCostText and FA.ShopCostText(shopping) or "")
 end
 

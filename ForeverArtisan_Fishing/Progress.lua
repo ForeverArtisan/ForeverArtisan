@@ -205,6 +205,8 @@ function ns.GoalRows()
   end
   return rows
 end
+-- the on-screen goals list (Core Tracker.lua) shows these too
+if ForeverArtisan and ForeverArtisan.Track then ForeverArtisan.Track.Goals("Fishing", ns.GoalRows, function() return ns.FishingSkill and ns.FishingSkill() ~= nil end, ns.RemoveGoal) end
 
 local function CheckGoals()
   for _, g in ipairs(ns.DB().goals) do

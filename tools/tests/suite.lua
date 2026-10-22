@@ -3202,4 +3202,114 @@ do
   FA.ProfessionListLoaded=oldPL
   print("planning ahead ok")
 end
+-- 0.9.31: the on-screen goals list (Core Tracker.lua)
+do
+  local T=ForeverArtisan.Track
+  assert(T, "tracker loaded")
+  local tl=loadedFrames["ForeverArtisan_Tailoring"].ns
+  local _,shopping=tl.Plan(75)
+  local items={}
+  for _,e in ipairs(shopping) do if type(e.id)=="number" and not e.train and e.need>0 then items[#items+1]=e end end
+  assert(#items>=2, "Tailoring plan has items to track: "..#items)
+  -- right-click one item: tracked, shown under "Tailoring shopping" with bags + bank counted
+  local e=items[1]
+  T.UntrackAll("Tailoring")
+  assert(T.Toggle("Tailoring", e)==true and T.IsTracked("Tailoring", e.id), "toggle on")
+  COUNTS[e.id]=1
+  local found
+  for _,g in ipairs(T.Lines()) do for _,l in ipairs(g.lines) do if l.id==e.id then found={g=g.title,l=l} end end end
+  assert(found and found.g=="Tailoring shopping" and found.l.have==1 and found.l.want==e.need, "line shows: "..tostring(found and found.g))
+  assert(ForeverArtisanGoalsFrame and ForeverArtisanGoalsFrame._shown, "goals frame shows")
+  -- right-click again: off
+  assert(T.Toggle("Tailoring", e)==false and not T.IsTracked("Tailoring", e.id), "toggle off")
+  -- Track all, then the plan changes: amounts follow, dropped items go
+  local n=T.TrackAll("Tailoring", shopping)
+  assert(n>=2 and T.AllOn("Tailoring"), "track all: "..n)
+  local fewer={} for i,x in ipairs(items) do if i>1 then fewer[#fewer+1]={id=x.id,name=x.name,need=x.need+5,have=0} end end
+  T.Sync("Tailoring", fewer)
+  assert(not T.IsTracked("Tailoring", items[1].id), "dropped from the plan: untracked")
+  local want for _,g in ipairs(T.Lines()) do for _,l in ipairs(g.lines) do if l.id==items[2].id then want=l.want end end end
+  assert(want==items[2].need+5, "amount follows the plan")
+  -- done: green, then it drops off and stops being tracked
+  local realTime=GetTime
+  COUNTS[items[2].id]=items[2].need+5
+  T.Lines()
+  GetTime=function() return 1000+60 end
+  T.Lines()
+  assert(not T.IsTracked("Tailoring", items[2].id), "finished item drops off")
+  GetTime=realTime
+  -- gathering goals show too
+  local mi=loadedFrames["ForeverArtisan_Mining"].ns
+  local hasMining
+  for _,g in ipairs(T.Lines()) do if g.title=="Mining" then hasMining=true end end
+  assert(hasMining, "Mining goals on the list")
+  -- goals are account-wide: a character without the profession doesn't see them
+  T.Goals("Testing", function() return {{id=2447,name="Peacebloom",have=0,want=5}} end, function() return false end)
+  for _,g in ipairs(T.Lines()) do assert(g.title~="Testing", "unlearned profession's goals hidden") end
+  T.Goals("Testing", nil, nil)
+  -- right-click a line on screen: it stops being tracked (Track all turns off), the rest stay
+  T.TrackAll("Tailoring", shopping)
+  local before=0 for _,id in ipairs(items) do if T.IsTracked("Tailoring", id.id) then before=before+1 end end
+  local line
+  for _,g in ipairs(T.Lines()) do for _,l in ipairs(g.lines) do if l.shopProf=="Tailoring" and not line then line=l end end end
+  assert(line, "a shopping line on screen")
+  T.Refresh()
+  local hit
+  for _,f in ipairs(frames) do local ln=rawget(f,"ln") if type(ln)=="table" and ln.id==line.id and f.scripts.OnClick then hit=f end end
+  local hintShown for _,x in ipairs(fonts) do if rawget(x,"_text")=="Right-click a line to remove it" and rawget(x,"_shown") then hintShown=true end end
+  assert(hintShown, "hint under the list")
+  assert(hit, "line button")
+  hit.scripts.OnClick(hit)
+  assert(not T.IsTracked("Tailoring", line.id) and not T.AllOn("Tailoring"), "right-click removes it")
+  T.Refresh()
+  local after=0 for _,id in ipairs(items) do if T.IsTracked("Tailoring", id.id) then after=after+1 end end
+  assert(after==before-1, "the others stay: "..before.." -> "..after)
+  T.UntrackAll("Tailoring")
+  -- the Progress tab: right-click a shopping row and Track all, without errors
+  run("FATAILOR","")
+  for _,f in ipairs(frames) do if f._text=="Progress" and f.scripts.OnClick then f.scripts.OnClick(f) end end
+  local clicked=0
+  for _,f in ipairs(frames) do local d=rawget(f,"data") if type(d)=="table" and d.entry and f.scripts.OnClick then
+    local ok,err=pcall(f.scripts.OnClick,f,"RightButton") assert(ok,"right-click: "..tostring(err)) clicked=clicked+1 end end
+  assert(clicked>0, "shopping rows take a right-click")
+  local tb=0
+  for _,f in ipairs(frames) do local tx=rawget(f,"_text") if (tx=="Track all" or tx=="Untrack all") and f.scripts.OnClick then
+    local ok,err=pcall(f.scripts.OnClick,f) assert(ok,"track all: "..tostring(err)) tb=tb+1 end end
+  assert(tb>=1, "Track all button")
+  -- a new gathering goal brings a hidden list back
+  ForeverArtisanSettings.track[ForeverArtisan.CharKey(ForeverArtisanSettings.track)].hidden=true
+  T.Lines()
+  T.Goals("Testing2", function() return {{id=765,name="Silverleaf",have=0,want=5}} end)
+  T.Lines()
+  assert(not ForeverArtisanSettings.track[ForeverArtisan.CharKey(ForeverArtisanSettings.track)].hidden, "new goal unhides")
+  T.Goals("Testing2", nil)
+  -- /fa goals
+  for _,a in ipairs({"","lock","unlock","reset","clear",""}) do run("FOREVERARTISAN","goals "..a) end
+  for k in pairs(COUNTS) do COUNTS[k]=nil end
+  print("goals tracker ok")
+end
+-- 0.9.31: weapon swap puts the off hand on first (it takes the two-handed pole off), and clicking first notes your weapons
+do
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  NAMES[1111]="Test Dagger"; NAMES[2222]="Test Dirk"
+  fns.SetGear("mh",1111); fns.SetGear("oh",2222)
+  local wm=fns.swapButton.attrs.weaponmacro or ""
+  assert(wm:find("/equipslot 17 Test Dirk",1,true) and wm:find("/equipslot 16 Test Dagger",1,true)
+    and wm:find("17",1,true) < wm:find("16",1,true), "off hand first: "..wm)
+  local pc=fns.swapButton.scripts.PreClick
+  assert(pc, "swap PreClick")
+  local ok,err=pcall(pc,fns.swapButton) assert(ok, "PreClick: "..tostring(err))
+  -- the off hand goes on once the main hand has landed (the game refuses it while the pole is on)
+  local equipped
+  EquipItemByName=function(id,slot) equipped={id,slot} end
+  fns.pendingOH={id=2222, till=GetTime()+5}
+  COUNTS[2222]=1
+  local realInv=GetInventoryItemID
+  GetInventoryItemID=function(_,slot) if slot==16 then return 1111 end return nil end
+  fns.FinishOffHand()
+  assert(equipped and equipped[1]==2222 and equipped[2]==17, "off hand follows the main hand"); fns.pendingOH=nil
+  GetInventoryItemID=realInv COUNTS[2222]=nil EquipItemByName=nil
+  fns.SetGear("mh",nil); fns.SetGear("oh",nil)
+  print("weapon swap order ok")
+end
 print("SUITE OK")
