@@ -567,7 +567,10 @@ function ns.TrackGear()
     -- swapping back fires once per slot: the main hand can land before the off hand does, so
     -- an empty off hand next to a one-hander keeps the off hand we already knew
     if not oh and EquipLoc(mh) ~= "INVTYPE_2HWEAPON" and c.lastGear and c.lastGear.mh == mh then oh = c.lastGear.oh end
-    c.lastGear = { mh = mh, oh = oh }
+    local l = c.lastGear
+    -- when it changed: the newer of "what you wore" and "what you put in the slots" wins
+    local at = (l and l.mh == mh and l.oh == oh and l.at) or time()
+    c.lastGear = { mh = mh, oh = oh, at = at }
   end
 end
 
@@ -576,7 +579,10 @@ function ns.GearSet()
   local c = ns.CharRec() or { gear = {} }
   local g = c.gear
   local last = c.lastGear or {}
-  local mh, oh = g.mh, g.oh
+  -- swap back to what you wore right before the pole, unless you set the slots since then
+  local mh, oh
+  if last.mh and (not g.mh or (last.at or 0) >= (g.at or 0)) then mh, oh = last.mh, last.oh
+  else mh, oh = g.mh, g.oh end
   if not mh then mh, oh = last.mh, (g.oh or last.oh) end
   if EquipLoc(mh) == "INVTYPE_2HWEAPON" then oh = nil end
   return mh, oh, c.pole
@@ -624,7 +630,25 @@ function ns.FinishOffHand()
       (mh and IsPole(mh)) and ", reads as a pole" or "")
     return
   end
-  -- (no bag check: on Forever the old GetItemCount can say 0 for an item you have; just try)
+  -- take it from a bag slot: with two of the same weapon, equipping by name can grab the one
+  -- already in your main hand and move it over, leaving the main hand empty
+  local pick = (C_Container and C_Container.PickupContainerItem) or PickupContainerItem
+  if pick and EquipCursorItem then
+    for bag = 0, LAST_BAG do
+      for slot = 1, (NumSlots(bag) or 0) do
+        if SlotItemID(bag, slot) == p.id then
+          if ClearCursor then ClearCursor() end
+          local ok, err = pcall(function() pick(bag, slot); EquipCursorItem(17) end)
+          -- anything still on the cursor (the item was locked mid-swap) goes back to the bag
+          if CursorHasItem and CursorHasItem() and ClearCursor then ClearCursor() end
+          p.why = ok and "the game didn't take it from your bags" or tostring(err)
+          return
+        end
+      end
+    end
+  end
+  -- not found in the bags: equip by name, unless the main hand holds the same item (it would move it)
+  if mh == p.id then p.why = "the second copy isn't in your bags"; return end
   local equip = (C_Item and C_Item.EquipItemByName) or EquipItemByName
   if not equip then p.why = "no equip function"; return end
   local ok, err = pcall(equip, p.id, 17)
@@ -655,7 +679,7 @@ end
 
 function ns.SetGear(slot, id)
   local c = ns.CharRec(); if not c then return end
-  if slot == "pole" then c.pole = id else c.gear[slot] = id end
+  if slot == "pole" then c.pole = id else c.gear[slot] = id; c.gear.at = time() end
   ns.UpdateGear()
   if ns.OnChange then ns.OnChange() end
 end

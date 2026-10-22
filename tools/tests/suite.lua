@@ -3306,8 +3306,42 @@ do
   COUNTS[2222]=1
   local realInv=GetInventoryItemID
   GetInventoryItemID=function(_,slot) if slot==16 then return 1111 end return nil end
+  -- in the bags: picked up from its bag slot and put in the off hand
+  local picked, cursorTo
+  PickupContainerItem=function(b,sl) picked={b,sl} end EquipCursorItem=function(sl) cursorTo=sl end
+  TEST_BAGS={[0]={9,2222}}
+  fns.FinishOffHand()
+  assert(picked and picked[1]==0 and picked[2]==2 and cursorTo==17, "off hand from its bag slot")
+  -- two of the same weapon: the second copy comes from the bags, not from the main hand
+  picked, cursorTo = nil, nil
+  fns.pendingOH={id=1111, till=GetTime()+5}
+  TEST_BAGS={[0]={1111}}
+  fns.FinishOffHand()
+  assert(picked and picked[2]==1 and cursorTo==17, "second copy from the bags")
+  -- not in the bags and the main hand holds the same item: don't move it
+  picked, equipped = nil, nil
+  fns.pendingOH={id=1111, till=GetTime()+5}
+  TEST_BAGS=nil
+  fns.FinishOffHand()
+  assert(not picked and not equipped, "main hand copy left alone")
+  -- not in the bags (bank/elsewhere): falls back to equipping by name
+  fns.pendingOH={id=2222, till=GetTime()+5}
   fns.FinishOffHand()
   assert(equipped and equipped[1]==2222 and equipped[2]==17, "off hand follows the main hand"); fns.pendingOH=nil
+  PickupContainerItem=nil EquipCursorItem=nil
+  -- swaps back to what you wore before the pole, unless you set the slots after that
+  fns.SetGear("mh",1111); fns.SetGear("oh",2222)
+  local realT=time
+  time=function() return realT()+100 end
+  local realInv2=GetInventoryItemID
+  GetInventoryItemID=function(_,slot) if slot==16 then return 3333 elseif slot==17 then return 4444 end end
+  fns.TrackGear()
+  local m1,o1=fns.GearSet()
+  assert(m1==3333 and o1==4444, "what you wore wins: "..tostring(m1).." "..tostring(o1))
+  time=function() return realT()+200 end
+  fns.SetGear("mh",1111)
+  assert(fns.GearSet()==1111, "slots set afterwards win")
+  time=realT GetInventoryItemID=realInv2
   GetInventoryItemID=realInv COUNTS[2222]=nil EquipItemByName=nil
   fns.SetGear("mh",nil); fns.SetGear("oh",nil)
   print("weapon swap order ok")

@@ -1,5 +1,9 @@
 # ForeverArtisan changelog
 
+## 0.9.32 (2026-10-22)
+- Changed: the fishing weapon swap puts back what you wore right before the pole, so changing weapons doesn't mean dragging them into the slots again. Slots you fill by hand still win until you wear something else. Thanks to the player who suggested it.
+- Fixed: fishing weapon swap with two of the same weapon (like two Skinning Knives) now puts both back. Before, only the off hand came back. Thanks to the player who tested it.
+
 ## 0.9.31 (2026-10-22)
 - New: **on-screen goals list**, like quest objectives. Right-click any item on a crafting shopping list (Progress tab) to keep it on screen, or click **Track all**. It counts your bags and bank, so buying, looting, fishing or gathering all move the number, and finished lines turn green and drop off. Gathering and fishing goals show there too, on characters that have that profession. Right-click a line to remove it. Drag it to move it; `/fa goals` shows or hides it, and `/fa goals lock | unlock | reset | clear`. Thanks to the player who asked.
 - Fixed: **fishing weapon swap** now gives dual-wielders both weapons back, and anything in the off hand (a second weapon, a shield, an orb or book) comes back after the pole. Before, the pole blocked the off hand and only the main hand returned. Swapping back also works when your weapons weren't read at login. Thanks to the players who reported it.

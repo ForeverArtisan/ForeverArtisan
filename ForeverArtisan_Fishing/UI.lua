@@ -263,7 +263,7 @@ local function BuildFishingPage(p)
       end,
       function() ns.SetGear(kind, nil) end,
       function(self)
-        GameTooltip:AddLine(self.auto and "Remembered from what you last wore." or "Drag an item here from your bags.", 0.6, 0.8, 1)
+        GameTooltip:AddLine(self.auto and "What you wore before the pole: the swap puts this back." or "Drag an item here to swap to it instead (until you wear something else).", 0.6, 0.8, 1, true)
         GameTooltip:AddLine("Right-click to clear.", 0.6, 0.6, 0.6)
       end)
     b.slot = kind
@@ -280,7 +280,7 @@ local function BuildFishingPage(p)
   Text(p, nil, "TOPLEFT", 222, -372):SetText("Swap key:")
   p.swapKeyBtn = KeyButton(p, 290, -368, "swapKey", ns.UpdateSwapKey, 100)
   local gh = Text(p, "GameFontDisableSmall", "TOPLEFT", 222, -396); gh:SetWidth(228)
-  gh:SetText("Toggles pole <-> weapons, even in combat. Empty slots use what you last wore. In combat, the fishing key grabs your weapons.")
+  gh:SetText("Toggles pole <-> weapons, even in combat. Swaps back to what you wore before the pole. In combat, the fishing key grabs your weapons.")
 
   -- profession gear from your bags: a better pole, a fishing line to put on (hover for all)
   p.gearHover = CreateFrame("Frame", nil, p); p.gearHover:SetPoint("TOPLEFT", 20, -446); p.gearHover:SetSize(430, 32)
@@ -354,7 +354,7 @@ local function RefreshFishingPage(p)
   for _, sl in ipairs(p.slots) do
     local sid = eff[sl.slot]
     sl.itemId = sid
-    sl.auto = sid and sl.slot ~= "pole" and not g[sl.slot]
+    sl.auto = sid and sl.slot ~= "pole" and g[sl.slot] ~= sid
     sl.icon:SetTexture(sid and Icon(sid) or nil)
     sl.icon:SetDesaturated(sl.auto and true or false)
     sl.icon:SetAlpha(sl.auto and 0.6 or 1)
