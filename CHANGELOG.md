@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.33 (2026-11-03)
+- Fixed: two of the same weapon (like two Skinning Knives) now both come back after the fishing pole. 0.9.32 still left the main hand empty. Thanks to the player who kept testing it.
+
 ## 0.9.32 (2026-10-22)
 - Changed: the fishing weapon swap puts back what you wore right before the pole, so changing weapons doesn't mean dragging them into the slots again. Slots you fill by hand still win until you wear something else. Thanks to the player who suggested it.
 - Fixed: fishing weapon swap with two of the same weapon (like two Skinning Knives) now puts both back. Before, only the off hand came back. Thanks to the player who tested it.

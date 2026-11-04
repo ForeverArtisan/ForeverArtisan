@@ -1590,6 +1590,7 @@ NEWS = {
   { "0.9.31", "Track shopping list items on screen like quest objectives: right-click one, or Track all. Gathering goals show there too (/fa goals). "
     .. "Fishing weapon swap now brings back your off hand: a second weapon, shield or orb." },
   { "0.9.32", "Fishing weapon swap puts back what you wore before the pole, and two of the same weapon both come back." },
+  { "0.9.33", "Fishing weapon swap: two of the same weapon now both come back (fixes 0.9.32)." },
 }
 
 local function verNum(v)

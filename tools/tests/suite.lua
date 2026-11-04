@@ -42,7 +42,10 @@ local chat={}
 DEFAULT_CHAT_FRAME={AddMessage=function(_,m) chat[#chat+1]=m; print("CHAT:",(tostring(m):gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r",""))) end}
 print=print
 SlashCmdList={}
-InCombatLockdown=function() return false end GetTime=function() return 1000 end time=os.time
+InCombatLockdown=function() return false end GetTime=function() return 1000 end
+-- the clock runs as if it were two days before launch (Nov 4, 2026), so the pre-launch tests still pass after it
+local SUITE_SHIFT=math.max(0, os.time()-(1793750400-2*86400))
+time=function(t) if t then return os.time(t) end return os.time()-SUITE_SHIFT end
 UnitName=function() return "Tester" end UnitFactionGroup=function() return "Horde" end UnitLevel=function() return 20 end
 UnitExists=function() return false end UnitGUID=function() return nil end
 GetRealZoneText=function() return "Desolace" end GetSubZoneText=function() return "Shadowprey Village" end GetZoneText=GetRealZoneText GetMinimapZoneText=GetSubZoneText
@@ -3302,7 +3305,7 @@ do
   -- the off hand goes on once the main hand has landed (the game refuses it while the pole is on)
   local equipped
   EquipItemByName=function(id,slot) equipped={id,slot} end
-  fns.pendingOH={id=2222, till=GetTime()+5}
+  fns.pendingOH={mh=1111, oh=2222, till=GetTime()+5}
   COUNTS[2222]=1
   local realInv=GetInventoryItemID
   GetInventoryItemID=function(_,slot) if slot==16 then return 1111 end return nil end
@@ -3314,20 +3317,37 @@ do
   assert(picked and picked[1]==0 and picked[2]==2 and cursorTo==17, "off hand from its bag slot")
   -- two of the same weapon: the second copy comes from the bags, not from the main hand
   picked, cursorTo = nil, nil
-  fns.pendingOH={id=1111, till=GetTime()+5}
+  fns.pendingOH={mh=1111, oh=1111, till=GetTime()+5}
   TEST_BAGS={[0]={1111}}
   fns.FinishOffHand()
   assert(picked and picked[2]==1 and cursorTo==17, "second copy from the bags")
   -- not in the bags and the main hand holds the same item: don't move it
   picked, equipped = nil, nil
-  fns.pendingOH={id=1111, till=GetTime()+5}
+  fns.pendingOH={mh=1111, oh=1111, till=GetTime()+5}
   TEST_BAGS=nil
   fns.FinishOffHand()
   assert(not picked and not equipped, "main hand copy left alone")
   -- not in the bags (bank/elsewhere): falls back to equipping by name
-  fns.pendingOH={id=2222, till=GetTime()+5}
+  fns.pendingOH={mh=1111, oh=2222, till=GetTime()+5}
   fns.FinishOffHand()
   assert(equipped and equipped[1]==2222 and equipped[2]==17, "off hand follows the main hand"); fns.pendingOH=nil
+  -- the reported case: two of the same knife, only the off hand got one, main hand empty:
+  -- the second copy goes into the main hand from the bags
+  picked, cursorTo = nil, nil
+  GetInventoryItemID=function(_,slot) if slot==17 then return 1111 end return nil end
+  TEST_BAGS={[0]={5,1111}}
+  fns.pendingOH={mh=1111, oh=1111, till=GetTime()+5}
+  fns.FinishOffHand()
+  assert(picked and picked[2]==2 and cursorTo==16, "empty main hand filled from the bags")
+  -- both hands right: done
+  GetInventoryItemID=function(_,slot) return 1111 end
+  fns.FinishOffHand()
+  assert(not fns.pendingOH, "both hands: done")
+  GetInventoryItemID=function(_,slot) if slot==16 then return 1111 end return nil end
+  -- the swap macro: two of the same weapon only equips the main hand by name
+  fns.SetGear("mh",1111); fns.SetGear("oh",1111)
+  local wm2=fns.swapButton.attrs.weaponmacro or ""
+  assert(not wm2:find("/equipslot 17",1,true) and wm2:find("/equipslot 16",1,true), "same weapon: main hand line only: "..wm2)
   PickupContainerItem=nil EquipCursorItem=nil
   -- swaps back to what you wore before the pole, unless you set the slots after that
   fns.SetGear("mh",1111); fns.SetGear("oh",2222)

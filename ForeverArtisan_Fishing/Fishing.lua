@@ -599,8 +599,8 @@ end
 -- has landed (PLAYER_EQUIPMENT_CHANGED below). Weapons can be changed this way in combat too.
 function ns.ExpectOffHand()
   if not PoleEquipped() then return end
-  local _, oh = ns.GearSet()
-  ns.pendingOH = oh and { id = oh, till = GetTime() + 4 } or nil
+  local mh, oh = ns.GearSet()
+  ns.pendingOH = (mh or oh) and { mh = mh, oh = oh, till = GetTime() + 4 } or nil
   -- the equip event can come while the item is still locked mid-swap: keep trying a few times a second
   if ns.pendingOH and C_Timer then
     local function Try()
@@ -611,48 +611,67 @@ function ns.ExpectOffHand()
     C_Timer.After(0.25, Try)
   end
 end
+
+-- put an item from a bag slot into an equipment slot (16 main hand, 17 off hand). From a bag slot,
+-- not by name: with two of the same weapon, by name can grab the one already in your other hand
+local function EquipFromBags(id, invSlot)
+  local pick = (C_Container and C_Container.PickupContainerItem) or PickupContainerItem
+  if not (pick and EquipCursorItem) then return false, "no pickup function" end
+  for bag = 0, LAST_BAG do
+    for slot = 1, (NumSlots(bag) or 0) do
+      if SlotItemID(bag, slot) == id then
+        if ClearCursor then ClearCursor() end
+        local ok, err = pcall(function() pick(bag, slot); EquipCursorItem(invSlot) end)
+        -- anything still on the cursor (the item was locked mid-swap) goes back to the bag
+        if CursorHasItem and CursorHasItem() and ClearCursor then ClearCursor() end
+        return true, ok and "the game didn't take it from your bags" or tostring(err)
+      end
+    end
+  end
+  return false, "not in your bags"
+end
+
+-- after the swap back to weapons: make sure both hands hold what they should. The swap's own lines
+-- can miss one: the pole blocks the off hand, and with two of the same weapon both lines can pick
+-- the same copy (only one hand gets it)
 function ns.FinishOffHand()
   local p = ns.pendingOH
   if not p then return end
-  if GetInventoryItemID("player", 17) == p.id then ns.pendingOH = nil; return end
+  local inMH, inOH = GetInventoryItemID("player", 16), GetInventoryItemID("player", 17)
+  local mhOk = not p.mh or inMH == p.mh
+  local ohOk = not p.oh or inOH == p.oh
+  if mhOk and ohOk then ns.pendingOH = nil; return end
   if GetTime() > p.till then
     ns.pendingOH = nil
     -- still holding the pole: you went fishing, not back to weapons; nothing to report
     if PoleEquipped() then return end
-    say(("Couldn't put %s back in your off hand (%s). Please tell us at %s"):format(ItemName(p.id), p.why or "no reason given",
+    local which, id = (not mhOk) and "main hand" or "off hand", (not mhOk) and p.mh or p.oh
+    say(("Couldn't put %s back in your %s (%s). Please tell us at %s"):format(ItemName(id), which, p.why or "no reason given",
       ForeverArtisan.BUG_URL or "foreverartisan.app/bug"))
     return
   end
-  local mh = GetInventoryItemID("player", 16)
-  if not mh or IsPole(mh) or EquipLoc(mh) == "INVTYPE_2HWEAPON" then
-    -- what the main hand reads as, so a report says exactly what blocked it
-    p.why = ("main hand not on yet: %s, %s%s"):format(mh and ItemName(mh) or "empty", tostring(mh and EquipLoc(mh)),
-      (mh and IsPole(mh)) and ", reads as a pole" or "")
+  -- the swap's main hand line hasn't landed yet: wait for it
+  if inMH and IsPole(inMH) then p.why = "main hand not on yet: still the pole"; return end
+  if not mhOk then
+    local found, why = EquipFromBags(p.mh, 16)
+    if not found and not inMH then
+      local equip = (C_Item and C_Item.EquipItemByName) or EquipItemByName
+      if equip and inOH ~= p.mh then pcall(equip, p.mh, 16); why = "the game didn't take it" end
+    end
+    p.why = why
     return
   end
-  -- take it from a bag slot: with two of the same weapon, equipping by name can grab the one
-  -- already in your main hand and move it over, leaving the main hand empty
-  local pick = (C_Container and C_Container.PickupContainerItem) or PickupContainerItem
-  if pick and EquipCursorItem then
-    for bag = 0, LAST_BAG do
-      for slot = 1, (NumSlots(bag) or 0) do
-        if SlotItemID(bag, slot) == p.id then
-          if ClearCursor then ClearCursor() end
-          local ok, err = pcall(function() pick(bag, slot); EquipCursorItem(17) end)
-          -- anything still on the cursor (the item was locked mid-swap) goes back to the bag
-          if CursorHasItem and CursorHasItem() and ClearCursor then ClearCursor() end
-          p.why = ok and "the game didn't take it from your bags" or tostring(err)
-          return
-        end
-      end
-    end
+  if inMH and EquipLoc(inMH) == "INVTYPE_2HWEAPON" then p.why = "a two-handed weapon is in your main hand"; return end
+  local found, why = EquipFromBags(p.oh, 17)
+  if not found then
+    -- not in the bags: by name, unless the main hand holds the same item (it would move it)
+    if inMH == p.oh then p.why = "the second copy isn't in your bags"; return end
+    local equip = (C_Item and C_Item.EquipItemByName) or EquipItemByName
+    if not equip then p.why = "no equip function"; return end
+    local ok, err = pcall(equip, p.oh, 17)
+    why = ok and "the game didn't take it" or tostring(err)
   end
-  -- not found in the bags: equip by name, unless the main hand holds the same item (it would move it)
-  if mh == p.id then p.why = "the second copy isn't in your bags"; return end
-  local equip = (C_Item and C_Item.EquipItemByName) or EquipItemByName
-  if not equip then p.why = "no equip function"; return end
-  local ok, err = pcall(equip, p.id, 17)
-  p.why = ok and "the game didn't take it" or tostring(err)
+  p.why = why
 end
 
 local function WeaponMacro()
@@ -660,7 +679,9 @@ local function WeaponMacro()
   local lines = {}
   -- off hand first: equipping it takes the two-handed pole off, so the main hand has a free slot.
   -- (main hand first left the off hand blocked by the pole, so dual-wielders got only one weapon)
-  if oh then lines[#lines + 1] = "/equipslot 17 " .. EquipName(oh) end
+  -- two of the same weapon: by name, both lines can pick the same copy, so only the main hand line
+  -- runs here and the addon puts the second copy on from your bags (FinishOffHand)
+  if oh and oh ~= mh then lines[#lines + 1] = "/equipslot 17 " .. EquipName(oh) end
   if mh then lines[#lines + 1] = "/equipslot 16 " .. EquipName(mh) end
   return table.concat(lines, "\n")
 end
