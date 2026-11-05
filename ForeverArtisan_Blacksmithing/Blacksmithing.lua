@@ -393,6 +393,8 @@ local function Scan()
   local got = ScanModern() or ScanOld() or ScanCraft()
   if not got or next(got) == nil then return end
   local c, n, learned = CharRec(), 0, 0
+  -- Season of Discovery recipes the window lists don't exist on Forever: not kept (Core RecipeFinds.lua)
+  if ForeverArtisan.DropNotOnForever then ForeverArtisan.DropNotOnForever(got); ForeverArtisan.DropNotOnForever(c.recipes) end
   for name, r in pairs(got) do
     n = n + 1
     if r.learned then learned = learned + 1 end
@@ -966,6 +968,10 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     db = ForeverArtisanBlacksmithingDB
     db.version = ForeverArtisan.Version()
     db.settings = db.settings or {}
+    -- drop Season of Discovery recipes an older version saved (they don't exist on Forever)
+    if ForeverArtisan.DropNotOnForever then
+      for _, c in pairs(db.chars or {}) do if type(c) == "table" then ForeverArtisan.DropNotOnForever(c.recipes) end end
+    end
     if db.settings.tooltips == nil then db.settings.tooltips = true end
     HookFrames()
     return

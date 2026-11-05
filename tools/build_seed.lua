@@ -3,9 +3,20 @@
 --   lua5.1 tools/build_seed.lua <path to ForeverArtisan_Contacts.lua> > ForeverArtisan_Contacts/SeedTrainers.lua
 -- Keeps only what a player needs (who, where, what they teach). Drops seenBy (a character name),
 -- builds, reactions and timestamps finer than the day. Never edit the output by hand; rerun this.
-local src = assert(arg[1], "usage: lua5.1 tools/build_seed.lua <ForeverArtisan_Contacts.lua>")
-dofile(src)
-local db = assert(ForeverArtisanContactsDB, "no ForeverArtisanContactsDB in " .. src)
+-- More than one file (the beta backup, then live): merged by NPC, the later file wins, so launch data
+-- updates the beta trainers without dropping the ones not met again yet.
+--   lua5.1 tools/build_seed.lua <beta ForeverArtisan_Contacts.lua> <live ForeverArtisan_Contacts.lua> > ...
+assert(arg[1], "usage: lua5.1 tools/build_seed.lua <ForeverArtisan_Contacts.lua> [more files, later wins]")
+local db = { entries = {} }
+for i = 1, #arg do
+  ForeverArtisanContactsDB = nil
+  dofile(arg[i])
+  local one = assert(ForeverArtisanContactsDB, "no ForeverArtisanContactsDB in " .. arg[i])
+  for k, e in pairs(one.entries or {}) do
+    if type(e) == "table" and e.kind == "trainer" and e.npcId then db.entries["trainer:" .. e.npcId] = e
+    else db.entries[k] = e end
+  end
+end
 
 local PROFS = { "Alchemy", "Blacksmithing", "Cooking", "Enchanting", "Engineering", "First Aid", "Fishing",
   "Herbalism", "Leatherworking", "Mining", "Skinning", "Tailoring" }
@@ -19,10 +30,11 @@ local ALLIANCE = { ["Stormwind City"] = true, ["Ironforge"] = true, ["Darnassus"
   ["Dun Morogh"] = true, ["Teldrassil"] = true, ["Theramore Isle"] = true }
 
 local function faction(e)
-  for _, place in ipairs({ e.subzone, e.zone }) do
+  -- an NPC out in the open has no subzone: not ipairs over the pair (it would stop at the nil and miss the zone)
+  for _, place in pairs({ e.subzone or false, e.zone or false }) do
     if place and BOTH[place] then return "Both" end
   end
-  for _, place in ipairs({ e.subzone, e.zone }) do
+  for _, place in pairs({ e.subzone or false, e.zone or false }) do
     if place and HORDE[place] then return "Horde" end
     if place and ALLIANCE[place] then return "Alliance" end
   end

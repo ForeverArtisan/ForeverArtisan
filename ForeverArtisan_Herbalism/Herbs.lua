@@ -47,6 +47,19 @@ for _, h in ipairs(ns.HERBS) do
   ns.herbById[rec.id] = rec
   ns.herbByName[rec.name:lower()] = rec
 end
+-- Forever adds smaller versions of the starter herbs ("Wilted Peacebloom", "Stunted Silverleaf", seen at
+-- launch): a node whose name ends in a known herb counts as that herb
+function ns.HerbByNode(name)
+  if type(name) ~= "string" then return end
+  local l = name:lower()
+  local h = ns.herbByName[l]
+  while not h do
+    l = l:match("^%S+%s+(.+)$")
+    if not l then return end
+    h = ns.herbByName[l]
+  end
+  return h
+end
 -- for crafting shopping lists: the Herbalism skill an herb needs, or nil when it isn't an herb
 ForeverArtisan.HerbSkill = function(id) local h = id and ns.herbById[id]; return h and h.req end
 

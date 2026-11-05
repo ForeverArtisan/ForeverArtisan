@@ -30,6 +30,10 @@ ns.SEED_REAGENTS = {
   ["Camp Chair"]         = { { name = "Light Leather", n = 3 }, { name = "Simple Wood", n = 2 } },
   ["First Aid Kit"]      = { { name = "Linen Bandage", n = 3 }, { name = "Refreshing Spring Water", n = 1 } },
   ["Basic Campfire Kit"] = { { name = "Simple Wood", n = 1 } },
+  -- read from the live profession windows at launch (Nov 5)
+  ["Toxin Study"]        = { { name = "Anti-Venom", n = 1 }, { name = "Mageweave Bandage", n = 2 }, { name = "Simple Wood", n = 2 } },
+  ["Greenhouse"]         = { { name = "Arthas' Tears", n = 1 }, { name = "Purple Lotus", n = 1 } },
+  ["Seed Hybridizer"]    = { { name = "Mountain Silversage", n = 4 } },
 }
 
 -- What each camp item gives, short, from the item tooltips (Oct 3). Tier 2 and 3 get theirs once we've seen them.

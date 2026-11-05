@@ -45,11 +45,16 @@ for _, n in ipairs(ns.NODES) do
   ns.nodeByName[n[2]:lower()] = { id = n[1], name = n[2], req = n[3] }
 end
 
--- "Ooze Covered Mithril Deposit" counts as a Mithril Deposit
+-- "Ooze Covered Mithril Deposit" counts as a Mithril Deposit; so does any other word in front of a
+-- known node (Forever added smaller herb nodes like "Wilted Peacebloom" at launch, so ore may follow)
 function ns.NormalizeNode(name)
   if not name then return end
-  local base = name:gsub("^Ooze Covered ", "")
-  return ns.nodeByName[base:lower()] and ns.nodeByName[base:lower()].name or base
+  local l = name:lower()
+  while not ns.nodeByName[l] do
+    l = l:match("^%S+%s+(.+)$")
+    if not l then return (name:gsub("^Ooze Covered ", "")) end
+  end
+  return ns.nodeByName[l].name
 end
 
 -- Classic gathering colors: orange = always a skill-up, yellow = usually, green = sometimes, gray = never.

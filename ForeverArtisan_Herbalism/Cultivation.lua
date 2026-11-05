@@ -92,7 +92,7 @@ end
 
 -- the level the game's rule gives for a herb: its Herbalism skill / 5, at least 1; above 300 skill, 60
 function ns.CultivationRuleLevel(name)
-  local rec = name and ns.herbByName and ns.herbByName[name:lower()]
+  local rec = name and ns.HerbByNode and ns.HerbByNode(name)
   if not rec or not rec.req then return nil end
   if rec.req > 300 then return 60 end
   return math.max(1, math.ceil(rec.req / 5))

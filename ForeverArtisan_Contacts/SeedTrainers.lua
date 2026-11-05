@@ -505,7 +505,12 @@ ns.SEED_TRAINERS = {
     { n = "Wool Bandage", sk = "First Aid 80", p = 225, lv = nil },
     { n = "Woolen Tourniquet", sk = "First Aid 120", p = 1080, lv = nil },
   } },
-  { id = 5943, n = "Rawrk", t = "First Aid Trainer", prof = "First Aid", f = "Horde", z = "Durotar", s = "Razor Hill Barracks", m = 1411, x = 54.1, y = 42, seen = 1792152000, skills = {
+  { id = 5941, n = "Lau'Tiki", t = "Fisherman", prof = "Fishing", f = "Horde", z = "Durotar", s = nil, m = 1411, x = 53.2, y = 81.5, seen = 1793880000, skills = {
+    { n = "Apprentice Fishing", sk = nil, p = 100, lv = nil },
+    { n = "Fish Bowl", sk = "Fishing 20", p = 100, lv = nil },
+    { n = "Journeyman Fishing", sk = "Fishing 50", p = 500, lv = 10 },
+  } },
+  { id = 5943, n = "Rawrk", t = "First Aid Trainer", prof = "First Aid", f = "Horde", z = "Durotar", s = "Razor Hill Barracks", m = 1411, x = 54.2, y = 42, seen = 1793880000, skills = {
     { n = "Anti-Venom", sk = "First Aid 80", p = 250, lv = nil },
     { n = "Apprentice First Aid", sk = nil, p = 100, lv = nil },
     { n = "First Aid Kit", sk = "First Aid 20", p = 100, lv = nil },
@@ -754,7 +759,7 @@ ns.SEED_TRAINERS = {
     { n = "Spiced Wolf Meat", sk = "Cooking 10", p = 50, lv = nil },
     { n = "Spider Sausage", sk = "Cooking 200", p = 4000, lv = nil },
   } },
-  { id = 266881, n = "Pa'zula", t = "Journeyman Enchanter", prof = "Enchanting", f = "Horde", z = "Durotar", s = "Sen'jin Village", m = 1411, x = 56.7, y = 73.7, seen = 1791892800, skills = {
+  { id = 266881, n = "Pa'zula", t = "Journeyman Enchanter", prof = "Enchanting", f = "Horde", z = "Durotar", s = "Sen'jin Village", m = 1411, x = 56.7, y = 73.7, seen = 1793880000, skills = {
     { n = "Apprentice Enchanting", sk = nil, p = 10, lv = nil },
     { n = "Enchant Bracer - Minor Stamina", sk = "Enchanting 50", p = 250, lv = nil },
     { n = "Enchant Chest - Inferior Stamina", sk = "Enchanting 15", p = 50, lv = nil },
@@ -769,10 +774,10 @@ ns.SEED_TRAINERS = {
   { id = 267325, n = "Walter Mason", t = "Junior Mining Trainer", prof = "Mining", f = "Horde", z = "Tirisfal Glades", s = "Deathknell", m = 1420, x = 32.2, y = 65.8, seen = 1790942400, skills = {
     { n = "Apprentice Mining", sk = nil, p = 10, lv = nil },
   } },
-  { id = 267327, n = "Kagil", t = "Junior Skinning Trainer", prof = "Skinning", f = "Horde", z = "Durotar", s = "The Den", m = 1411, x = 40.8, y = 67.9, seen = 1791979200, skills = {
+  { id = 267327, n = "Kagil", t = "Junior Skinning Trainer", prof = "Skinning", f = "Horde", z = "Durotar", s = "The Den", m = 1411, x = 40.7, y = 67.9, seen = 1793880000, skills = {
     { n = "Apprentice Skinning", sk = nil, p = 10, lv = nil },
   } },
-  { id = 267329, n = "Zor'la", t = "Junior Herbalism Trainer", prof = "Herbalism", f = "Horde", z = "Durotar", s = "Valley of Trials", m = 1411, x = 42.7, y = 67.4, seen = 1791979200, skills = {
+  { id = 267329, n = "Zor'la", t = "Junior Herbalism Trainer", prof = "Herbalism", f = "Horde", z = "Durotar", s = "Valley of Trials", m = 1411, x = 42.7, y = 67.4, seen = 1793880000, skills = {
     { n = "Apprentice Herbalism", sk = nil, p = 10, lv = nil },
   } },
 }

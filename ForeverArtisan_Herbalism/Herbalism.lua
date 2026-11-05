@@ -513,7 +513,7 @@ local function ObjectTip(tt)
   if not db or db.settings.tooltips == false or not tt or tt.faHerbDone then return end
   local first = _G[tt:GetName() .. "TextLeft1"]
   local name = first and first:GetText()
-  local h = name and ns.herbByName[name:lower()]
+  local h = name and ns.HerbByNode(name)
   if not h then return end
   tt.faHerbDone = true
   local skill = EffSkill()

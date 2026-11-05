@@ -79,7 +79,9 @@ for _, m in ipairs(MODULES) do
   local out = {}
   for _, name in ipairs(sortedKeys(best)) do
     local r = best[name]
-    if seenBy[name] * 2 >= readers and r.reagents and #r.reagents > 0 then
+    -- Season of Discovery recipes the window lists don't exist on Forever: left out of the seed
+    local sod = type(r.group) == "string" and r.group:lower():find("season of discovery", 1, true)
+    if seenBy[name] * 2 >= readers and r.reagents and #r.reagents > 0 and not sod then
       local mats = {}
       for _, g in ipairs(r.reagents) do
         if g.id then

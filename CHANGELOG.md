@@ -1,5 +1,13 @@
 # ForeverArtisan changelog
 
+## 0.9.34 (2026-11-05)
+- Fixed: with a profession window open, the addon kept asking the server about recipe items that don't exist on Forever (the Season of Discovery ones), every couple of seconds. Thanks to the player who tracked it down.
+- Fixed: Season of Discovery recipes the profession window lists (they don't exist on Forever) no longer show up in plans, Best crafts, Make now, the Market tab or the recipe book.
+- Fixed: Forever's smaller herb nodes (Wilted Peacebloom, Stunted Silverleaf) now get the same skill color on their tooltip as the full-size ones.
+- Added: a Settings checkbox to hide disenchant values on item tooltips (same as /fa disenchant off). Thanks to the player who asked.
+- Added: the Durotar fishing trainer to Trade Contacts' built-in trainers. A trainer standing outside any town was left out before.
+- Added: materials for three more camp items (Toxin Study, Greenhouse, Seed Hybridizer), read from the live game.
+
 ## 0.9.33 (2026-11-03)
 - Fixed: two of the same weapon (like two Skinning Knives) now both come back after the fishing pole. 0.9.32 still left the main hand empty. Thanks to the player who kept testing it.
 

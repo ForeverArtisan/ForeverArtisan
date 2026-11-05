@@ -354,7 +354,7 @@ end
 function ForeverArtisan.PlanRecipes(prof, recipes, skip)
   local list, unknown = {}, 0
   for _, r in pairs(recipes or {}) do
-    if not (skip and skip(r)) then
+    if not (skip and skip(r)) and not ForeverArtisan.NotOnForever(r) then
       if r.learned then
         list[#list + 1] = r
       elseif r.reagents and #r.reagents > 0 then
@@ -377,6 +377,22 @@ function ForeverArtisan.PlanRecipes(prof, recipes, skip)
   return list, unknown
 end
 
+-- The profession window on Forever also lists Season of Discovery recipes (their own group). Their items
+-- don't exist here, so they never go in plans, Best crafts, Make now or the recipe book.
+function ForeverArtisan.NotOnForever(r)
+  local g = type(r) == "table" and r.group
+  return type(g) == "string" and g:lower():find("season of discovery", 1, true) ~= nil
+end
+-- drops them from a recipe table (a scan, or one saved by an older version); returns how many went
+function ForeverArtisan.DropNotOnForever(recipes)
+  local n = 0
+  if type(recipes) ~= "table" then return 0 end
+  for name, r in pairs(recipes) do
+    if ForeverArtisan.NotOnForever(r) then recipes[name] = nil; n = n + 1 end
+  end
+  return n
+end
+
 -- Planning ahead for a profession this character doesn't have: the recipes of the character (an alt)
 -- that read the most of that profession's window, or else the recipes seen on the Forever beta
 -- (seedFn: the module's ns.SeedRecipes). Every recipe comes back unlearned, with the beta trainer level
@@ -396,7 +412,7 @@ function ForeverArtisan.AheadRecipes(chars, seedFn)
   local out = {}
   for name, r in pairs(src) do
     local sd = seed[name]
-    out[name] = setmetatable({ learned = false, seedTrain = r.seedTrain or (sd and sd.seedTrain) }, { __index = r })
+    if not ForeverArtisan.NotOnForever(r) then out[name] = setmetatable({ learned = false, seedTrain = r.seedTrain or (sd and sd.seedTrain) }, { __index = r }) end
   end
   return out, best and "alt" or "beta", bestKey
 end

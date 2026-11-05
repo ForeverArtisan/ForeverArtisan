@@ -1075,7 +1075,7 @@ do
     assert(can==0 and lines[1]:find("0/1") and lines[1]:find("Raw Brilliant Smallfish"), "no mats")
     can = cp.CanMake("Camp Chair", {["light leather"]=7, ["simple wood"]=5})
     assert(can==2, "camp chair: 7 leather / 3, 5 wood / 2 -> 2")
-    assert(cp.CanMake("Seed Hybridizer")==nil, "unknown reagents")
+    assert(cp.CanMake("Molten Foundry")==nil, "unknown reagents")
     GetContainerItemLink=function(_,s) return "|cffffffff|Hitem:1::|h[Raw Brilliant Smallfish]|h|r" end
     cp.InvalidateBags()
     local fish for _,r in ipairs(cp.Rows()) do if r.prof=="Fishing" then fish=r end end
@@ -2009,6 +2009,13 @@ do
     FA.OnItemInfo(991098) assert(redrawn==0, "items nobody waited on don't redraw")
     FA.OnItemInfo(991099)
     assert(redrawn==1, "redraw once it arrives: "..redrawn)
+    -- an item the server says doesn't exist: no redraw, and never asked again (asked every redraw before)
+    asked=nil
+    FA.WaitForItem(991097); assert(asked==991097, "asked once")
+    FA.OnItemInfo(991097, false)
+    assert(redrawn==1, "no redraw for a missing item")
+    asked=nil; FA.WaitForItem(991097)
+    assert(asked==nil, "missing item not asked again")
     C_Item, FA.PricesChanged = oCI2, oPC
     assert(FA.HouseCompare(991011).better==nil, "a shaky goblin price doesn't win")
     assert(FA.HouseCompare(991012).better==nil, "at home, no tag for your own house")
@@ -2688,6 +2695,9 @@ do
   local function click(k, on) R[k].check._checked=on; R[k].check.GetChecked=function() return on end; R[k].check.scripts.OnClick(R[k].check) end
   click("prices", false); assert(ForeverArtisanSettings.priceTips==false and not FA.PriceTipsOn(), "prices off")
   click("prices", true); assert(FA.PriceTipsOn(), "prices back on")
+  assert(R.detips, "setting detips")
+  click("detips", false); assert(ForeverArtisanSettings.deTips==false and not FA.DisenchantTipsOn(), "disenchant tooltips off")
+  click("detips", true); assert(FA.DisenchantTipsOn() and ForeverArtisanSettings.deTips==nil, "disenchant tooltips back on")
   local hidden0=ForeverArtisanSettings.minimapHide
   click("minimap", false); assert(ForeverArtisanSettings.minimapHide, "minimap hidden")
   click("minimap", true); assert(not ForeverArtisanSettings.minimapHide, "minimap shown")
@@ -2703,6 +2713,17 @@ do
   assert(nt:find(ForeverArtisan.Version(), 1, true) and nNews==3 and not nt:find("0.9.17"), "three newest: "..nt)
   run("FOREVERARTISAN","welcome"); assert(pnl.tab=="info", "/fa welcome opens Info")
   print("0.9.21 panel tabs ok")
+end
+-- launch: Forever's smaller herb nodes count as the herb; ore names with a word in front too
+do
+  local hb=loadedFrames["ForeverArtisan_Herbalism"].ns
+  assert(hb.HerbByNode("Wilted Peacebloom").name=="Peacebloom" and hb.HerbByNode("Stunted Silverleaf").name=="Silverleaf", "small herb nodes")
+  assert(hb.HerbByNode("Peacebloom").name=="Peacebloom" and hb.HerbByNode("Mailbox")==nil and hb.HerbByNode(nil)==nil, "exact and unknown")
+  assert(hb.CultivationRuleLevel("Wilted Peacebloom")==1, "cultivation level for the small node")
+  local mn=loadedFrames["ForeverArtisan_Mining"].ns
+  assert(mn.NormalizeNode("Ooze Covered Mithril Deposit")=="Mithril Deposit" and mn.NormalizeNode("Small Copper Vein")=="Copper Vein"
+    and mn.NormalizeNode("Copper Vein")=="Copper Vein" and mn.NormalizeNode("Strange Rock")=="Strange Rock", "ore node names")
+  print("launch node names ok")
 end
 print("CRAFTS OK")
 -- 0.9.23: auto loot opens an empty loot window, then the chat line is the only record of a recipe
@@ -3203,6 +3224,21 @@ do
   assert(a3 and a3.none, "no recipes on file: nothing to plan")
   en.SeedRecipes=oldSeed
   FA.ProfessionListLoaded=oldPL
+  -- Season of Discovery recipes (listed by the window, don't exist on Forever): never planned, never kept
+  do
+    local sod=0 for _,r in pairs(tl.SeedRecipes()) do if FA.NotOnForever(r) then sod=sod+1 end end
+    assert(sod>0, "the beta seeds carry Season of Discovery recipes")
+    FA.ProfessionListLoaded=function() return true end
+    local ahead=FA.AheadRecipes(ForeverArtisanTailoringDB.chars, tl.SeedRecipes)
+    for _,r in pairs(ahead) do assert(not FA.NotOnForever(r), "planning ahead skips "..r.name) end
+    local rec={a={name="Old",group="SEASON OF DISCOVERY"},b={name="Linen",group="Cloth"}}
+    assert(FA.DropNotOnForever(rec)==1 and rec.a==nil and rec.b, "saved ones dropped, the rest kept")
+    assert(#FA.BestCrafts({x={name="Qiraji",learned=true,itemId=234009,group="Season of Discovery",reagents={}}}, nil, "profit")==0, "not in Best crafts")
+    local list=FA.PlanRecipes("Tailoring",{x={name="Q",learned=true,group="SEASON OF DISCOVERY"},y={name="L",learned=true,group="Cloth"}})
+    assert(#list==1 and list[1].name=="L", "not in plans")
+    FA.ProfessionListLoaded=oldPL
+    print("season of discovery filter ok", sod)
+  end
   print("planning ahead ok")
 end
 -- 0.9.31: the on-screen goals list (Core Tracker.lua)

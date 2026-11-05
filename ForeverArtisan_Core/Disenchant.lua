@@ -169,7 +169,8 @@ FA.DisenchantMatValue = sellValue
 
 local function nameOf(id)
   local n = GetItemInfo and GetItemInfo(id)
-  if not n and C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, id) end
+  -- ask through Prices.lua, which stops asking about items the server says don't exist
+  if not n and FA.WaitForItem then FA.WaitForItem(id) end
   return n or ("item " .. id)
 end
 

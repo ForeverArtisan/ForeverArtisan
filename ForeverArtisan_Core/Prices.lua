@@ -321,20 +321,26 @@ local function ItemLoaded(id)
   local ok, name = pcall(Info, id)
   return ok and name ~= nil
 end
+-- items the server says don't exist (Season of Discovery recipes the window lists on Forever): asked once
+-- a session, never again, and no redraw for them (each redraw asked again, every 1-2 seconds)
+local missing = {}
 function FA.WaitForItem(id)
   id = tonumber(id)
-  if not id or waiting[id] or ItemLoaded(id) then return end
+  if not id or waiting[id] or missing[id] or ItemLoaded(id) then return end
   waiting[id] = true
   local Req = C_Item and C_Item.RequestLoadItemDataByID
   if Req then pcall(Req, id) end
 end
 local itemEv = CreateFrame("Frame")
 pcall(itemEv.RegisterEvent, itemEv, "GET_ITEM_INFO_RECEIVED")
-function FA.OnItemInfo(id)
+function FA.OnItemInfo(id, success)
   id = tonumber(id)
-  if id and waiting[id] then waiting[id] = nil; FA.PricesChanged() end
+  if not (id and waiting[id]) then return end
+  waiting[id] = nil
+  if success == false then missing[id] = true; return end
+  FA.PricesChanged()
 end
-itemEv:SetScript("OnEvent", function(_, _, id) FA.OnItemInfo(id) end)
+itemEv:SetScript("OnEvent", function(_, _, id, success) FA.OnItemInfo(id, success) end)
 FA.GuardEvents(itemEv)
 
 local ev = CreateFrame("Frame")
@@ -799,7 +805,7 @@ function FA.BestCrafts(recipes, chanceOf, mode)
   local out, makes, memo = {}, {}, {}
   for _, r in pairs(recipes or {}) do if r.learned and r.itemId then makes[r.itemId] = r end end
   for _, r in pairs(recipes or {}) do
-    if r.learned and r.itemId and not BEST_SKIP[r.name] then
+    if r.learned and r.itemId and not BEST_SKIP[r.name] and not (FA.NotOnForever and FA.NotOnForever(r)) then
       FA.WaitForItem(r.itemId)
       for _, g in ipairs(r.reagents or {}) do FA.WaitForItem(g.id) end
       local n = r.makes or 1
