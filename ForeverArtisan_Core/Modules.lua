@@ -286,14 +286,18 @@ local function refreshPanel()
     local v, t, b, q = FA.Vendors.counts()
     local qs = FA.QuestieStatus and FA.QuestieStatus() or "missing"
     local lines = { ("You've met: |cffffffff%d vendors and %d trainers|r"):format(v, t) }
-    if b > 0 then lines[#lines + 1] = ("From the Forever beta: |cffffffff%d more trainers|r you haven't met"):format(b) end
+    if b > 0 then lines[#lines + 1] = ("Built-in list: |cffffffff%d more trainers|r you haven't met"):format(b) end
     lines[#lines + 1] = (qs == "missing") and (GREY .. "From Questie: not installed. With it, every profession trainer in the game is included.|r")
       or (qs == "off") and (GREY .. "From Questie: turned off|r")
       -- it reads Questie's database a few seconds after login (longer after a Questie update)
       or (qs == "reading" or qs == "installed") and (GREY .. "From Questie: reading its trainers, a moment...|r")
       or ("From Questie: |cffffffff%d more trainers|r for your faction you haven't met"):format(q)
-    -- each trainer counts once: one you've met is left out of the beta and Questie numbers
-    if b + q > 0 then lines[#lines + 1] = ("All together: |cffffffff%d trainers|r"):format(t + b + q) end
+    local qv = (qs == "on" and FA.Vendors.questieVendors) and FA.Vendors.questieVendors() or 0
+    if qv > 0 then
+      lines[#lines + 1] = ("From Questie: |cffffffff%d more vendors|r of profession materials you haven't met"):format(qv)
+    end
+    -- each NPC counts once: one you've met is left out of the beta and Questie numbers
+    if b + q + qv > 0 then lines[#lines + 1] = ("All together: |cffffffff%d trainers and %d vendors|r"):format(t + b + q, v + qv) end
     panel.known:SetText(table.concat(lines, "\n"))
   else
     -- (turning it off already asks first and says what's lost; this is the reminder while it's off)
@@ -629,7 +633,8 @@ local function buildContactsTab(p)
       if d.id then GameTooltip:SetItemByID(d.id) else GameTooltip:AddLine(d.tipTitle or "") end
       local tip = d.tip or (d.tipFn and d.tipFn())
       if tip then GameTooltip:AddLine(tip, 1, 1, 1, true) end
-      if d.npc then GameTooltip:AddLine("Click for a waypoint", 0.5, 0.75, 1) end
+      -- (contact details already end with it)
+      if d.npc and not (tip and tip:find("Click for a waypoint", 1, true)) then GameTooltip:AddLine("Click for a waypoint", 0.5, 0.75, 1) end
       GameTooltip:Show()
     end)
     r:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -695,7 +700,7 @@ local SETTINGS = {
     end,
     need = function() return FA.Vendors and "Needs Questie." or "Needs Trade Contacts on." end,
     set = function(on) if SlashCmdList.FACONTACTS then SlashCmdList.FACONTACTS(on and "questie on" or "questie off") end end },
-  { key = "seeds", label = "Trainers from the Forever beta", desc = "Trainers we met on the beta, until you meet them yourself.",
+  { key = "seeds", label = "Built-in trainer list", desc = "Trainers from the built-in list, shown until you meet them yourself.",
     get = function() local st = CSettings(); if not (FA.Vendors and st) then return nil end; return not st.seedsOff end,
     need = function() return "Needs Trade Contacts on." end,
     set = function(on) if SlashCmdList.FACONTACTS then SlashCmdList.FACONTACTS(on and "seeds on" or "seeds off") end end },
@@ -844,14 +849,23 @@ function refreshMarket()
       local byReturn = ForeverArtisanSettings and ForeverArtisanSettings.marketSort == "return"
       local both = byReturn and (ret ~= "" and (ret .. GREY .. "  ·  |r") or "") .. money
         or money .. (ret ~= "" and (GREY .. "  ·  |r" .. ret) or "")
+      -- short here ("goblin AH +51c"); the legend under the list says what gold means
+      if tag then tag = tag:gsub("^better at goblin AH: ", "goblin AH "):gsub("^better at your AH: ", "your AH ") end
       r.right:SetText(((tr.dir == "up" or tr.dir == "down") and (ARROW[tr.dir] .. " ") or "")
         .. both .. (tag and (GOLD .. "  " .. tag .. "|r") or ""))
+      -- the name gets what the numbers leave (it ends in "..." when it doesn't fit), so they never overlap
+      local w = r.right.GetStringWidth and r.right:GetStringWidth()
+      local rw = type(w) == "number" and w or 170
+      r.left:SetWidth(math.max(110, 428 - 26 - 44 - rw - 10))
       r.dot:SetText(MARKET_DOT[(row.conf or {}).level or "shaky"])
       r:Show()
     else
       r:Hide()
     end
   end
+  -- what the list is (crafts you already know, not recipes to buy) and that rows open a chart
+  p.clickHint:SetText(("Crafts you know, by %s. Red loses money. Click one for its price chart and trend.")
+    :format((ForeverArtisanSettings and ForeverArtisanSettings.marketSort == "return") and "return" or "profit"))
   p.clickHint:SetShown(#data > 0)
   p.empty:SetText(#data > 0 and ""
     or (read == 0 and "Learn a crafting profession and open its window once, so ForeverArtisan can read your recipes.")
@@ -1600,6 +1614,7 @@ NEWS = {
   { "0.9.33", "Fishing weapon swap: two of the same weapon now both come back (fixes 0.9.32)." },
   { "0.9.34", "Launch fixes: no more server spam from Season of Discovery recipes (now hidden), small herb nodes show their color, and a Settings box for disenchant tooltips." },
   { "0.9.35", "Fishing pool and rare catch alerts, session gold per hour, day and night fish, Where to sell on every item tooltip, and recipe lists from the live game." },
+  { "0.9.36", "With Questie, the nearest vendor for any profession material, even ones you haven't met. Shopping list waypoints go to the nearest vendor, and a tidier Market tab." },
 }
 
 local function verNum(v)

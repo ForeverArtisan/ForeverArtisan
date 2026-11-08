@@ -178,7 +178,7 @@ local function RefreshMainPage(p)
     if npc then
       p.find:SetText(GOLD .. "Learn from: " .. npc.n .. ", " .. (npc.s or npc.z or "?") .. "|r"
         .. (npc.seenOnly and (GRAY .. "  (seen, talk to them)|r") or "")
-        .. (npc.seed and (GRAY .. "  (seen on the Forever beta)|r") or ""))
+        .. (npc.seed and (GRAY .. "  (built-in trainer list)|r") or ""))
     else
       p.find:SetText(GRAY .. "Ask a city guard for a First Aid trainer.|r")
     end

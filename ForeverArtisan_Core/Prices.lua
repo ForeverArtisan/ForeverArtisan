@@ -440,10 +440,18 @@ local function Vendor(id, name)
   return best, who
 end
 
--- the cheapest vendor you've met for an item, as a Trade Contacts entry with a place to go, or nil
+-- the nearest vendor for an item, as a Trade Contacts entry with a place to go, or nil: one you've met,
+-- or one from Questie for a profession material. Within about the same distance, one you've met wins.
 function FA.VendorNPC(id, name)
   local V = FA.Vendors
-  if not (V and V.hitsForLink) or not (id or name) then return end
+  if not (V and (V.sellers or V.hitsForLink)) or not (id or name) then return end
+  if V.sellers then
+    local ok, list = pcall(V.sellers, id, name)
+    for _, h in ipairs(ok and type(list) == "table" and list or {}) do
+      if h.npc and h.npc.m then return h.npc end -- the nearest one with a place to go
+    end
+    return nil
+  end
   local ok, hits = pcall(V.hitsForLink, id and ("item:" .. id) or nil, name)
   if not ok or type(hits) ~= "table" then return end
   local best, bestUnit

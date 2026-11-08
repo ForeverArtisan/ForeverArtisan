@@ -1887,11 +1887,12 @@ do
   local mk=pnl.market
   assert(mk.rows[1]._shown and mk.rows[1].left._text:find("Pricey Thing") and mk.rows[1].left._text:find("Cooking"), "row names the recipe and profession")
   assert(mk.rows[1].right._text:find("%+") and mk.rows[1].dot._text:find("Indicator"), "profit and confidence dot")
-  assert(mk.clickHint._shown and mk.clickHint._text:find("Click any craft"), "the click hint above the list")
+  assert(mk.rows[1].left._w and mk.rows[1].left._w>=110 and mk.rows[1].left._w<=260, "name sized to what the numbers leave: "..tostring(mk.rows[1].left._w))
+  assert(mk.clickHint._shown and mk.clickHint._text:find("Crafts you know, by profit",1,true) and mk.clickHint._text:find("Click one"), "the heading above the list")
   -- Market: sort by return, and the shared minimum
   assert(mk.sortBtn._text=="Sort: most profit", "market sort button")
   mk.sortBtn.scripts.OnClick(mk.sortBtn)
-  assert(ForeverArtisanSettings.marketSort=="return" and mk.sortBtn._text=="Sort: best return" and mk.rows[1].right._text:find("%%"), "market by return")
+  assert(ForeverArtisanSettings.marketSort=="return" and mk.sortBtn._text=="Sort: best return" and mk.rows[1].right._text:find("%%") and mk.clickHint._text:find("by return",1,true), "market by return")
   mk.sortBtn.scripts.OnClick(mk.sortBtn)
   assert(ForeverArtisanSettings.marketSort==nil, "back to profit")
   FA.SetMinProfit(1000000); run("FOREVERARTISAN","market")
@@ -2118,8 +2119,8 @@ do
   for _, h in ipairs(hits) do if h.npc.n=="Victor Ward" then found=h end end
   assert(found and found.npc.seed, "seeded trainer answers recipe lookups")
   local t=ForeverArtisan.TrainableRecipe("Tailoring","Bolt of Woolen Cloth")
-  assert(t and t.npc.seed and t.who:find("seen on the Forever beta"), "plans label a seeded trainer")
-  assert(cns.DetailText(victor):find("Seen on the Forever beta"), "detail says where it came from")
+  assert(t and t.npc.seed and t.who:find("built-in trainer list",1,true), "plans label a seeded trainer")
+  assert(cns.DetailText(victor):find("From the built-in trainer list",1,true), "detail says where it came from")
   -- your own visit replaces the seed: one Victor Ward, not seeded
   db.entries["trainer:"..victor.id]={kind="trainer",npcId=victor.id,name="Victor Ward",title="Journeyman Tailor",zone="Undercity",
     subzone="Magic Quarter",mapID=1458,x=70,y=30,skills={{name="Bolt of Woolen Cloth",skillReq="Tailoring 55",priceCopper=100}}}
@@ -2335,6 +2336,71 @@ do
   assert(#rowsFor("runecloth") == 0, "questie off: no recipe rows")
   run("FACONTACTS","questie on")
   print("0.9.25 questie recipe search ok")
+  -- 0.9.36: Questie vendors for materials. In Undercity, the nearest seller of Mild Spices is the
+  -- Undercity one from Questie, not Tai'tasi in Durotar (the only one you've met).
+  npcs[9200]={name="UC Spicer",sub="Trade Goods",flags=4,fr="H",sp={[1497]={{60,40}}}}
+  npcs[9201]={name="Ally Spicer",sub="Trade Goods",flags=4,fr="A",sp={[1497]={{61,41}}}}
+  items[2678]={name="Mild Spices",class=7,vendors={9200,9201}}
+  items[117]={name="Tough Jerky",class=0,vendors={9200}}
+  db.entries["vendor:3184"]={kind="vendor",npcId=3184,name="Tai'tasi",title="Trade Supplies",zone="Durotar",mapID=1411,x=50,y=50,
+    items={{name="Mild Spices",itemId=2678,priceCopper=40}}}
+  cns.QuestieVendorsReset(); cns.OnContactsChanged()
+  local oBest, oPos, oWorld = C_Map.GetBestMapForUnit, C_Map.GetPlayerMapPosition, C_Map.GetWorldPosFromMapPos
+  C_Map.GetWorldPosFromMapPos=nil
+  C_Map.GetBestMapForUnit=function() return 1458 end
+  C_Map.GetPlayerMapPosition=function() return {GetXY=function() return .59,.41 end} end
+  local v=FA.VendorNPC(2678,"Mild Spices")
+  assert(v and v.n=="UC Spicer" and v.questie and v.m==1458, "Undercity: nearest seller is Questie's Undercity vendor: "..tostring(v and v.n))
+  for _, h in ipairs(FA.Vendors.sellers(2678,"Mild Spices")) do assert(h.npc.n~="Ally Spicer", "other faction's vendor left out") end
+  local fan=loadedFrames["ForeverArtisan_FirstAid"] and loadedFrames["ForeverArtisan_FirstAid"].ns
+  if fan and fan.SourceFor then
+    local src=fan.SourceFor(2678,"Mild Spices")
+    assert(src:find("UC Spicer",1,true) and src:find("from Questie",1,true), "shopping list names the nearest vendor: "..src)
+  end
+  -- search finds the material with Questie's nearest vendor, and the /fa count includes it
+  FA.QDB.Reset(); FA.QDB.BuildRecipeIndex(); cns.QuestieVendorsReset()
+  local srow
+  for _, d in ipairs(cns.SearchRows("spices")) do if d.left=="Mild Spices" and (d.right or ""):find("Questie") then srow=d end end
+  assert(srow and srow.right:find("UC Spicer, ",1,true) and not srow.right:find("Sold by",1,true) and srow.npc and srow.npc.m==1458, "search: Questie vendor for a material")
+  assert(srow.tipFn():find("a vendor you haven't met yet",1,true) and srow.tipFn():find("Sold by UC Spicer",1,true), "material row tooltip")
+  local mineRow
+  for _, d in ipairs(cns.SearchRows("spices")) do if d.left=="Mild Spices" and not (d.right or ""):find("Questie") then mineRow=d end end
+  assert(mineRow and mineRow.right:find("Tai'tasi",1,true), "your own vendor still listed")
+  for _, d in ipairs(cns.SearchRows("spices")) do assert(not (d.right or ""):find("Ally Spicer",1,true), "other faction's vendor not searched") end
+  assert(FA.Vendors.questieVendors()==1, "count: one Horde material vendor you haven't met, got "..tostring(FA.Vendors.questieVendors()))
+  for _, d in ipairs(cns.SearchRows("jerky")) do assert(not (d.right or ""):find("Questie"), "food isn't indexed") end
+  -- in Durotar, the vendor you've met there is nearest
+  C_Map.GetBestMapForUnit=function() return 1411 end
+  C_Map.GetPlayerMapPosition=function() return {GetXY=function() return .5,.5 end} end
+  v=FA.VendorNPC(2678,"Mild Spices")
+  assert(v and v.n=="Tai'tasi" and not v.questie, "Durotar: the vendor you've met")
+  -- once you've met the Undercity vendor, your own record replaces Questie's copy
+  C_Map.GetBestMapForUnit=function() return 1458 end
+  C_Map.GetPlayerMapPosition=function() return {GetXY=function() return .59,.41 end} end
+  db.entries["vendor:9200"]={kind="vendor",npcId=9200,name="UC Spicer",title="Trade Goods",zone="Undercity",mapID=1458,x=60,y=40,
+    items={{name="Mild Spices",itemId=2678,priceCopper=40}}}
+  cns.OnContactsChanged()
+  local mineN, qN = 0, 0
+  for _, h in ipairs(FA.Vendors.sellers(2678,"Mild Spices")) do if h.npc.n=="UC Spicer" then if h.npc.questie then qN=qN+1 else mineN=mineN+1 end end end
+  assert(mineN==1 and qN==0, "met vendor replaces the Questie copy")
+  assert(FA.Vendors.questieVendors()==0, "met vendor leaves the Questie count")
+  db.entries["vendor:9200"]=nil; cns.OnContactsChanged()
+  -- not a profession material: no Questie vendors
+  local oInst=C_Item.GetItemInfoInstant
+  C_Item.GetItemInfoInstant=function(id) if id==117 then return 117,"x","x","",1,0,0 end return oInst(id) end
+  cns.QuestieVendorsReset()
+  assert(#FA.Vendors.sellers(117,"Tough Jerky")==0, "food isn't a profession material")
+  C_Item.GetItemInfoInstant=oInst
+  -- Questie off: back to the vendors you've met
+  run("FACONTACTS","questie off")
+  v=FA.VendorNPC(2678,"Mild Spices")
+  assert(v and v.n=="Tai'tasi", "questie off: only vendors you've met")
+  for _, d in ipairs(cns.SearchRows("spices")) do assert(not (d.right or ""):find("Questie"), "questie off: no Questie search rows") end
+  assert(FA.Vendors.questieVendors()==0, "questie off: no count")
+  run("FACONTACTS","questie on")
+  db.entries["vendor:3184"]=nil; cns.QuestieVendorsReset(); cns.OnContactsChanged()
+  C_Map.GetBestMapForUnit, C_Map.GetPlayerMapPosition, C_Map.GetWorldPosFromMapPos = oBest, oPos, oWorld
+  print("0.9.36 questie vendors ok")
   -- a QuestieDB we can't read: the feature stays off, no errors
   LibQuestieDB.RequireContract=function() return false end
   cns.QuestieReset(); db.questieCache=nil; cns.BuildQuestieTrainers(); cns.OnContactsChanged()
@@ -3290,7 +3356,7 @@ do
   assert(not bolt or bolt.craft, "bolts are crafted from the linen, not bought")
   assert(trains and trains>0, "trainer recipes on the way")
   for _,st in ipairs(steps) do
-    if st.train then assert(st.train.who:find("seen on the Forever beta"), "beta trainer named") end
+    if st.train then assert(st.train.who:find("built-in trainer list",1,true), "beta trainer named") end
   end
   print("AHEAD tailoring", #steps, "steps to", steps[#steps].to, "stuck", stuck)
   if os.getenv("AHEAD_DUMP") then

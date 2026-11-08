@@ -1,6 +1,7 @@
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
 -- ForeverArtisan: Trade Contacts - finder. Turns your saved contacts into answers:
--- "Sold by" lines on item tooltips, search, and waypoints. Only NPCs you've met.
+-- "Sold by" lines on item tooltips, search, and waypoints. NPCs you've met, plus (with Questie
+-- installed) the vendors it knows for profession materials, tagged Questie.
 local ADDON, ns = ...
 local FA = ForeverArtisan
 local GOLD, GREY = FA.GOLD, FA.GRAY
@@ -8,6 +9,7 @@ local PREFIX = FA.Prefix("Trade Contacts")
 local MAX_TIP_LINES = 3
 
 local npcs, byId, byName = {}, {}, {}
+local metKeys = {} -- NPC ids and names you've met: their Questie copies stay out
 local dirty = true
 
 local function DB() return ForeverArtisanContactsDB end
@@ -138,6 +140,9 @@ local function Rebuild()
       end
     end
   end
+  wipe(metKeys)
+  for k in pairs(full) do metKeys[k] = true end
+  for k in pairs(current) do metKeys[k] = true end
   table.sort(npcs, function(a, b) return (a.n or "") < (b.n or "") end)
   dirty = false
 end
@@ -149,7 +154,7 @@ function ns.SeedFits(sd)
   if f ~= "Horde" and f ~= "Alliance" then return true end
   return sd.f == f
 end
-ns.SEED_LABEL = "seen on the Forever beta"
+ns.SEED_LABEL = "from the built-in trainer list"
 
 local function Ensure() if dirty then Rebuild() end end
 
@@ -365,7 +370,7 @@ function ns.DetailText(npc, it)
   if npc.questie then
     lines[#lines + 1] = GREY .. "From Questie's database. Open their training window once to save what they teach.|r"
   elseif npc.seed then
-    lines[#lines + 1] = GREY .. "Seen on the Forever beta" .. (npc.seen and (", " .. date("%b %Y", npc.seen)) or "")
+    lines[#lines + 1] = GREY .. "From the built-in trainer list" .. (npc.seen and (", seen " .. date("%b %Y", npc.seen)) or "")
       .. ". Talk to them once to make it yours.|r"
   elseif note then
     lines[#lines + 1] = "|cffff9020" .. note .. "|r"
@@ -391,6 +396,74 @@ local function hitsForLink(link, name)
     end
   end
   return out
+end
+
+---------------------------------------------------------------- Questie vendors (on demand)
+-- Questie knows who sells each item. For profession materials (trade goods, reagents, recipes and
+-- Core's vendor-only list), the vendors you haven't met join "who sells this" and "nearest vendor":
+-- tagged Questie, no price. A vendor you've met replaces its Questie copy.
+local qCache = {}
+local MAT_CLASS = { [5] = true, [7] = true, [9] = true }
+local function itemIdOf(name)
+  local inst = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+  local ok, id = pcall(inst or function() end, name)
+  return ok and tonumber(id) or nil
+end
+local function isMaterial(id, name)
+  local inst = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+  local ok, _, _, _, _, _, class = pcall(inst or function() end, id)
+  if ok and MAT_CLASS[class] then return true end
+  return (FA.VendorHint and FA.VendorHint(name or id)) and true or false
+end
+local function questieHits(id, name)
+  if not id or not FA.QuestieSellers or Settings().questieOff then return {} end
+  if qCache[id] == nil then
+    local list = {}
+    if isMaterial(id, name) then
+      local ok, sellers = pcall(FA.QuestieSellers, id)
+      for _, q in ipairs(ok and type(sellers) == "table" and sellers or {}) do
+        local it = { n = name or ("item:" .. id), id = id }
+        local npc = { id = q.id, n = q.n, t = q.t, k = "vendor", z = q.z, m = q.m, x = q.x, y = q.y, age = 0,
+                      key = "questie:" .. q.id, questie = true, items = { it } }
+        list[#list + 1] = { npc = npc, item = it, seen = true }
+      end
+    end
+    qCache[id] = list
+  end
+  Ensure()
+  local out = {}
+  for _, h in ipairs(qCache[id]) do
+    if not metKeys[h.npc.id or false] and not metKeys[h.npc.n] then out[#out + 1] = h end
+  end
+  return out
+end
+function ns.QuestieVendorsReset() wipe(qCache) end
+
+-- everyone who sells an item, nearest first: vendors you've met, then Questie's for materials.
+-- Within about the same distance, ones you've met come first. Training rows are left out.
+local function sellers(id, name)
+  id = tonumber(id) or (name and itemIdOf(name)) or nil
+  local list = {}
+  for _, h in ipairs(hitsForLink(id and ("item:" .. id) or nil, name)) do
+    if not h.item.train and (not id or not h.item.id or h.item.id == id) then list[#list + 1] = h end
+  end
+  for _, h in ipairs(questieHits(id, name)) do list[#list + 1] = h end
+  return sortHits(list)
+end
+ns.Sellers = sellers
+
+-- vendors of profession materials from Questie for your faction that you haven't met (the /fa count)
+local function questieVendorCount()
+  if Settings().questieOff or not FA.QuestieVendorIds then return 0 end
+  local vf = FA.QuestieVendorIds()
+  if type(vf) ~= "table" then return 0 end
+  Ensure()
+  local mine = UnitFactionGroup and UnitFactionGroup("player")
+  local n = 0
+  for id, f in pairs(vf) do
+    if f and (f == "Both" or (mine ~= "Horde" and mine ~= "Alliance") or f == mine) and not metKeys[id] then n = n + 1 end
+  end
+  return n
 end
 
 -- "alchemy" should find an <Alchemist>, "leatherworking" a <Leatherworker>, "herbalism" an <Herbalist>
@@ -481,6 +554,17 @@ local function search(q)
     end
   end
   for _, h in ipairs(seenHits(known, has)) do hits[#hits + 1] = h end
+  -- materials: the two nearest vendors from Questie you haven't met, sorted in with your own
+  if FA.QuestieMaterialSearch and not Settings().questieOff then
+    local ok, mats = pcall(FA.QuestieMaterialSearch, q)
+    for _, m in ipairs(ok and mats or {}) do
+      local qh = sortHits(questieHits(m.id, m.n))
+      for i = 1, math.min(2, #qh) do
+        hits[#hits + 1] = { npc = qh[i].npc, item = { n = m.n, id = m.id, q = true, how = "sold", mat = true },
+          seen = true, questie = true }
+      end
+    end
+  end
   sortHits(hits)
   -- recipes nobody you've met sells: what Questie's database knows, after your own contacts
   if FA.QuestieRecipeSearch then
@@ -532,6 +616,9 @@ local function addToTooltip(tt)
   local hits = hitsForLink(link, name)
   local list = {}
   for i, h in ipairs(hits or {}) do if not h.item.train then list[#list + 1] = h end end
+  -- vendors you haven't met, from Questie (profession materials only)
+  local id = link and tonumber(link:match("item:(%d+)"))
+  for _, h in ipairs(questieHits(id, name)) do list[#list + 1] = h end
   if #list == 0 then
     -- nobody you've met sells it: for known vendor-only reagents, say what kind of vendor does
     local FA = ForeverArtisan
@@ -553,7 +640,11 @@ local function addToTooltip(tt)
     if h.item.lim then left = left .. " |cffff8040(limited)|r" end
     if old then left = left .. GREY .. ns.AgeTag(h.npc, true) .. "|r" end
     local c = old and 0.6 or 1
-    tt:AddDoubleLine(left, money(h.item), c, c, c, c, c, c)
+    if h.npc.questie then
+      tt:AddDoubleLine(left, GREY .. "Questie|r", c, c, c, c, c, c)
+    else
+      tt:AddDoubleLine(left, money(h.item), c, c, c, c, c, c)
+    end
   end
   if #list > MAX_TIP_LINES then
     tt:AddLine(GREY .. "  +" .. (#list - MAX_TIP_LINES) .. " more: /fa " .. (name or "") .. "|r")
@@ -590,6 +681,10 @@ ns.HitsForLink = hitsForLink
 FA.Vendors = {
   search = search,
   hitsForLink = hitsForLink,
+  -- everyone who sells an item, nearest first (vendors you've met, then Questie's for materials)
+  sellers = function(id, name) return sellers(id, name) end,
+  -- vendors of profession materials from Questie you haven't met (0 without Questie)
+  questieVendors = function() return questieVendorCount() end,
   open = function(q) if ns.OpenSearch then ns.OpenSearch(q) end end,
   -- search rows for the /fa panel: { icon, id, left, right, tip/tipFn, tipTitle, npc } like the Search tab
   rows = function(q) return ns.SearchRows and ns.SearchRows(q) or {} end,

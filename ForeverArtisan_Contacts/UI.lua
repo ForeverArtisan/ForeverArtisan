@@ -53,7 +53,7 @@ local function DistText(h)
   return ("%d yd  ·  "):format(math.floor(h.dist / 10 + 0.5) * 10)
 end
 -- seeded trainers (met on the Forever beta, not by you yet) carry a short tag in lists
-local function BetaTag(npc) return (npc.seed and "  ·  beta") or (npc.questie and "  ·  Questie") or "" end
+local function BetaTag(npc) return (npc.seed and "  ·  built-in") or (npc.questie and "  ·  Questie") or "" end
 
 local function SearchData(results)
   local data = {}
@@ -61,7 +61,9 @@ local function SearchData(results)
     local npc, it = h.npc, h.item
     if it and it.q then
       -- from Questie's database: a recipe nobody you've met sells (Finder.lua)
-      local how = (it.how == "sold" and npc) and ("Sold by " .. npc.n .. ", " .. ns.Where(npc))
+      -- a material row reads like your own contacts' rows ("Vendor, Town · Questie"), so the tag fits
+      local how = (it.mat and npc) and (npc.n .. ", " .. ns.Where(npc))
+        or (it.how == "sold" and npc) and ("Sold by " .. npc.n .. ", " .. ns.Where(npc))
         or (it.how == "drop" and npc) and ("Drops from " .. npc.n .. ", " .. ns.Where(npc))
         or (it.how == "quest" and npc) and ("Quest from " .. npc.n .. ", " .. ns.Where(npc))
         or (it.how == "quest" and it.quest) and ("Quest: " .. it.quest)
@@ -70,7 +72,7 @@ local function SearchData(results)
       data[#data + 1] = { id = it.id, icon = it.id and Icon(it.id) or 134939, npc = npc,
         left = it.n, right = GRAY .. how .. "  ·  Questie|r", tail = "",
         tipFn = function()
-          local lines = { how .. (npc and npc.x and ("  (%.1f, %.1f)"):format(npc.x, npc.y) or "") }
+          local lines = { (it.mat and "Sold by " or "") .. how .. (npc and npc.x and ("  (%.1f, %.1f)"):format(npc.x, npc.y) or "") }
           if it.how == "quest" and it.quest then lines[#lines + 1] = "Quest: " .. it.quest
           elseif it.quest then lines[#lines + 1] = "Also a quest reward: " .. it.quest end
           if it.how == "other" then
@@ -78,7 +80,8 @@ local function SearchData(results)
           elseif not npc then
             lines[#lines + 1] = "No location in Questie's database for this one."
           end
-          lines[#lines + 1] = GRAY .. "From Questie's database. You haven't met anyone who sells it.|r"
+          lines[#lines + 1] = GRAY .. (it.mat and "From Questie's database: a vendor you haven't met yet. Talk to them to save their prices."
+            or "From Questie's database. You haven't met anyone who sells it.") .. "|r"
           return table.concat(lines, "\n")
         end }
     elseif it then
@@ -189,7 +192,7 @@ local function RefreshSearchPage(p)
   local qs = ns.QuestieStatus and ns.QuestieStatus()
   if p.help then
     p.help:SetText((view.nearestLabel and qs == "missing")
-      and (YELLOW .. "Only trainers you've met or that we saw on the Forever beta. With Questie installed, every profession trainer in the game shows here.|r")
+      and (YELLOW .. "Only trainers you've met or from the built-in list. With Questie installed, every profession trainer in the game shows here.|r")
       or "Search items, recipes, vendors, towns or a profession. Click a row for a waypoint. Hover a checkbox to see what it does.")
   end
   if view.nearestLabel then
@@ -209,7 +212,7 @@ local function RefreshSearchPage(p)
     p.status:SetText(YELLOW .. "No contacts yet. Talk to a crafting vendor or profession trainer and they show up here.|r")
   elseif q == "" then
     local extra = {}
-    if b > 0 then extra[#extra + 1] = b .. " from the Forever beta" end
+    if b > 0 then extra[#extra + 1] = b .. " from the built-in list" end
     if nq > 0 then extra[#extra + 1] = nq .. " from Questie" end
     p.status:SetText(("%d vendors and %d trainers you've met%s. Type to search."):format(v, t,
       #extra > 0 and (", plus trainers: " .. table.concat(extra, ", ")) or ""))
@@ -482,7 +485,7 @@ local function NearestOptions()
     local h = hits[1]
     if not h then return end
     opts[#opts + 1] = { value = value, text = label .. " trainer: " .. GOLD .. h.npc.n .. "|r" .. GRAY .. ", " .. ns.Where(h.npc)
-      .. (h.npc.seed and " (beta)" or h.npc.questie and " (Questie)" or h.seen and " (seen)" or "") .. (#hits > 1 and ("  +" .. (#hits - 1)) or "") .. "|r" }
+      .. (h.npc.seed and " (built-in)" or h.npc.questie and " (Questie)" or h.seen and " (seen)" or "") .. (#hits > 1 and ("  +" .. (#hits - 1)) or "") .. "|r" }
   end
   if mine then add("class", mine) end
   for _, tr in ipairs(TRADES) do add(tr[1], tr[1]) end
@@ -570,7 +573,7 @@ local function RefreshListPage(p)
   end
   p.zonePick.Sync(); p.tradePick.Sync()
   p.header:SetText(("Showing %d of %d contacts"):format(shown, total)
-    .. (seeds > 0 and "  ·  beta = seen on the Forever beta" or (old > 0 and "  ·  grey name = not seen since a game update" or "")))
+    .. (seeds > 0 and "  ·  built-in = from the built-in trainer list" or (old > 0 and "  ·  grey name = not seen since a game update" or "")))
   view.listOff = math.min(view.listOff, math.max(0, #data - LIST_ROWS))
   Fill(p.rows, data, view.listOff)
   if total == 0 then p.empty:SetText("No contacts yet.\nTalk to a crafting vendor or profession trainer.")

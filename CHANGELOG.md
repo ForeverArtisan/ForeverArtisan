@@ -1,5 +1,12 @@
 # ForeverArtisan changelog
 
+## 0.9.36 (2026-11-08)
+- Added: with Questie installed, vendors you haven't met yet now answer "where do I buy this" for profession materials. Shopping lists, waypoints, item tooltips and Trade Contacts search point to the nearest one, so Mild Spices in Undercity points to an Undercity vendor, not one across the ocean. Vendors you've met still come first nearby, with their prices.
+- Fixed: clicking a material on a shopping list now sets a waypoint to the nearest vendor, not the cheapest one you'd met anywhere.
+- Fixed: on the Market tab, long recipe names no longer run into the price numbers.
+- Changed: the Market tab says what its list is: crafts you already know, ranked by profit (red loses money).
+- Changed: built-in profession trainers are labeled "built-in" instead of "seen on the Forever beta". The list now includes trainers from the live game.
+
 ## 0.9.35 (2026-11-07)
 - Added: fishing pool alerts. A ready-check sound and a blue banner with the pool's name when one comes into view, and the Catch log remembers where you saw them.
 - Added: rare catch alerts for chests, quest items and uncommon fish, in the item's own color.

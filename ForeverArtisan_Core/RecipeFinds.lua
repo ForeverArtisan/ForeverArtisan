@@ -338,7 +338,7 @@ function ForeverArtisan.TrainableRecipe(prof, name)
       if not sk or not prof or sk:find(prof, 1, true) then
         local at = sk and tonumber(sk:match("(%d+)%s*$")) or 1
         local who = h.npc and h.npc.n and (h.npc.n .. " (" .. (h.npc.s or h.npc.z or "?")
-          .. (h.npc.seed and ", seen on the Forever beta" or "") .. ")")
+          .. (h.npc.seed and ", built-in trainer list" or "") .. ")")
         -- same skill: the cheaper one, and a trainer you've met over one from the Forever beta
         local better = not best or at < best.at
           or (at == best.at and ((best.npc and best.npc.seed and not h.npc.seed) or (it.p or 0) < (best.cost or 0)))
@@ -364,7 +364,7 @@ function ForeverArtisan.PlanRecipes(prof, recipes, skip)
         local t = ForeverArtisan.TrainableRecipe(prof, r.name)
         local st = r.seedTrain -- planning ahead: what a trainer taught it at on the Forever beta
         if not t and st and not st.starter then
-          t = { at = st.at, cost = st.cost, who = "a " .. prof .. " trainer (seen on the Forever beta)" }
+          t = { at = st.at, cost = st.cost, who = "a " .. prof .. " trainer (built-in trainer list)" }
         end
         if t then
           list[#list + 1] = setmetatable({ learned = true, train = t, base = r }, { __index = r })

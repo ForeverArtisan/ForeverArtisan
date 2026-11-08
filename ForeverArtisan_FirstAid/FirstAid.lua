@@ -305,18 +305,19 @@ local function BestLogged(dbTable, id)
   return best.sub .. " (" .. best.zone .. ")"
 end
 
-local function VendorFor(name)
+local function VendorFor(name, id)
   local V = ForeverArtisan and ForeverArtisan.Vendors
-  if not (V and V.hitsForLink and name) then return end
-  local hits = V.hitsForLink(nil, name)
+  if not (V and V.hitsForLink and (name or id)) then return end
+  -- nearest first, Questie's vendors included for materials (Trade Contacts' sellers)
+  local hits = V.sellers and V.sellers(id, name) or (name and V.hitsForLink(nil, name))
   local h = hits and hits[1]
   if not h then return end
-  return h.npc.n .. " (" .. (h.npc.s or h.npc.z or "?") .. ")", h.item and h.item.p
+  return h.npc.n .. " (" .. (h.npc.s or h.npc.z or "?") .. ")" .. (h.npc.questie and ", from Questie" or ""), h.item and h.item.p
 end
 
 -- short text: where to get this material
 function ns.SourceFor(id, name)
-  local v = VendorFor(name)
+  local v = VendorFor(name, id)
   if v then return "Vendor: " .. v end
   local hint = ForeverArtisan and ForeverArtisan.VendorHint and ForeverArtisan.VendorHint(name or id)
   if hint then return "Vendor: " .. hint .. " (none in your Trade Contacts yet)" end

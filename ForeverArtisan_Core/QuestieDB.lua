@@ -8,6 +8,9 @@
 --   FA.QuestieRecipeSources(name, prefixes)  recipe book lines: who sells or drops it, quest rewards
 --   FA.QuestieMaterial(id)          one shopping-list line for a material, or nil
 --   FA.QuestieRecipeSearch(q)       recipe items by name, with sellers, drops and quests (Trade Contacts search)
+--   FA.QuestieSellers(id)           vendors for your faction who sell an item, with a place on the map
+--   FA.QuestieMaterialSearch(q)     materials sold by a vendor, by name (Trade Contacts search)
+--   FA.QuestieVendorIds()           every vendor of materials: [npcId] = "Horde"/"Alliance"/"Both" (the /fa count)
 local FA = ForeverArtisan
 local QDB = {}
 FA.QDB = QDB
@@ -128,6 +131,8 @@ local function Where(npc) return npc.z or "?" end
 ---------------------------------------------------------------- recipe items: name -> id, once per QuestieDB version
 
 local recipeIndex -- [name] = itemId
+local matIndex    -- [name] = itemId: trade goods and reagents some vendor sells
+local vendorFaction -- [npcId] = faction or false: everyone who sells one of those
 local building = false
 
 local function Settings()
@@ -145,14 +150,16 @@ function QDB.BuildRecipeIndex()
   local L = QDB.Lib()
   if not (L and L.Item) then return end
   local cache = Settings().questieRecipes
-  if cache and cache.version == QDB.Version() and cache.contract == L.contractVersion and type(cache.index) == "table" then
-    recipeIndex = cache.index
+  if cache and cache.version == QDB.Version() and cache.contract == L.contractVersion and type(cache.index) == "table"
+     and type(cache.mats) == "table" and type(cache.vendors) == "table" then
+    recipeIndex, matIndex, vendorFaction = cache.index, cache.mats, cache.vendors
+    if FA.RefreshPanel then pcall(FA.RefreshPanel) end -- the /fa vendor count
     return
   end
   local okIds, ids = pcall(L.Item.GetAllIds)
   if not okIds or type(ids) ~= "table" then return end
   building = true
-  local index, i = {}, 1
+  local index, mats, vfac, i = {}, {}, {}, 1
   local function step()
     local stop = math.min(#ids, i + BATCH - 1)
     for k = i, stop do
@@ -162,21 +169,39 @@ function QDB.BuildRecipeIndex()
         local okN, name = pcall(L.Item.name, id)
         if okN and type(name) == "string" and (class == 9 or HasPrefix(name)) then index[name] = id end
       end
+      -- materials (reagents, trade goods) that a vendor sells: for search and the vendor count
+      if okC and (class == 5 or class == 7) then
+        local okV, vs = pcall(L.Item.vendors, id)
+        if okV and type(vs) == "table" and #vs > 0 then
+          local okN, name = pcall(L.Item.name, id)
+          if okN and type(name) == "string" then
+            mats[name] = id
+            for _, nid in ipairs(vs) do
+              if vfac[nid] == nil then
+                local _, fr = pcall(L.Npc.friendlyToFaction, nid)
+                vfac[nid] = Faction(fr) or false
+              end
+            end
+          end
+        end
+      end
     end
     i = stop + 1
     if i <= #ids and C_Timer then C_Timer.After(0, step)
     elseif i <= #ids then step()
     else
-      recipeIndex, building = index, false
-      Settings().questieRecipes = { version = QDB.Version(), contract = L.contractVersion, index = index }
-      if type(L.InvalidateCache) == "function" then pcall(L.InvalidateCache, "Item") end
+      recipeIndex, matIndex, vendorFaction, building = index, mats, vfac, false
+      Settings().questieRecipes = { version = QDB.Version(), contract = L.contractVersion, index = index,
+        mats = mats, vendors = vfac }
+      if FA.RefreshPanel then pcall(FA.RefreshPanel) end -- the /fa vendor count
+      if type(L.InvalidateCache) == "function" then pcall(L.InvalidateCache, "Item"); pcall(L.InvalidateCache, "Npc") end
     end
   end
   step()
 end
 
 function QDB.Reset()
-  recipeIndex, building, areaMap = nil, false, nil
+  recipeIndex, matIndex, vendorFaction, building, areaMap = nil, nil, nil, false, nil
   for k in pairs(npcCache) do npcCache[k] = nil end
   for k in pairs(mapNames) do mapNames[k] = nil end
   if ForeverArtisanSettings then ForeverArtisanSettings.questieRecipes = nil end
@@ -302,6 +327,45 @@ function FA.QuestieRecipeSearch(q)
     out[#out + 1] = r
   end
   return out, #names
+end
+
+-- Vendors for your faction (neutral towns count) who sell one item, each with a place on the map.
+-- Unsorted; Trade Contacts sorts them by distance. {} without Questie or when it's turned off.
+function FA.QuestieSellers(itemId)
+  if QDB.Off() or not itemId then return {} end
+  local L = QDB.Lib()
+  if not (L and L.Item) then return {} end
+  local out = {}
+  local _, vendors = pcall(L.Item.vendors, itemId)
+  for _, nid in ipairs(type(vendors) == "table" and vendors or {}) do
+    local npc = QDB.Npc(nid)
+    if npc and npc.m and Friendly(npc) then out[#out + 1] = npc end
+  end
+  return out
+end
+
+-- Trade Contacts search: materials some vendor sells whose name has the text.
+-- { { n = item name, id }, ... } (at most 6, by name) or nil
+local MAX_MATS = 6
+function FA.QuestieMaterialSearch(q)
+  if QDB.Off() or not matIndex or type(q) ~= "string" then return nil end
+  q = q:lower():gsub("^%s+", ""):gsub("%s+$", "")
+  if #q < 3 then return nil end
+  local names = {}
+  for name in pairs(matIndex) do
+    if name:lower():find(q, 1, true) then names[#names + 1] = name end
+  end
+  if #names == 0 then return nil end
+  table.sort(names)
+  local out = {}
+  for i = 1, math.min(MAX_MATS, #names) do out[#out + 1] = { n = names[i], id = matIndex[names[i]] } end
+  return out
+end
+
+-- every vendor who sells a material: [npcId] = "Horde" / "Alliance" / "Both" / false (unknown), or nil
+function FA.QuestieVendorIds()
+  if QDB.Off() then return nil end
+  return vendorFaction
 end
 
 -- One shopping-list line for a material, or nil: a vendor for your faction first, then a short drop list.

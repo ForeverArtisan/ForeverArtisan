@@ -148,6 +148,7 @@ if FA then FA.QuestieStatus = function() return ns.QuestieStatus() end end
 function ns.QuestieReset()
   state.list, state.status, state.building = nil, "none", false
   if FA.QDB and FA.QDB.Reset then FA.QDB.Reset() end
+  if ns.QuestieVendorsReset then ns.QuestieVendorsReset() end
   if ForeverArtisanContactsDB then ForeverArtisanContactsDB.questieCache = nil end
 end
 

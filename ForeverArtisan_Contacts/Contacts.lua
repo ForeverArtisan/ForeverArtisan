@@ -814,7 +814,7 @@ function ns.Forget(key)
     st.hiddenSeeds[seedId] = true
     local name
     for _, sd in ipairs(ns.SEED_TRAINERS or {}) do if sd.id == seedId then name = sd.n end end
-    say("hid " .. (name or "that trainer") .. ". /fa contacts seeds reset brings the beta trainers back.")
+    say("hid " .. (name or "that trainer") .. ". /fa contacts seeds reset brings the built-in trainers back.")
     if ns.OnContactsChanged then ns.OnContactsChanged() end
     return
   end
@@ -1006,14 +1006,14 @@ SlashCmdList.FACONTACTS = function(msg)
       if e.kind == "vendor" then v = v + 1 elseif e.kind == "trainer" then t = t + 1 end
     end
     say(("%d vendors and %d trainers saved on this account."):format(v, t))
-    DEFAULT_CHAT_FRAME:AddMessage("  Talk to a crafting vendor or profession trainer and they're saved. Profession trainers we met on the Forever beta show up too, marked beta, until you meet them yourself.")
+    DEFAULT_CHAT_FRAME:AddMessage("  Talk to a crafting vendor or profession trainer and they're saved. Profession trainers from the built-in list show up too, marked built-in, until you meet them yourself.")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts  - open the window (search, contacts)")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa <item or vendor>  - search, e.g. /fa silk thread")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts tooltips  - 'Sold by' lines on item tooltips on/off")
     DEFAULT_CHAT_FRAME:AddMessage("  Crafting NPCs you pass are noted while friendly NPC nameplates are on (/fa nameplates). Search tab: 'Only not visited' lists the ones to talk to, nearest first")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts forget <name>  - remove one contact (or right-click it twice on the Contacts tab)")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts note <text>  - add a note to the last contact  ·  /fa contacts quiet  - chat messages on/off")
-    DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts seeds off, on or reset  - the trainers we met on the Forever beta: hide them all, show them, or bring back ones you hid")
+    DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts seeds off, on or reset  - the built-in trainer list: hide them all, show them, or bring back ones you hid")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts questie on or off  - with Questie installed, every profession trainer from its database shows in search and Nearest trainer")
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts clear confirm  - forget everyone")
   elseif cmd == "tooltips" then
@@ -1040,7 +1040,7 @@ SlashCmdList.FACONTACTS = function(msg)
     local sub = rest:lower()
     if sub == "off" then
       st.questieOff = true
-      say("Questie trainers off. Trade Contacts shows your own contacts and the beta trainers.")
+      say("Questie trainers off. Trade Contacts shows your own contacts and the built-in trainers.")
     elseif sub == "on" then
       st.questieOff = nil
       if ns.BuildQuestieTrainers then ns.BuildQuestieTrainers() end
@@ -1059,13 +1059,13 @@ SlashCmdList.FACONTACTS = function(msg)
   elseif cmd == "seeds" then
     local st = ForeverArtisanContactsDB.settings
     local sub = rest:lower()
-    if sub == "off" then st.seedsOff = true; say("trainers from the Forever beta hidden. Only NPCs you've met show up.")
-    elseif sub == "on" then st.seedsOff = nil; say("trainers from the Forever beta shown, marked beta, until you meet them yourself.")
-    elseif sub == "reset" then st.hiddenSeeds = nil; st.seedsOff = nil; say("all trainers from the Forever beta are back.")
+    if sub == "off" then st.seedsOff = true; say("built-in trainers hidden. Only NPCs you've met show up.")
+    elseif sub == "on" then st.seedsOff = nil; say("built-in trainers shown, marked built-in, until you meet them yourself.")
+    elseif sub == "reset" then st.hiddenSeeds = nil; st.seedsOff = nil; say("all built-in trainers are back.")
     elseif sub == "preview" then
       -- for testing: show the beta trainers as a new player sees them, until /reload
       ns.seedPreview = not ns.seedPreview or nil
-      say(ns.seedPreview and "preview on: the beta trainers show the way a new player sees them, in place of your own records of them. /reload or /fa contacts seeds preview to end it."
+      say(ns.seedPreview and "preview on: the built-in trainers show the way a new player sees them, in place of your own records of them. /reload or /fa contacts seeds preview to end it."
         or "preview off: your own records are back.")
     else
       local n, met, hid = 0, 0, 0
@@ -1080,7 +1080,7 @@ SlashCmdList.FACONTACTS = function(msg)
         end
       end
       local showing = st.seedsOff and 0 or (n - met - hid)
-      say(("%d profession trainers from the Forever beta for your faction. You've met %d yourself, %d show as beta%s.")
+      say(("%d built-in profession trainers for your faction. You've met %d yourself, %d show as built-in%s.")
         :format(n, met, showing, hid > 0 and (", " .. hid .. " hidden") or "") .. (st.seedsOff and " (turned off)" or ""))
       DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts seeds off, on or reset (brings back hidden ones)")
     end
