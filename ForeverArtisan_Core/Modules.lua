@@ -678,6 +678,9 @@ local SETTINGS = {
     get = function() return FA.PriceTipsOn and FA.PriceTipsOn() end,
     set = function(on) if on then ForeverArtisanSettings.priceTips = nil else ForeverArtisanSettings.priceTips = false end end,
     note = function() return (type(_G.Auctionator) == "table" and _G.Auctionator.API) and "Auctionator shows its own, so ForeverArtisan stays quiet." or nil end },
+  { key = "updates", label = "Remind me to check for updates", desc = "Once a version is more than 7 days old, one line at login (at most once a week).",
+    get = function() return not FA.UpdateCheckOn or FA.UpdateCheckOn() end,
+    set = function(on) ForeverArtisanSettings.updateCheck = (not on) and false or nil end },
   { key = "detips", label = "Disenchant values on item tooltips", desc = "What a green or blue item disenchants into, and what that's worth. Same as /fa disenchant on | off.",
     get = function() return FA.DisenchantTipsOn and FA.DisenchantTipsOn() end,
     need = function() return "Not loaded." end,
@@ -757,7 +760,7 @@ local function buildSettingsTab(p)
       end)
       panel.settingRows[#panel.settingRows + 1] = r
       panel.settingRows[d.key] = r
-      y = y - 48
+      y = y - 44 -- tight enough that every row fits above the panel's bottom bar
     end
   end
   -- the game's friendly nameplates carry the titles: a status line, and a button when they're off
@@ -1596,6 +1599,7 @@ NEWS = {
   { "0.9.32", "Fishing weapon swap puts back what you wore before the pole, and two of the same weapon both come back." },
   { "0.9.33", "Fishing weapon swap: two of the same weapon now both come back (fixes 0.9.32)." },
   { "0.9.34", "Launch fixes: no more server spam from Season of Discovery recipes (now hidden), small herb nodes show their color, and a Settings box for disenchant tooltips." },
+  { "0.9.35", "Fishing pool and rare catch alerts, session gold per hour, day and night fish, Where to sell on every item tooltip, and recipe lists from the live game." },
 }
 
 local function verNum(v)
@@ -1838,7 +1842,8 @@ SlashCmdList.FOREVERARTISAN = function(msg)
   elseif lower == "new" or lower == "news" or lower == "whatsnew" then
     showNews({}, true)
   elseif lower == "version" or lower == "ver" then
-    print(PREFIX .. "ForeverArtisan " .. FA.Version())
+    print(PREFIX .. "ForeverArtisan " .. FA.Version()
+      .. ((FA.VersionAgeDays and FA.VersionAgeDays()) and (GREY .. "  (released " .. FA.VersionAgeDays() .. " days ago)|r") or ""))
     checkVersions()
     -- the other addons it reads, when installed
     for _, a in ipairs(FA.AddonHealth and FA.AddonHealth() or {}) do

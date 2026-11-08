@@ -1,9 +1,10 @@
 ## Interface: 16001
 ## Title: ForeverArtisan: First Aid
+## Group: ForeverArtisan_Core
 ## IconTexture: Interface\Icons\Spell_Holy_SealOfSacrifice
 ## Notes: What to make next for skill-ups, a plan and shopping list to reach your target skill, a craft log, where to train next, and material tooltips.
 ## Author: ForeverArtisan
-## Version: 0.9.34
+## Version: 0.9.35
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## Dependencies: ForeverArtisan_Core

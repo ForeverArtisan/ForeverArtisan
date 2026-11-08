@@ -1,5 +1,16 @@
 # ForeverArtisan changelog
 
+## 0.9.35 (2026-11-07)
+- Added: fishing pool alerts. A ready-check sound and a blue banner with the pool's name when one comes into view, and the Catch log remembers where you saw them.
+- Added: rare catch alerts for chests, quest items and uncommon fish, in the item's own color.
+- Added: fishing session stats on the Progress tab: catches, skill-ups and what your catch is worth, per hour.
+- Added: day and night fish. The Catch log marks fish that only bite at night or by day, and says when to come back.
+- Added: "Where to sell" on every item's tooltip once you've seen it at both your Auction House and a goblin one: both prices after their cuts, and which pays more.
+- Added: a reminder to check for updates once your version is more than a week old. One line at login, at most once a week. Turn it off in Settings or with /fa updates off.
+- Changed: every profession's built-in recipe list now comes from the live game. Cooking's skill-up levels changed on 17 recipes, Enchanting has 3 new recipes, Leatherworking and Alchemy picked up Forever's renamed recipes, and Blacksmithing has the Sulfuron Hammer.
+- Added: two more Undercity trainers to Trade Contacts' built-in list (Engineering and Alchemy).
+- Changed: in the game's AddOns list, every ForeverArtisan module now sits under Core, which is marked (Required).
+
 ## 0.9.34 (2026-11-05)
 - Fixed: with a profession window open, the addon kept asking the server about recipe items that don't exist on Forever (the Season of Discovery ones), every couple of seconds. Thanks to the player who tracked it down.
 - Fixed: Season of Discovery recipes the profession window lists (they don't exist on Forever) no longer show up in plans, Best crafts, Make now, the Market tab or the recipe book.

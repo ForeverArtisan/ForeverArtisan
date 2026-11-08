@@ -3,7 +3,7 @@
 -- Forever beta", until you talk to them yourself (then your own record replaces the seed).
 local _, ns = ...
 ns.SEED_TRAINERS = {
-  { id = 223, n = "Dan Golthas", t = "Journeyman Leatherworker", prof = "Leatherworking", f = "Horde", z = "Undercity", s = "Rogues' Quarter", m = 1458, x = 71, y = 58.7, seen = 1791633600, skills = {
+  { id = 223, n = "Dan Golthas", t = "Journeyman Leatherworker", prof = "Leatherworking", f = "Horde", z = "Undercity", s = "Rogues' Quarter", m = 1458, x = 70.9, y = 58.7, seen = 1794052800, skills = {
     { n = "Apprentice Leatherworking", sk = nil, p = 10, lv = nil },
     { n = "Black Whelp Slippers", sk = "Leatherworking 35", p = 500, lv = nil },
     { n = "Camp Tent", sk = "Leatherworking 20", p = 100, lv = nil },
@@ -154,7 +154,7 @@ ns.SEED_TRAINERS = {
     { n = "Incense Candle", sk = "Herbalism 20", p = 100, lv = nil },
     { n = "Journeyman Herbalism", sk = "Herbalism 50", p = 500, lv = nil },
   } },
-  { id = 3191, n = "Cook Torka", t = nil, prof = "Cooking", f = "Horde", z = "Durotar", s = "Razor Hill", m = 1411, x = 51.1, y = 42.5, seen = 1792238400, skills = {
+  { id = 3191, n = "Cook Torka", t = nil, prof = "Cooking", f = "Horde", z = "Durotar", s = "Razor Hill", m = 1411, x = 51.1, y = 42.6, seen = 1793966400, skills = {
     { n = "Apprentice Cook", sk = nil, p = 100, lv = nil },
     { n = "Basic Campfire Kit", sk = "Cooking 20", p = 100, lv = nil },
     { n = "Boiled Clams", sk = "Cooking 50", p = 100, lv = nil },
@@ -272,7 +272,7 @@ ns.SEED_TRAINERS = {
     { n = "Rough Boomstick", sk = "Engineering 50", p = 150, lv = nil },
     { n = "Rough Copper Bomb", sk = "Engineering 30", p = 130, lv = nil },
   } },
-  { id = 3523, n = "Bowen Brisboise", t = "Journeyman Tailor", prof = "Tailoring", f = "Horde", z = "Tirisfal Glades", s = "Cold Hearth Manor", m = 1420, x = 52.6, y = 55.5, seen = 1791115200, skills = {
+  { id = 3523, n = "Bowen Brisboise", t = "Journeyman Tailor", prof = "Tailoring", f = "Horde", z = "Tirisfal Glades", s = "Cold Hearth Manor", m = 1420, x = 52.6, y = 55.6, seen = 1793966400, skills = {
     { n = "Apprentice Tailoring", sk = nil, p = 10, lv = nil },
     { n = "Barbaric Linen Vest", sk = "Tailoring 40", p = 300, lv = nil },
     { n = "Blue Linen Shirt", sk = "Tailoring 25", p = 50, lv = nil },
@@ -324,7 +324,7 @@ ns.SEED_TRAINERS = {
     { n = "Strange Copper Boots", sk = "Blacksmithing 35", p = 100, lv = nil },
     { n = "Thick War Axe", sk = "Blacksmithing 45", p = 500, lv = nil },
   } },
-  { id = 4552, n = "Eunice Burch", t = "Cooking Trainer", prof = "Cooking", f = "Horde", z = "Undercity", s = "Trade Quarter", m = 1458, x = 62.4, y = 44.5, seen = 1792152000, skills = {
+  { id = 4552, n = "Eunice Burch", t = "Cooking Trainer", prof = "Cooking", f = "Horde", z = "Undercity", s = "Trade Quarter", m = 1458, x = 62.1, y = 44.7, seen = 1794052800, skills = {
     { n = "Apprentice Cook", sk = nil, p = 100, lv = nil },
     { n = "Basic Campfire Kit", sk = "Cooking 20", p = 100, lv = nil },
     { n = "Boiled Clams", sk = "Cooking 50", p = 100, lv = nil },
@@ -340,6 +340,20 @@ ns.SEED_TRAINERS = {
     { n = "Apprentice Fishing", sk = nil, p = 100, lv = nil },
     { n = "Fish Bowl", sk = "Fishing 20", p = 100, lv = nil },
     { n = "Journeyman Fishing", sk = "Fishing 50", p = 500, lv = 10 },
+  } },
+  { id = 4586, n = "Graham Van Talen", t = "Journeyman Engineer", prof = "Engineering", f = "Horde", z = "Undercity", s = "Rogues' Quarter", m = 1458, x = 75.3, y = 72.7, seen = 1794052800, skills = {
+    { n = "Apprentice Engineer", sk = nil, p = 10, lv = nil },
+    { n = "Arclight Spanner", sk = "Engineering 50", p = 150, lv = nil },
+    { n = "Coarse Blasting Powder", sk = "Engineering 75", p = 250, lv = nil },
+    { n = "Coarse Dynamite", sk = "Engineering 75", p = 250, lv = nil },
+    { n = "Copper Modulator", sk = "Engineering 65", p = 225, lv = nil },
+    { n = "Copper Tube", sk = "Engineering 50", p = 150, lv = nil },
+    { n = "Crafted Heavy Shot", sk = "Engineering 75", p = 250, lv = nil },
+    { n = "Crude Scope", sk = "Engineering 60", p = 200, lv = nil },
+    { n = "Handful of Copper Bolts", sk = "Engineering 30", p = 115, lv = nil },
+    { n = "Reagent Bot", sk = "Engineering 20", p = 100, lv = nil },
+    { n = "Rough Boomstick", sk = "Engineering 50", p = 150, lv = nil },
+    { n = "Rough Copper Bomb", sk = "Engineering 30", p = 130, lv = nil },
   } },
   { id = 4588, n = "Arthur Moore", t = "Expert Leatherworker", prof = "Leatherworking", f = "Horde", z = "Undercity", s = "Rogues' Quarter", m = 1458, x = 70.4, y = 57.7, seen = 1791633600, skills = {
     { n = "Apprentice Leatherworking", sk = nil, p = 10, lv = nil },
@@ -406,7 +420,7 @@ ns.SEED_TRAINERS = {
     { n = "Wool Bandage", sk = "First Aid 80", p = 250, lv = nil },
     { n = "Woolen Tourniquet", sk = "First Aid 120", p = 1200, lv = nil },
   } },
-  { id = 4605, n = "Basil Frye", t = "Journeyman Blacksmith", prof = "Blacksmithing", f = "Horde", z = "Undercity", s = "War Quarter", m = 1458, x = 60.1, y = 29.2, seen = 1790942400, skills = {
+  { id = 4605, n = "Basil Frye", t = "Journeyman Blacksmith", prof = "Blacksmithing", f = "Horde", z = "Undercity", s = "War Quarter", m = 1458, x = 60, y = 28.8, seen = 1794052800, skills = {
     { n = "Apprentice Blacksmith", sk = nil, p = 10, lv = nil },
     { n = "Coarse Grinding Stone", sk = "Blacksmithing 50", p = 250, lv = nil },
     { n = "Coarse Sharpening Stone", sk = "Blacksmithing 40", p = 100, lv = nil },
@@ -458,7 +472,7 @@ ns.SEED_TRAINERS = {
     { n = "Fish Bowl", sk = "Fishing 20", p = 100, lv = nil },
     { n = "Journeyman Fishing", sk = "Fishing 50", p = 500, lv = 10 },
   } },
-  { id = 5695, n = "Vance Undergloom", t = "Journeyman Enchanter", prof = "Enchanting", f = "Horde", z = "Tirisfal Glades", s = "Gallows' End Tavern", m = 1420, x = 61.7, y = 51.6, seen = 1791115200, skills = {
+  { id = 5695, n = "Vance Undergloom", t = "Journeyman Enchanter", prof = "Enchanting", f = "Horde", z = "Tirisfal Glades", s = "Gallows' End Tavern", m = 1420, x = 61.7, y = 51.6, seen = 1793966400, skills = {
     { n = "Apprentice Enchanting", sk = nil, p = 10, lv = nil },
     { n = "Enchant Bracer - Minor Stamina", sk = "Enchanting 50", p = 250, lv = nil },
     { n = "Enchant Chest - Inferior Stamina", sk = "Enchanting 15", p = 50, lv = nil },
@@ -470,7 +484,7 @@ ns.SEED_TRAINERS = {
     { n = "Greater Magic Wand", sk = "Enchanting 70", p = 200, lv = nil },
     { n = "Lesser Magic Wand", sk = "Enchanting 10", p = 50, lv = nil },
   } },
-  { id = 5759, n = "Nurse Neela", t = "First Aid Trainer", prof = "First Aid", f = "Horde", z = "Tirisfal Glades", s = "Gallows' End Tavern", m = 1420, x = 61.8, y = 52.8, seen = 1791115200, skills = {
+  { id = 5759, n = "Nurse Neela", t = "First Aid Trainer", prof = "First Aid", f = "Horde", z = "Tirisfal Glades", s = "Gallows' End Tavern", m = 1420, x = 61.8, y = 52.8, seen = 1794052800, skills = {
     { n = "Anti-Venom", sk = "First Aid 80", p = 250, lv = nil },
     { n = "Apprentice First Aid", sk = nil, p = 100, lv = nil },
     { n = "First Aid Kit", sk = "First Aid 20", p = 100, lv = nil },
@@ -505,12 +519,12 @@ ns.SEED_TRAINERS = {
     { n = "Wool Bandage", sk = "First Aid 80", p = 225, lv = nil },
     { n = "Woolen Tourniquet", sk = "First Aid 120", p = 1080, lv = nil },
   } },
-  { id = 5941, n = "Lau'Tiki", t = "Fisherman", prof = "Fishing", f = "Horde", z = "Durotar", s = nil, m = 1411, x = 53.2, y = 81.5, seen = 1793880000, skills = {
+  { id = 5941, n = "Lau'Tiki", t = "Fisherman", prof = "Fishing", f = "Horde", z = "Durotar", s = "Darkspear Strand", m = 1411, x = 53.3, y = 81.7, seen = 1793966400, skills = {
     { n = "Apprentice Fishing", sk = nil, p = 100, lv = nil },
     { n = "Fish Bowl", sk = "Fishing 20", p = 100, lv = nil },
     { n = "Journeyman Fishing", sk = "Fishing 50", p = 500, lv = 10 },
   } },
-  { id = 5943, n = "Rawrk", t = "First Aid Trainer", prof = "First Aid", f = "Horde", z = "Durotar", s = "Razor Hill Barracks", m = 1411, x = 54.2, y = 42, seen = 1793880000, skills = {
+  { id = 5943, n = "Rawrk", t = "First Aid Trainer", prof = "First Aid", f = "Horde", z = "Durotar", s = "Razor Hill Barracks", m = 1411, x = 54.1, y = 42, seen = 1793966400, skills = {
     { n = "Anti-Venom", sk = "First Aid 80", p = 250, lv = nil },
     { n = "Apprentice First Aid", sk = nil, p = 100, lv = nil },
     { n = "First Aid Kit", sk = "First Aid 20", p = 100, lv = nil },
@@ -591,6 +605,17 @@ ns.SEED_TRAINERS = {
     { n = "Reagent Bot", sk = "Engineering 20", p = 100, lv = nil },
     { n = "Rough Boomstick", sk = "Engineering 50", p = 150, lv = nil },
     { n = "Rough Copper Bomb", sk = "Engineering 30", p = 130, lv = nil },
+  } },
+  { id = 11044, n = "Doctor Martin Felben", t = "Journeyman Alchemist Trainer", prof = "Alchemy", f = "Horde", z = "Undercity", s = "The Apothecarium", m = 1458, x = 46.5, y = 74.3, seen = 1794052800, skills = {
+    { n = "Apprentice Alchemist", sk = nil, p = 10, lv = nil },
+    { n = "Cerulean Dye", sk = "Alchemy 40", p = 150, lv = nil },
+    { n = "Elixir of Minor Fortitude", sk = "Alchemy 50", p = 250, lv = nil },
+    { n = "Elixir of Minor Strength", sk = "Alchemy 15", p = 50, lv = nil },
+    { n = "Mana Well", sk = "Alchemy 20", p = 100, lv = nil },
+    { n = "Minor Mana Potion", sk = "Alchemy 25", p = 100, lv = nil },
+    { n = "Minor Rejuvenation Potion", sk = "Alchemy 40", p = 150, lv = nil },
+    { n = "Minor Troll's Blood Elixir", sk = "Alchemy 15", p = 50, lv = nil },
+    { n = "Sulfuric Acid", sk = "Alchemy 40", p = 150, lv = nil },
   } },
   { id = 11048, n = "Victor Ward", t = "Journeyman Tailor", prof = "Tailoring", f = "Horde", z = "Undercity", s = "Magic Quarter", m = 1458, x = 70.1, y = 29.2, seen = 1791633600, skills = {
     { n = "Apprentice Tailoring", sk = nil, p = 10, lv = nil },
@@ -747,7 +772,7 @@ ns.SEED_TRAINERS = {
     { n = "Wool Bandage", sk = "First Aid 80", p = 250, lv = nil },
     { n = "Woolen Tourniquet", sk = "First Aid 120", p = 1200, lv = nil },
   } },
-  { id = 265944, n = "William Pickman", t = "Cooking Trainer", prof = "Cooking", f = "Horde", z = "Tirisfal Glades", s = "Gallows' End Tavern", m = 1420, x = 61.8, y = 51.5, seen = 1791115200, skills = {
+  { id = 265944, n = "William Pickman", t = "Cooking Trainer", prof = "Cooking", f = "Horde", z = "Tirisfal Glades", s = "Gallows' End Tavern", m = 1420, x = 61.8, y = 51.5, seen = 1794052800, skills = {
     { n = "Apprentice Cook", sk = nil, p = 100, lv = nil },
     { n = "Basic Campfire Kit", sk = "Cooking 20", p = 100, lv = nil },
     { n = "Boiled Clams", sk = "Cooking 50", p = 100, lv = nil },

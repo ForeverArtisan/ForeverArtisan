@@ -214,6 +214,9 @@ local function BuildFishingPage(p)
       function() return S().reelSameKey end, function(v) S().reelSameKey = v end, ApplyFishing),
     Check(p, "Chat line for each catch", 16, -176, function() return S().verbose end, function(v) S().verbose = v end),
     Check(p, "Show lure bar on screen", 16, -200, function() return S().hud end, function(v) S().hud = v end),
+    -- a ping and a line on screen for a fishing pool in view or a rare catch (Extras.lua)
+    Check(p, "Alerts: pools and rare catches", 240, -176, function() return S().alerts ~= false end,
+      function(v) S().alerts = v and nil or false end),
   }
 
   Text(p, nil, "TOPLEFT", 22, -238):SetText("Fishing key:")
@@ -426,7 +429,10 @@ local function RefreshProgressPage(p)
     p.big:SetText(i.notLearned and (GRAY .. "Fishing not learned yet|r") or (GRAY .. "Skill unknown|r")); p.fill:SetWidth(1)
   end
   local ses = ns.session
-  p.l1:SetText(("This session: %s+%d|r skill-ups from %d catches"):format(GREEN, i.gained or 0, ses.catches))
+  -- this session: skill-ups, catches and what the catch is worth (Extras.lua); per hour on the pace line
+  local st = ns.SessionStats and ns.SessionStats()
+  local worth = (st and st.value > 0) and (GRAY .. "   ·   worth ~|r" .. (FA.Money and FA.Money(st.value) or st.value)) or ""
+  p.l1:SetText(("This session: %s+%d|r skill-ups from %d catches%s"):format(GREEN, i.gained or 0, ses.catches, worth))
   p.l2:SetText(("%d catch%s since the last point%s"):format(i.sinceUp or 0, (i.sinceUp or 0) == 1 and "" or "es",
     i.cpp and ("   ·   about %.1f catches per point"):format(i.cpp) or ""))
   if i.capped then
@@ -438,6 +444,10 @@ local function RefreshProgressPage(p)
     p.l3:SetText(GRAY .. "Skill up once to see your pace.|r")
   end
   p.l4:SetText(i.advice and (GOLD .. "Next rank (" .. (i.faction or "") .. "): |r" .. i.advice) or "")
+  if st and st.perHour then
+    p.l3:SetText(p.l3:GetText() .. GRAY .. ("   ·   per hour: %d catches, ~%s|r"):format(st.perHour.catches,
+      FA.Money and FA.Money(st.perHour.value) or st.perHour.value))
+  end
 
   -- goals or cooking suggestions
   local data = {}
@@ -472,7 +482,8 @@ local function RefreshProgressPage(p)
       data[#data + 1] = { id = g.id, icon = Icon(g.id), pct = math.min(1, g.have / math.max(g.want, 1)), done = done,
         left = (done and GREEN or "") .. g.name .. (done and "|r" or ""),
         right = ("%s%d  /|r"):format(done and GREEN or YELLOW, g.have), want = g.want, goalIndex = g.i,
-        tip = g.best and ("Best logged spot: " .. g.best) or "No logged spot yet.",
+        tip = (g.best and ("Best logged spot: " .. g.best) or "No logged spot yet.")
+          .. (ns.FishTimeTip and ns.FishTimeTip(g.id) and ("\n" .. ns.FishTimeTip(g.id)) or ""),
         act = "Remove", onAct = function() ns.RemoveGoal(g.i) end }
     end
     p.empty:SetText(#data == 0 and "No goals yet. Drag a fish into the + box above, use Suggest from Cooking, or right-click a fish in the catch log." or "")
@@ -595,15 +606,26 @@ local function RefreshLogPage(p)
       local it = e.it
       data[#data + 1] = { icon = Icon(e.id), itemId = e.id, itemName = it.name,
         left = QColor(it.q) .. (it.name or ns.ItemName(e.id)) .. "|r",
-        right = ("%d%%   %d caught%s"):format(math.floor(it.hauls * 100 / c + 0.5), it.n,
-          it.minSkill and ("   skill " .. it.minSkill) or ""),
-        tip = ("Seen %d times here%s. Right-click to make it a goal."):format(it.hauls, it.lastSeen and (", last " .. it.lastSeen) or "") }
+        right = ("%d%%   %d caught%s%s"):format(math.floor(it.hauls * 100 / c + 0.5), it.n,
+          it.minSkill and ("   skill " .. it.minSkill) or "",
+          (ns.FishTime and ns.FishTime(e.id)) and (GOLD .. "   " .. ns.FishTime(e.id) .. "|r") or ""),
+        tip = ("Seen %d times here%s. Right-click to make it a goal."):format(it.hauls, it.lastSeen and (", last " .. it.lastSeen) or "")
+          .. (ns.FishTimeTip and ns.FishTimeTip(e.id) and ("\n" .. ns.FishTimeTip(e.id)) or "") }
     end
     local rate = z.casts > 0 and (", " .. math.floor(z.catches * 100 / z.casts + 0.5) .. "% hooked") or ""
     p.header:SetText(("%s%s|r %s(%s)|r   %d catches, %d casts, %d got away%s"):format(
       GOLD, z.sub, GRAY, z.zone, z.catches, z.casts, z.escaped, rate))
     p.empty:SetText(#data == 0 and "No catches at this spot yet." or "")
+    local pools = ns.PoolsAt and ns.PoolsAt(z.zone .. " / " .. z.sub) or {}
+    if #pools > 0 then
+      local names = {}
+      for k2 = 1, math.min(3, #pools) do names[#names + 1] = ("%s (%d)"):format(pools[k2].name, pools[k2].spots) end
+      p.poolLine = GOLD .. "Pools seen here: |r" .. table.concat(names, ", ")
+    else
+      p.poolLine = nil
+    end
   end
+  if view.mode == "all" then p.poolLine = nil end
   p.shown = data
   local spotView = view.mode ~= "all"
   p.addAll:SetShown(spotView)
@@ -618,7 +640,7 @@ local function RefreshLogPage(p)
       r:Hide()
     end
   end
-  p.footer:SetText(("%d catches in the raw log%s"):format(#db.raw,
+  p.footer:SetText(p.poolLine or ("%d catches in the raw log%s"):format(#db.raw,
     #data > LOG_ROWS and ("   |   showing %d-%d of %d"):format(view.offset + 1, math.min(#data, view.offset + LOG_ROWS), #data) or ""))
 end
 
@@ -773,6 +795,7 @@ local function BuildHUD()
   Tip(hud, function()
     GameTooltip:AddLine("ForeverArtisan: Fishing")
     GameTooltip:AddLine("Click to open, drag to move. Right icon swaps pole/weapons.", 1, 1, 1)
+    if ns.SessionLine then GameTooltip:AddLine(ns.SessionLine(), 1, 1, 1, true) end
   end)
   hud:SetScript("OnUpdate", function(self, el)
     self.t = (self.t or 0) + el

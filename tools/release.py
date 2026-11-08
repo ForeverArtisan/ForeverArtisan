@@ -12,6 +12,8 @@ usage (from the repo):  python tools\\release.py . 0.9.1-beta.1\n\nusage: releas
 
 What it does:
 - sets "## Version: VERSION" in every ForeverArtisan_*/*.toc (Core and all modules)
+- stamps "## X-Release-Date: YYYY-MM-DD" (today) in Core's TOC: the addon reminds players to check
+  for updates once its version is more than 7 days old
 - syntax-checks every .lua file (luac5.1 -p, if installed)
 - dates CHANGELOG.md in SOURCE_DIR: renames the "## x.y.z (unreleased)" section to VERSION,
   or adds a new section with the changelog lines given
@@ -42,6 +44,20 @@ def set_versions(root, ver):
             sys.exit("no single ## Version line in " + t)
         open(t, "w", encoding="utf-8", newline="\n").write(s2)
         print("  %-45s %s" % (os.path.basename(t), ver))
+
+
+def set_release_date(root):
+    t = os.path.join(root, "ForeverArtisan_Core", "ForeverArtisan_Core.toc")
+    s = open(t, encoding="utf-8").read()
+    line = "## X-Release-Date: " + datetime.date.today().isoformat()
+    if re.search(r"^## X-Release-Date: .*$", s, flags=re.M):
+        s = re.sub(r"^## X-Release-Date: .*$", line, s, flags=re.M)
+    else:
+        s, n = re.subn(r"^(## Version: .*)$", r"\1\n" + line, s, count=1, flags=re.M)
+        if n != 1:
+            sys.exit("no ## Version line in " + t)
+    open(t, "w", encoding="utf-8", newline="\n").write(s)
+    print("  %-45s %s" % ("release date", line.split(": ")[1]))
 
 
 def check_syntax(root):
@@ -133,6 +149,7 @@ def main():
         sys.exit("version must look like 0.9.0 or 1.1.0-beta.1")
     print("ForeverArtisan %s  (%s)" % (ver, channel(ver)))
     set_versions(root, ver)
+    set_release_date(root)
     check_syntax(root)
     add_changelog(root, ver, notes)
     if out:

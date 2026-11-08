@@ -305,7 +305,7 @@ local function RefreshProgressPage(p)
   end
   if aheadInfo then
     p.rate:SetText(GRAY .. "Planning ahead from skill 1 with " .. (aheadInfo.from == "alt" and ("recipes your alt " .. (aheadInfo.who or "?"):match("^[^-]+") .. " has seen")
-      or "recipes from the Forever beta") .. ". The list is what to save.|r")
+      or "the built-in recipe list") .. ". The list is what to save.|r")
   end
 
   local plan = {}

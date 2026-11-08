@@ -282,14 +282,17 @@ end
 -- Item tooltips: "Dropped by Greater Duskbat, Tirisfal Glades (you looted it 2 times)" on any material
 -- you've looted from a mob, whether or not you know a recipe that uses it yet.
 -- Also the Auction House price you last saw for it (when Auctionator isn't there to show its own).
+-- And "Where to sell": your Auction House and the goblin one after their cuts, once you've seen both.
 local function DropTip(tt, id)
   if not id or tt.faDropTip then return end
   local line = FA.MaterialWhere(id)
   local price = FA.TooltipPrice and FA.TooltipPrice(id)
-  if not line and not price then return end
+  local house = (FA.PriceTipsOn == nil or FA.PriceTipsOn()) and FA.HouseLines and FA.HouseLines(id, 1, "each") or {}
+  if not line and not price and #house == 0 then return end
   tt.faDropTip = true
   if line then tt:AddLine(FA.GOLD .. "ForeverArtisan:|r " .. line, 1, 1, 1, true) end
   if price then tt:AddLine(FA.GOLD .. "ForeverArtisan:|r " .. price, 1, 1, 1, true) end
+  for i, l in ipairs(house) do tt:AddLine((i == 1 and (FA.GOLD .. "ForeverArtisan:|r ") or "") .. l, 1, 1, 1, true) end
   tt:Show()
 end
 local function HookDropTips()

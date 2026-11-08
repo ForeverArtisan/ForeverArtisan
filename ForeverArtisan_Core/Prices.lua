@@ -683,26 +683,28 @@ function FA.HouseTag(c)
   return (c.better == "goblin" and "better at goblin AH: +" or "better at your AH: +") .. FA.Money(c.diff)
 end
 
--- "Where to sell" tooltip lines: both houses after their cuts, and which pays more
-function FA.HouseLines(id, makes)
+-- "Where to sell" tooltip lines: both houses after their cuts, and which pays more.
+-- unit: "a craft" (recipe tooltips, the default) or "each" (item tooltips)
+function FA.HouseLines(id, makes, unit)
   local c = FA.HouseCompare(id, makes)
   if not c then return {} end
+  unit = unit or "a craft"
   local function line(name, each, net, cut, age, listed, mailed)
     local bits = { FA.AgeText(age) }
     if listed then bits[#bits + 1] = listed .. " listed" end
-    return ("%s: %s each, about %s a craft after its %d%% cut%s"):format(name, FA.Money(each), FA.Money(net), cut,
+    return ("%s: %s each, about %s %s after its %d%% cut%s"):format(name, FA.Money(each), FA.Money(net), unit, cut,
       mailed and " and postage" or "") .. FA.GRAY .. " (" .. table.concat(bits, ", ") .. ")|r"
   end
   local lines = { FA.GOLD .. "Where to sell|r",
     line("Your Auction House", c.home, c.homeNet, math.floor(FA.AH_CUT * 100 + 0.5), c.homeAge, c.homeListed, c.away == "home"),
     line("Goblin Auction House", c.gob, c.gobNet, math.floor(FA.NEUTRAL_CUT * 100 + 0.5), c.gobAge, c.gobListed, c.away == "goblin") }
   if c.better == "goblin" then
-    lines[#lines + 1] = FA.GREEN .. "The goblin Auction House pays about " .. FA.Money(c.diff) .. " more a craft|r"
+    lines[#lines + 1] = FA.GREEN .. "The goblin Auction House pays about " .. FA.Money(c.diff) .. " more " .. unit .. "|r"
       .. FA.GRAY .. " (Booty Bay, Gadgetzan, Everlook)|r"
   elseif c.better == "home" then
-    lines[#lines + 1] = FA.GREEN .. "Your own Auction House pays about " .. FA.Money(c.diff) .. " more a craft|r"
+    lines[#lines + 1] = FA.GREEN .. "Your own Auction House pays about " .. FA.Money(c.diff) .. " more " .. unit .. "|r"
   end
-  lines[#lines + 1] = FA.GRAY .. ("Postage to a banker there: %s a craft (30c a mail slot, a full stack fits in one)."):format(FA.Money(c.postage)) .. "|r"
+  lines[#lines + 1] = FA.GRAY .. ("Postage to a banker there: %s %s (30c a mail slot, a full stack fits in one)."):format(FA.Money(c.postage), unit) .. "|r"
   return lines
 end
 

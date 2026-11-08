@@ -2022,6 +2022,9 @@ do
     local lines = table.concat(FA.HouseLines(991010), "\n")
     assert(lines:find("Where to sell") and lines:find("Goblin Auction House: 25s each, about 20s 95c a craft after its 15%% cut and postage")
       and lines:find("pays about 16s 20c more") and lines:find("Postage to a banker there: 30c"), lines)
+    -- item tooltips say "each", not "a craft"
+    local each = table.concat(FA.HouseLines(991010, 1, "each"), "\n")
+    assert(each:find("about 20s 95c each after its 15%% cut and postage") and each:find("more each") and not each:find("a craft"), each)
     local worth = table.concat(FA.CraftValueLines({name="Goblin Thing", itemId=991010, reagents={{id=991001,n=1}}}), "\n")
     assert(worth:find("Where to sell"), "What it's worth includes both houses: "..worth)
     assert(#FA.HouseLines(991001)==0, "no goblin price: no block")
@@ -2691,7 +2694,7 @@ do
   FA.QuestieStatus, FA.Vendors.counts = oQS, oC
   -- Settings: the slash-command switches as boxes
   local R=pnl.settingRows
-  for _,k in ipairs({"minimap","prices","questie","seeds","alts","gather","titles"}) do assert(R[k], "setting "..k) end
+  for _,k in ipairs({"minimap","prices","updates","questie","seeds","alts","gather","titles"}) do assert(R[k], "setting "..k) end
   local function click(k, on) R[k].check._checked=on; R[k].check.GetChecked=function() return on end; R[k].check.scripts.OnClick(R[k].check) end
   click("prices", false); assert(ForeverArtisanSettings.priceTips==false and not FA.PriceTipsOn(), "prices off")
   click("prices", true); assert(FA.PriceTipsOn(), "prices back on")
@@ -2724,6 +2727,110 @@ do
   assert(mn.NormalizeNode("Ooze Covered Mithril Deposit")=="Mithril Deposit" and mn.NormalizeNode("Small Copper Vein")=="Copper Vein"
     and mn.NormalizeNode("Copper Vein")=="Copper Vein" and mn.NormalizeNode("Strange Rock")=="Strange Rock", "ore node names")
   print("launch node names ok")
+end
+-- 0.9.35 fishing: session stats, day and night fish, pool alerts, rare catch alerts
+do
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local FA=ForeverArtisan
+  local oT, oAH, oGI, oCI, oGT, oPS, oGGT = GetTime, FA.AHPrice, GetItemInfo, C_Item, GetTime, PlaySound, GetGameTime
+  local clock=10000 GetTime=function() return clock end
+  local sounds, lastSound, lastChannel=0 PlaySound=function(k,ch) sounds=sounds+1 lastSound, lastChannel=k, ch end
+  local info={[6291]={"Raw Brilliant Smallfish",1,1},[6358]={"Oily Blackmouth",1,1},[13759]={"Raw Nightfin Snapper",1,1},
+    [6351]={"Dented Crate",1,1},[6360]={"Steelscale Crushfish",2,1},[777001]={"Odd Fish",1,1}}
+  GetItemInfo=function(id) local e=info[id] if e then return e[1],nil,e[2],1,1,"Trade Goods","Meat",20,"",134400,e[3] end end
+  C_Item=nil
+  FA.AHPrice=function(id) if id==6358 then return 100 end end
+  -- session value: Oily Blackmouth at the AH (95c after the cut), smallfish to a vendor (1c)
+  local ses=fns.session
+  ses.catches, ses.ups, ses.firstCatch, ses.value, ses.unpriced = 0, 0, nil, nil, nil
+  fns.OnCatch({items={{id=6358,n=2},{id=6291,n=3}}})
+  local st=fns.SessionStats()
+  assert(st.value==2*95+3*1 and st.catches==1 and not st.perHour, "session value: "..tostring(st.value))
+  clock=clock+30*60
+  st=fns.SessionStats()
+  assert(st.perHour and st.perHour.catches==2 and st.perHour.value==386, "per hour after 5 minutes")
+  assert(fns.SessionLine():find("an hour"), fns.SessionLine())
+  -- rare catches: a crate, an uncommon fish; a plain fish is not
+  local warned
+  local oFW=fns.Alert fns.Alert=function(txt) warned=txt end
+  assert(fns.IsRareCatch(6351) and fns.IsRareCatch(6360) and not fns.IsRareCatch(6291), "rare catch rules")
+  sounds=0; fns.OnCatch({items={{id=6351,n=1}}})
+  assert(sounds==1 and warned and warned:find("Dented Crate"), "rare catch alert")
+  ForeverArtisanFishingDB.settings.alerts=false; warned=nil
+  fns.OnCatch({items={{id=6360,n=1}}})
+  assert(not warned, "alerts off: quiet")
+  ForeverArtisanFishingDB.settings.alerts=nil
+  -- pools: names, a spot remembered, one alert a minute
+  assert(fns.IsPoolName("Oily Blackmouth School") and fns.IsPoolName("Floating Wreckage") and fns.IsPoolName("School of Deviate Fish")
+    and not fns.IsPoolName("Fishing Bobber") and not fns.IsPoolName("Mailbox"), "pool names")
+  sounds=0; warned=nil
+  assert(fns.SeenPool("Oily Blackmouth School") and sounds==1 and warned:find("Oily Blackmouth School"), "pool alert")
+  assert(lastSound==8960 and lastChannel=="Master", "pool sound: the ready check, on Master")
+  fns.SeenPool("Oily Blackmouth School")
+  assert(sounds==1, "once a minute")
+  local zone, sub = fns.Where()
+  local pools=fns.PoolsAt(zone.." / "..sub)
+  assert(#pools==1 and pools[1].spots==1 and pools[1].seen==2, "pool spot remembered")
+  assert(fns.SeenPool("Fishing Bobber")==nil, "the bobber isn't a pool")
+  fns.Alert=oFW
+  -- the banner itself draws, with an icon
+  fns.Alert("Fishing pool: Oily Blackmouth School", 136245, 0.35, 0.8, 1)
+  assert(_G.ForeverArtisanFishingAlert and _G.ForeverArtisanFishingAlert:IsShown(), "alert banner shown")
+  -- day and night: Nightfin is known; a fish only caught at night where you also fish by day is learned
+  assert(fns.FishTime(13759)=="night" and fns.FishTime(6291)==nil, "known night fish")
+  local raw=ForeverArtisanFishingDB.raw
+  local keep=#raw
+  for i=1,6 do raw[#raw+1]={zone="Test Zone",sub="Cove",gt="21:00",items={{id=777001,n=1}}} end
+  for i=1,6 do raw[#raw+1]={zone="Test Zone",sub="Cove",gt="12:00",items={{id=6291,n=1}}} end
+  local tm, learned = fns.FishTime(777001)
+  assert(tm=="night" and learned, "learned night fish: "..tostring(tm))
+  GetGameTime=function() return 12,30 end
+  assert(fns.FishTimeTip(777001):find("come back after 18:00"), fns.FishTimeTip(777001))
+  for i=#raw,keep+1,-1 do raw[i]=nil end
+  -- the windows draw with it all
+  run("FAFISH","")
+  for _,f in ipairs(frames) do if (f._text=="Progress" or f._text=="Catch log" or f._text=="Fishing") and f.scripts.OnClick then local ok,err=pcall(f.scripts.OnClick,f) assert(ok,"fishing tab: "..tostring(err)) end end
+  local hud=_G.ForeverArtisanFishingHUD if hud and hud.scripts.OnEnter then local ok,err=pcall(hud.scripts.OnEnter,hud) assert(ok,"hud tip: "..tostring(err)) end
+  fns.OnChange()
+  local ff=_G.ForeverArtisanFishingFrame ff:Show()
+  for _,f in ipairs(frames) do if f._text=="Progress" and f.scripts.OnClick and rawget(f,"_parent")==ff then f.scripts.OnClick(f) end end
+  fns.OnChange()
+  local sesShown, perHour for _,x in ipairs(fonts) do local s=rawget(x,"_text")
+    if type(s)=="string" and s:find("This session:") and s:find("worth ~") then sesShown=true end
+    if type(s)=="string" and s:find("per hour: %d+ catches") then perHour=true end end
+  assert(sesShown and perHour, "Progress tab: worth on the session line, per hour on the pace line")
+  GetTime, FA.AHPrice, GetItemInfo, C_Item, PlaySound, GetGameTime = oT, oAH, oGI, oCI, oPS, oGGT
+  print("0.9.35 fishing extras ok")
+end
+-- 0.9.35: update reminder once the version is more than 7 days old (release.py stamps the date)
+do
+  local FA=ForeverArtisan
+  local oMeta, oT = C_AddOns.GetAddOnMetadata, time
+  local relDate
+  C_AddOns.GetAddOnMetadata=function(n,f) if n=="ForeverArtisan_Core" and f=="X-Release-Date" then return relDate end return oMeta(n,f) end
+  local rel=oT({year=2026,month=11,day=7,hour=12})
+  local now=rel
+  time=function(t) if t then return oT(t) end return now end
+  ForeverArtisanSettings.updateNagAt=nil
+  relDate=nil
+  assert(FA.VersionAgeDays()==nil and FA.UpdateReminder()==nil, "no release date (test build): quiet")
+  relDate="2026-11-07"
+  now=rel+3*86400
+  assert(FA.VersionAgeDays()==3 and FA.UpdateReminder()==nil, "3 days: quiet")
+  now=rel+9*86400
+  local line=FA.UpdateReminder()
+  assert(line and line:find("9 days old") and line:find("CurseForge") and not line:find("!"), "9 days: "..tostring(line))
+  assert(FA.UpdateReminder()==nil, "once a week")
+  now=now+8*86400
+  assert(FA.UpdateReminder(), "a week later: again")
+  run("FOREVERARTISAN","updates off")
+  now=now+8*86400
+  assert(not FA.UpdateCheckOn() and FA.UpdateReminder()==nil, "off: quiet")
+  run("FOREVERARTISAN","updates on") assert(FA.UpdateCheckOn(), "back on")
+  run("FOREVERARTISAN","version")
+  C_AddOns.GetAddOnMetadata, time = oMeta, oT
+  ForeverArtisanSettings.updateNagAt=nil
+  print("0.9.35 update reminder ok")
 end
 print("CRAFTS OK")
 -- 0.9.23: auto loot opens an empty loot window, then the chat line is the only record of a recipe
@@ -3201,7 +3308,7 @@ do
   if not (ForeverArtisanTailoringFrame and ForeverArtisanTailoringFrame._shown) then run("FATAILOR","") end
   for _,f in ipairs(frames) do if f._text=="Progress" and f.scripts.OnClick then f.scripts.OnClick(f) end end
   local said for _,f in ipairs(fonts) do local t=rawget(f,"_text") if type(t)=="string" and t:find("Planning ahead from skill 1") then said=t end end
-  assert(said and said:find("Forever beta"), "Progress tab says it's planning ahead")
+  assert(said and said:find("built%-in recipe list"), "Progress tab says it's planning ahead")
   -- the first tab's Start planning button (shown without the profession) opens the Progress tab
   local btns=0
   for _,f in ipairs(frames) do if rawget(f,"_text")=="Start planning" and f.scripts.OnClick then
@@ -3227,9 +3334,14 @@ do
   -- Season of Discovery recipes (listed by the window, don't exist on Forever): never planned, never kept
   do
     local sod=0 for _,r in pairs(tl.SeedRecipes()) do if FA.NotOnForever(r) then sod=sod+1 end end
-    assert(sod>0, "the beta seeds carry Season of Discovery recipes")
+    assert(sod==0, "the recipe builder leaves them out of the seeds now: "..sod)
+    -- an alt saved by an older version still has some: planning ahead skips them
+    local withSod=function() local s={} for n,r in pairs(tl.SeedRecipes()) do s[n]=r end
+      s["Crimson Silk Shoulders"]={name="Crimson Silk Shoulders",group="SEASON OF DISCOVERY",reagents={{id=4305,n=5}}} return s end
+    sod=1
     FA.ProfessionListLoaded=function() return true end
-    local ahead=FA.AheadRecipes(ForeverArtisanTailoringDB.chars, tl.SeedRecipes)
+    local ahead=FA.AheadRecipes(ForeverArtisanTailoringDB.chars, withSod)
+    assert(not ahead["Crimson Silk Shoulders"], "planning ahead skips Season of Discovery")
     for _,r in pairs(ahead) do assert(not FA.NotOnForever(r), "planning ahead skips "..r.name) end
     local rec={a={name="Old",group="SEASON OF DISCOVERY"},b={name="Linen",group="Cloth"}}
     assert(FA.DropNotOnForever(rec)==1 and rec.a==nil and rec.b, "saved ones dropped, the rest kept")
