@@ -1,13 +1,16 @@
--- Gathering spots from GatherMate2 (and its data pack), when the player has it.
--- GatherMate2 keeps every herb and ore node it knows by zone. We only read it: nothing is copied
--- into the addon or shipped. Herbalism's and Mining's "Pick next" use it for herbs and ores you
+-- Gathering spots from GatherMate2 (and its data pack), when the player has it, else from Questie's
+-- database (its herb and ore spawn points), when the player has Questie.
+-- Both keep every herb and ore node they know by zone. We only read them: nothing is copied
+-- into the addon or shipped. Herbalism's and Mining's "Pick next" use them for herbs and ores you
 -- haven't logged yourself, and a click on a row sets a waypoint to the nearest spot.
--- Off: /fa gather off. Anything unexpected and it quietly does nothing.
+-- Off: /fa gather off (GatherMate2), /fa contacts questie off (Questie). Anything unexpected and it
+-- quietly does nothing.
 --   FA.GatherStatus()                 "on" | "off" | "missing" | "incompatible"
 --   FA.GatherZones(kind, node)        { { m, z, n, here }, ... } best first, and the total; or nil
 --   FA.GatherZoneText(kind, node, k, short)  "Mulgore, The Barrens  +3 more" ("+3" when short), or nil
 --   FA.GatherTip(kind, node)          tooltip lines, or nil
 --   FA.GatherWaypoint(kind, node)     waypoint to the nearest known spot; true when one was set
+--   FA.GatherSource(kind, node)       "GatherMate2" or "Questie": where those spots come from, or nil
 -- kind is "herb" or "mine"; node is the English node name ("Peacebloom", "Copper Vein").
 local FA = ForeverArtisan
 local PREFIX = "|cffd4a94eForeverArtisan:|r "
@@ -50,6 +53,93 @@ local function Data(kind)
   local db = g and type(g.gmdbs) == "table" and g.gmdbs[TYPES[kind]]
   if type(db) ~= "table" then db = rawget(_G, SV[kind]) end
   return type(db) == "table" and db or nil
+end
+
+---------------------------------------------------------------- Questie's spawn points (second source)
+-- Questie's database has every herb and ore node's spawn points, by object ID but without names.
+-- These IDs were checked against our own Herbalism and Mining logs on live Forever (Nov 8, 2026):
+-- the logged spots sit on their spawn points. Ore spawn points are shared between ore types in the
+-- data (a spot can grow Silver or Gold), so they read as "can spawn here".
+local QIDS = {
+  herb = {
+    -- 656160 and 656161: Forever's small starter-zone nodes (Wilted Peacebloom, Stunted Silverleaf),
+    -- which share their spots
+    Peacebloom = { 1618, 656160, 656161 }, Silverleaf = { 1617, 656160, 656161 }, Earthroot = { 1619 },
+    Mageroyal = { 1620 }, Briarthorn = { 1621 }, Stranglekelp = { 2045 }, Bruiseweed = { 1622 },
+    ["Wild Steelbloom"] = { 1623 }, ["Grave Moss"] = { 1628 }, Kingsblood = { 1624 }, Liferoot = { 2041 },
+    Fadeleaf = { 2042 }, Goldthorn = { 2046 }, ["Khadgar's Whisker"] = { 2043 }, Wintersbite = { 2044 },
+    Firebloom = { 2866 }, ["Purple Lotus"] = { 142140 }, ["Arthas' Tears"] = { 142141 }, Sungrass = { 142142 },
+    Blindweed = { 142143 }, ["Ghost Mushroom"] = { 142144 }, Gromsblood = { 142145 }, ["Golden Sansam"] = { 176583 },
+    Dreamfoil = { 176584 }, ["Mountain Silversage"] = { 176586 }, Plaguebloom = { 176587 }, Icecap = { 176588 },
+    ["Black Lotus"] = { 176589 },
+  },
+  mine = {
+    -- the "Ooze Covered" nodes give the same ore
+    ["Copper Vein"] = { 1731 }, ["Tin Vein"] = { 1732 }, ["Incendicite Mineral Vein"] = { 1610 },
+    ["Silver Vein"] = { 1733, 73940 }, ["Lesser Bloodstone Deposit"] = { 2653 }, ["Iron Deposit"] = { 1735 },
+    ["Indurium Mineral Vein"] = { 19903 }, ["Gold Vein"] = { 1734, 73941 }, ["Mithril Deposit"] = { 2040, 123310 },
+    ["Truesilver Deposit"] = { 2047, 123309 }, ["Dark Iron Deposit"] = { 165658 },
+    ["Small Thorium Vein"] = { 324, 123848 }, ["Rich Thorium Vein"] = { 175404, 177388 },
+  },
+}
+FA.GATHER_QIDS = QIDS -- for the tests
+
+-- Questie clears the spawns of the common gathering nodes from what it shows (Peacebloom to
+-- Kingsblood, Copper to Thorium: "thousands of spawns that Questie never displays"), so the API
+-- returns nothing for them. QuestieDB still stores them in its own TOC metadata, in the format its
+-- contract covers (X-Object-<id>-4, base64 CBOR, "~N~" for N numbered parts). For those nodes we
+-- read that stored row the way QuestieDB does. Read only, and nothing Questie shows changes.
+local function StoredSpawns(oid)
+  local get = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+  local E = C_EncodingUtil
+  if not (get and E and E.DecodeBase64 and E.DeserializeCBOR) then return nil end
+  local key = "X-Object-" .. oid .. "-4"
+  local ok, v = pcall(get, "QuestieDB", key)
+  if not ok or type(v) ~= "string" or v == "" then return nil end
+  local n = tonumber(v:match("^~(%d+)~$"))
+  if n then
+    local parts = {}
+    for i = 1, n do
+      local okP, part = pcall(get, "QuestieDB", key .. "-" .. i)
+      if not okP or type(part) ~= "string" then return nil end
+      parts[i] = part
+    end
+    v = table.concat(parts)
+  end
+  local okB, bytes = pcall(E.DecodeBase64, v)
+  if not okB or type(bytes) ~= "string" then return nil end
+  local okC, t = pcall(E.DeserializeCBOR, bytes)
+  return okC and type(t) == "table" and t or nil
+end
+FA.GatherStoredSpawns = StoredSpawns -- for the tests
+
+local qSpots = {} -- ["herb:Peacebloom"] = { [uiMapID] = { { x, y }, ... } } or false
+local function QSpots(kind, node)
+  local ids = node and QIDS[kind] and QIDS[kind][node]
+  if not ids or not FA.QDB or (FA.QDB.Off and FA.QDB.Off()) then return nil end
+  local key = kind .. ":" .. node
+  if qSpots[key] ~= nil then return qSpots[key] or nil end
+  local L = FA.QDB.Lib and FA.QDB.Lib()
+  if not (L and L.Object and L.Object.spawns) then return nil end -- not ready yet: ask again later
+  local out, any = {}, false
+  for _, oid in ipairs(ids) do
+    local ok, sp = pcall(L.Object.spawns, oid)
+    if not (ok and type(sp) == "table" and next(sp)) then sp = StoredSpawns(oid); ok = sp ~= nil end
+    for area, pts in pairs(ok and type(sp) == "table" and sp or {}) do
+      local m = FA.QDB.UiMap(area)
+      if m and m > 0 then
+        for _, p in ipairs(type(pts) == "table" and pts or {}) do
+          local x, y = type(p) == "table" and tonumber(p[1]), type(p) == "table" and tonumber(p[2])
+          if x and y and x >= 0 and y >= 0 then
+            local t = out[m] or {}; out[m] = t
+            t[#t + 1] = { x, y }; any = true
+          end
+        end
+      end
+    end
+  end
+  qSpots[key] = any and out or false
+  return any and out or nil
 end
 
 function FA.GatherStatus()
@@ -120,11 +210,33 @@ local function Counts(kind)
   return counts
 end
 
+-- where a node's spots come from: GatherMate2 when it knows the node, else Questie
+-- (/fa gather off turns off both)
+local function Source(kind, node)
+  if not TYPES[kind] or Off() then return nil end
+  do
+    local id = NodeId(kind, node)
+    local counts = id and Counts(kind)
+    if counts and counts[id] then return "GatherMate2", counts[id], id end
+  end
+  local q = QSpots(kind, node)
+  if q then
+    local byMap = {}
+    for m, pts in pairs(q) do byMap[m] = #pts end
+    return "Questie", byMap, q
+  end
+end
+function FA.GatherSource(kind, node) return (Source(kind, node)) end
+
+-- spots from somewhere: GatherMate2 readable, or Questie installed and on (for the Settings row)
+function FA.GatherAvailable()
+  if Off() then return false end
+  if FA.GatherStatus() == "on" then return true end
+  return FA.QDB and FA.QDB.Lib and FA.QDB.Lib() ~= nil and not (FA.QDB.Off and FA.QDB.Off()) or false
+end
+
 function FA.GatherZones(kind, node)
-  if Off() or not TYPES[kind] then return nil end
-  local id = NodeId(kind, node)
-  local counts = id and Counts(kind)
-  local byMap = counts and counts[id]
+  local src, byMap = Source(kind, node)
   if not byMap then return nil end
   local here, list, total = Here(), {}, 0
   for m, n in pairs(byMap) do
@@ -141,7 +253,7 @@ function FA.GatherZones(kind, node)
     if a.n ~= b.n then return a.n > b.n end
     return a.z < b.z
   end)
-  return list, total
+  return list, total, src
 end
 
 function FA.GatherZoneText(kind, node, limit, short)
@@ -155,9 +267,9 @@ function FA.GatherZoneText(kind, node, limit, short)
 end
 
 function FA.GatherTip(kind, node)
-  local list, total = FA.GatherZones(kind, node)
+  local list, total, src = FA.GatherZones(kind, node)
   if not list then return nil end
-  local lines = { "|cffd4a94eKnown spots (from GatherMate2)|r" }
+  local lines = { "|cffd4a94eKnown spots (from " .. (src or "GatherMate2") .. ")|r" }
   for i = 1, math.min(5, #list) do
     local z = list[i]
     lines[#lines + 1] = ("%s: %d spot%s%s"):format(z.z, z.n, z.n == 1 and "" or "s", z.here and "  (you're here)" or "")
@@ -188,23 +300,28 @@ local function WorldPos(m, x, y)
   if wx and wy then return cont, wx, wy end
 end
 
+-- a node's spots on one map, as { {x, y}, ... }
+local function SpotsOn(kind, node, m)
+  local src, _, ref = Source(kind, node)
+  if src == "Questie" then return ref[m] or {} end
+  local out, db = {}, Data(kind)
+  for coord, nid in pairs(db and db[m] or {}) do
+    if nid == ref then local x, y = Decode(coord); out[#out + 1] = { x, y } end
+  end
+  return out
+end
+
 -- the nearest spot: on your map first, else across your continent, else the zone with the most spots
 local function Nearest(kind, node)
-  local id = NodeId(kind, node)
-  local db = id and Data(kind)
-  if not db then return nil end
   local list = FA.GatherZones(kind, node)
   if not list then return nil end
   local pm, px, py = PlayerPos()
   local best, bestD
   -- on your map: plain map distance
-  if pm and px and type(db[pm]) == "table" then
-    for coord, nid in pairs(db[pm]) do
-      if nid == id then
-        local x, y = Decode(coord)
-        local d = (x - px) ^ 2 + (y - py) ^ 2
-        if not bestD or d < bestD then best, bestD = { m = pm, x = x, y = y }, d end
-      end
+  if pm and px then
+    for _, p in ipairs(SpotsOn(kind, node, pm)) do
+      local d = (p[1] - px) ^ 2 + (p[2] - py) ^ 2
+      if not bestD or d < bestD then best, bestD = { m = pm, x = p[1], y = p[2] }, d end
     end
     if best then return best end
   end
@@ -213,33 +330,26 @@ local function Nearest(kind, node)
   if pm and px then pc, pwx, pwy = WorldPos(pm, px, py) end
   if pc then
     for _, z in ipairs(list) do
-      for coord, nid in pairs(db[z.m] or {}) do
-        if nid == id then
-          local x, y = Decode(coord)
-          local c, wx, wy = WorldPos(z.m, x, y)
-          if c ~= pc then break end -- the whole zone is on another continent
-          local d = (wx - pwx) ^ 2 + (wy - pwy) ^ 2
-          if not bestD or d < bestD then best, bestD = { m = z.m, x = x, y = y }, d end
-        end
+      for _, p in ipairs(SpotsOn(kind, node, z.m)) do
+        local c, wx, wy = WorldPos(z.m, p[1], p[2])
+        if c ~= pc then break end -- the whole zone is on another continent
+        local d = (wx - pwx) ^ 2 + (wy - pwy) ^ 2
+        if not bestD or d < bestD then best, bestD = { m = z.m, x = p[1], y = p[2] }, d end
       end
     end
     if best then return best end
   end
   -- somewhere else: the zone with the most spots
   local top = list[1]
-  for coord, nid in pairs(db[top.m] or {}) do
-    if nid == id then
-      local x, y = Decode(coord)
-      return { m = top.m, x = x, y = y, far = true }
-    end
-  end
+  local p = SpotsOn(kind, node, top.m)[1]
+  if p then return { m = top.m, x = p[1], y = p[2], far = true } end
 end
 
 function FA.GatherWaypoint(kind, node)
   if Off() then return false end
   local spot = Nearest(kind, node)
   if not spot then
-    print(PREFIX .. "GatherMate2 doesn't know any " .. (node or "?") .. " spots yet.")
+    print(PREFIX .. "no known " .. (node or "?") .. " spots yet.")
     return false
   end
   local z = MapName(spot.m) or "?"
@@ -269,4 +379,5 @@ end
 
 function FA.GatherReset()
   for k in pairs(cache) do cache[k] = nil end
+  for k in pairs(qSpots) do qSpots[k] = nil end
 end

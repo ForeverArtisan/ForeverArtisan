@@ -516,7 +516,7 @@ local function AddNearest(p)
   b.Sync()
   FA.UI.Tip(b, function()
     GameTooltip:AddLine("Nearest trainer")
-    GameTooltip:AddLine("Pick your class or a profession for a waypoint to the closest trainer you've met or passed.", 1, 1, 1, true)
+    GameTooltip:AddLine("Pick your class or a profession for a waypoint to the closest trainer: ones you've met or passed, the built-in list, and Questie's when it's installed.", 1, 1, 1, true)
   end)
   p.nearest = b
 end

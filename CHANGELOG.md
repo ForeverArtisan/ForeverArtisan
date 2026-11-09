@@ -1,5 +1,11 @@
 # ForeverArtisan changelog
 
+## 0.9.37 (2026-11-08)
+- Added: with Questie installed, Herbalism and Mining show where herbs and ores spawn even if you haven't gathered them yet, with a waypoint to the nearest spot. GatherMate2 still comes first when you have it.
+- Added: with Questie installed, Nearest trainer finds your class trainers too, even ones you haven't met.
+- Changed: trainers and vendors on another continent are listed with your faction's capital cities first, then by zone.
+- Changed: /fafish derby says whether the time comes from the in-game calendar or is an estimate.
+
 ## 0.9.36 (2026-11-08)
 - Added: with Questie installed, vendors you haven't met yet now answer "where do I buy this" for profession materials. Shopping lists, waypoints, item tooltips and Trade Contacts search point to the nearest one, so Mild Spices in Undercity points to an Undercity vendor, not one across the ocean. Vendors you've met still come first nearby, with their prices.
 - Fixed: clicking a material on a shopping list now sets a waypoint to the nearest vendor, not the cheapest one you'd met anywhere.

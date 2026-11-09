@@ -2255,7 +2255,7 @@ do
   local reads=0
   local oldIds=LibQuestieDB.Npc.GetAllIds
   LibQuestieDB.Npc.GetAllIds=function() reads=reads+1 return oldIds() end
-  cns.QuestieReset(); db.questieCache={version="?",contract=3,list={{id=9001,n="Grumbo",t="Journeyman Tailor",prof="Tailoring",f="Horde",m=1454,x=60,y=50}}}
+  cns.QuestieReset(); db.questieCache={version="?",contract=3,schema=2,list={{id=9001,n="Grumbo",t="Journeyman Tailor",prof="Tailoring",f="Horde",m=1454,x=60,y=50}}}
   cns.BuildQuestieTrainers()
   assert(reads==0, "cached list used")
   cns.QuestieReset(); db.questieCache=nil; cns.BuildQuestieTrainers()
@@ -2401,6 +2401,40 @@ do
   db.entries["vendor:3184"]=nil; cns.QuestieVendorsReset(); cns.OnContactsChanged()
   C_Map.GetBestMapForUnit, C_Map.GetPlayerMapPosition, C_Map.GetWorldPosFromMapPos = oBest, oPos, oWorld
   print("0.9.36 questie vendors ok")
+  -- 0.9.37: /fafish derby says where the time came from, like the Derby tab
+  do
+    local fns2=loadedFrames["ForeverArtisan_Fishing"].ns
+    local d=fns2.derby
+    local oS, oE, oSrc = d.start, d.stop, d.source
+    d.start, d.stop, d.source = time()+3600*30, time()+3600*32, "calendar"
+    local oR=fns2.RefreshDerby; fns2.RefreshDerby=function() return d end
+    local n0=#chat; run("FAFISH","derby")
+    local line=tostring(chat[#chat] or "")
+    assert(#chat>n0 and line:find("Next derby:",1,true) and line:find("from the in-game calendar",1,true), "derby source: calendar: "..line)
+    d.source="schedule"; run("FAFISH","derby")
+    line=tostring(chat[#chat] or "")
+    assert(line:find("estimated",1,true) and line:find("in-game calendar yet",1,true), "derby source: estimate: "..line)
+    fns2.RefreshDerby=oR; d.start, d.stop, d.source = oS, oE, oSrc
+  end
+  -- 0.9.37: class trainers from Questie, your class only; an older saved list is read again once
+  npcs[9010]={name="Orgy Druid",sub="Druid Trainer",flags=19,fr="H",sp={[1637]={{40,40}}}}
+  npcs[9011]={name="Orgy Warrior",sub="Warrior Trainer",flags=19,fr="H",sp={[1637]={{41,41}}}}
+  db.questieCache={version="?",contract=3,list={}} -- no schema: saved before class trainers
+  cns.QuestieReset(); db.questieCache={version="?",contract=3,list={}}; cns.BuildQuestieTrainers(); cns.OnContactsChanged()
+  assert(db.questieCache.schema==2, "old saved list read again")
+  local cl={}
+  for _, h in ipairs(cns.NearestTrainerHits("class")) do cl[h.npc.n]=h.npc end
+  assert(cl["Orgy Druid"] and cl["Orgy Druid"].questie, "Questie class trainer for your class")
+  local anyWar=false
+  for _, npc in ipairs(cns.Contacts()) do if npc.n=="Orgy Warrior" then anyWar=true end end
+  assert(not anyWar, "other classes' trainers left out")
+  -- other continent: your capitals first, and a city's subzones sort with it
+  local hs={ {npc={n="A",z="Hillsbrad Foothills",m=999,x=1,y=1,age=0}}, {npc={n="B",z="Undercity",s="Magic Quarter",m=998,x=1,y=1,age=0}},
+             {npc={n="C",z="Undercity",m=997,x=1,y=1,age=0}}, {npc={n="D",z="Arathi Highlands",m=996,x=1,y=1,age=0}} }
+  cns.SortHits(hs)
+  local order=hs[1].npc.n..hs[2].npc.n..hs[3].npc.n..hs[4].npc.n
+  assert(order=="BCDA" or order=="CBDA", "capitals first, then zones: "..order)
+  npcs[9010]=nil; npcs[9011]=nil; cns.QuestieReset(); db.questieCache=nil; cns.BuildQuestieTrainers(); cns.OnContactsChanged()
   -- a QuestieDB we can't read: the feature stays off, no errors
   LibQuestieDB.RequireContract=function() return false end
   cns.QuestieReset(); db.questieCache=nil; cns.BuildQuestieTrainers(); cns.OnContactsChanged()
@@ -2533,6 +2567,47 @@ do
   assert(FA.GatherStatus()=="incompatible" and FA.GatherZones("herb","Peacebloom")==nil, "a GatherMate2 we can't read: nothing")
   GatherMate2=nil; FA.GatherReset()
   assert(FA.GatherStatus()=="missing", "gone")
+  -- 0.9.37: no GatherMate2, Questie installed: its herb and ore spawn points
+  local oLQ=rawget(_G,"LibQuestieDB")
+  local spawns={ [1618]={[405]={{20,71},{50,50}}}, [656160]={[405]={{22,70}}}, [1731]={[17]={{60,60}}}, [2041]={[405]={{-1,-1}}} }
+  LibQuestieDB={ contractVersion=3, RequireContract=function(v) return v>=1 and v<=3 end,
+    Object={ spawns=function(id) return spawns[id] end },
+    Support={ Get=function() return { private={ areaIdToUiMapId="return {[405]=1443,[17]=1413}" } } end } }
+  FA.QDB.Reset(); FA.GatherReset()
+  C_Map.GetBestMapForUnit=function() return 1443 end
+  C_Map.GetPlayerMapPosition=function() return {GetXY=function() return .21,.70 end} end
+  local ql,qt,qsrc=FA.GatherZones("herb","Peacebloom")
+  assert(ql and qsrc=="Questie" and FA.GatherSource("herb","Peacebloom")=="Questie" and qt==3 and ql[1].m==1443 and ql[1].here, "Questie herb spots, with the small node")
+  assert(FA.GatherTip("herb","Peacebloom"):find("from Questie",1,true), "tooltip names Questie")
+  assert(FA.GatherZones("mine","Copper Vein") and FA.GatherZones("mine","Copper Vein")[1].m==1413, "Questie ore spots")
+  assert(FA.GatherZones("herb","Liferoot")==nil, "no real spot: nothing")
+  assert(FA.GatherZones("herb","Not A Herb")==nil, "unknown node: nothing")
+  local qgot; local oldV2=FA.Vendors; FA.Vendors={waypoint=function(n) qgot=n end}
+  assert(FA.GatherWaypoint("herb","Peacebloom") and qgot.m==1443 and math.abs(qgot.x-22)<0.01 and math.abs(qgot.y-70)<0.01, "nearest Questie spot")
+  FA.Vendors=oldV2
+  run("FOREVERARTISAN","gather off")
+  assert(FA.GatherZones("herb","Peacebloom")==nil, "gather off: Questie spots off too")
+  run("FOREVERARTISAN","gather on")
+  ForeverArtisanContactsDB.settings.questieOff=true; FA.GatherReset()
+  assert(FA.GatherZones("herb","Peacebloom")==nil, "questie off: no Questie spots")
+  ForeverArtisanContactsDB.settings.questieOff=nil; FA.GatherReset()
+  -- Questie clears the common nodes' spawns (Bruiseweed): read QuestieDB's stored row instead
+  local oMeta, oEnc = C_AddOns and C_AddOns.GetAddOnMetadata, rawget(_G,"C_EncodingUtil")
+  C_AddOns = C_AddOns or {}
+  local store={ ["X-Object-1622-4"]="~2~", ["X-Object-1622-4-1"]="BRUISE", ["X-Object-1622-4-2"]="WEED" }
+  C_AddOns.GetAddOnMetadata=function(addon,key) if addon=="QuestieDB" then return store[key] end return oMeta and oMeta(addon,key) end
+  C_EncodingUtil={ DecodeBase64=function(v) return "bytes:"..v end,
+    DeserializeCBOR=function(b) if b=="bytes:BRUISEWEED" then return {[405]={{40,40},{41,41}}} end end }
+  FA.GatherReset()
+  local bl,bt,bs=FA.GatherZones("herb","Bruiseweed")
+  assert(bl and bs=="Questie" and bt==2 and bl[1].m==1443, "cleared node read from QuestieDB's stored row")
+  store["X-Object-1622-4-2"]=nil; FA.GatherReset()
+  assert(FA.GatherZones("herb","Bruiseweed")==nil, "a missing part: nothing, no error")
+  C_AddOns.GetAddOnMetadata=oMeta; C_EncodingUtil=oEnc; FA.GatherReset()
+  -- every node in Herbalism and Mining has its Questie IDs
+  for _, h in ipairs(loadedFrames["ForeverArtisan_Herbalism"].ns.HERBS) do assert(FA.GATHER_QIDS.herb[h[2]], "Questie IDs for "..h[2]) end
+  for _, n in ipairs(loadedFrames["ForeverArtisan_Mining"].ns.NODES) do assert(FA.GATHER_QIDS.mine[n[2]], "Questie IDs for "..n[2]) end
+  LibQuestieDB=oLQ; FA.QDB.Reset(); FA.GatherReset()
   C_Map.GetBestMapForUnit, C_Map.GetPlayerMapPosition=oldBest, oldPos
   print("0.9.19 gather ok")
 end

@@ -535,9 +535,9 @@ local function buildModulesTab(p)
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("Questie" .. ((st == "missing") and " (not installed)" or (st == "off") and " (installed, turned off)"
       or (st == "loading" or st == "reading") and " (installed, still loading its data)" or " (installed)"), 1, 0.82, 0)
-    GameTooltip:AddLine((st == "on") and (n .. " profession trainers for your faction from its database, in search and Nearest trainer. Click to turn off.")
-      or (st == "off") and "Click to show every profession trainer from its database again."
-      or (st == "missing") and "Every profession trainer in the game in search and Nearest trainer, not just the ones you've met."
+    GameTooltip:AddLine((st == "on") and (n .. " trainers for your faction from its database, in search and Nearest trainer, plus vendors for materials and herb and ore spots. Click to turn off.")
+      or (st == "off") and "Click to use its database again: trainers, vendors for materials, and herb and ore spots."
+      or (st == "missing") and "Every trainer in the game in search and Nearest trainer, vendors for materials you haven't met, and where herbs and ores spawn."
       or "Reading its database...", 1, 1, 1, true)
     if st ~= "missing" and st ~= "off" then
       GameTooltip:AddLine("Also: who sells, drops or gives each recipe and material, in Trade Contacts search, recipe books and shopping lists, and the vendor price to compare in recipe watch.", 1, 1, 1, true)
@@ -716,10 +716,11 @@ local SETTINGS = {
   { key = "gather", label = "Herb and ore spots", desc = "Herbalism and Mining show where to find what you haven't logged.",
     get = function()
       local st = FA.GatherStatus and FA.GatherStatus() or "missing"
-      if st == "missing" or st == "incompatible" then return nil end
-      return st ~= "off"
+      local questie = FA.QDB and FA.QDB.Lib and FA.QDB.Lib() ~= nil
+      if (st == "missing" or st == "incompatible") and not questie then return nil end
+      return not (ForeverArtisanSettings and ForeverArtisanSettings.gatherOff)
     end,
-    need = function() return "Needs GatherMate2 and its data pack." end,
+    need = function() return "Needs Questie, or GatherMate2 and its data pack." end,
     set = function(on) ForeverArtisanSettings.gatherOff = (not on) or nil; if FA.GatherReset then FA.GatherReset() end end },
   { head = "Names in town" },
   { key = "titles", label = "Job titles under NPC names", desc = "\"Cooking Trainer\", \"Trade Supplies\" and so on, in towns.",
@@ -1615,6 +1616,7 @@ NEWS = {
   { "0.9.34", "Launch fixes: no more server spam from Season of Discovery recipes (now hidden), small herb nodes show their color, and a Settings box for disenchant tooltips." },
   { "0.9.35", "Fishing pool and rare catch alerts, session gold per hour, day and night fish, Where to sell on every item tooltip, and recipe lists from the live game." },
   { "0.9.36", "With Questie, the nearest vendor for any profession material, even ones you haven't met. Shopping list waypoints go to the nearest vendor, and a tidier Market tab." },
+  { "0.9.37", "With Questie, where every herb and ore spawns, with a waypoint to the nearest one, and your class trainers in Nearest trainer." },
 }
 
 local function verNum(v)
@@ -1811,7 +1813,7 @@ local function help()
   local hasS = type(rawget(_G, "Syndicator")) == "table"
   local hasG = FA.GatherStatus and FA.GatherStatus() ~= "missing"
   print("  Works best with: Auctionator (" .. (hasA and "installed" or "not installed") .. ") for current prices, Questie ("
-    .. (hasQ and "installed" or "not installed") .. ") for trainers and recipe sources, Syndicator ("
+    .. (hasQ and "installed" or "not installed") .. ") for trainers, vendors, recipe sources and herb and ore spots, Syndicator ("
     .. (hasS and "installed" or "not installed") .. ") for what your alts hold, GatherMate2 ("
     .. (hasG and "installed" or "not installed") .. ") for herb and ore spots, TomTom ("
     .. (type(rawget(_G, "TomTom")) == "table" and "installed" or "not installed") .. ") for waypoint arrows. All optional.")

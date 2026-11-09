@@ -1159,7 +1159,10 @@ SlashCmdList.FAFISH = function(msg)
   elseif cmd == "derby" and ns.DerbyStatus then
     local st, sec = ns.DerbyStatus()
     say(st == "live" and ("Derby is LIVE, ends in " .. ns.DerbyClock(sec) .. ".")
-      or ("Next derby: " .. ns.DerbyWhen() .. ", in " .. ns.DerbyClock(sec) .. "."))
+      -- where the time came from, like the Derby tab says
+      or ("Next derby: " .. ns.DerbyWhen() .. ", in " .. ns.DerbyClock(sec) .. ", "
+        .. ((ns.derby and ns.derby.source == "calendar") and "from the in-game calendar."
+          or "estimated (Sunday 2 PM server time). It isn't in the in-game calendar yet.")))
   elseif cmd == "padsnap" then
     -- hidden: save every controller-related setting, addon and frame, to find what the
     -- "Enable Gamepad UI (Alpha)" checkbox changes. Run once with it on and once off, then /reload.

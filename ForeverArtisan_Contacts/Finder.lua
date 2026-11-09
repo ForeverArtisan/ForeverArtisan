@@ -130,7 +130,8 @@ local function Rebuild()
   if fromQuestie then
     local mapName = {}
     for _, q in ipairs(fromQuestie) do
-      if not full[q.id] and not full[q.n] and not current[q.id] and not current[q.n] and not seeded[q.id] and not seeded[q.n] and ns.SeedFits(q) then
+      if not full[q.id] and not full[q.n] and not current[q.id] and not current[q.n] and not seeded[q.id] and not seeded[q.n]
+         and ns.SeedFits(q) and ns.MyClassFits(q) then
         if mapName[q.m] == nil then
           local ok, info = pcall(C_Map.GetMapInfo, q.m)
           mapName[q.m] = ok and info and info.name or false
@@ -145,6 +146,16 @@ local function Rebuild()
   for k in pairs(current) do metKeys[k] = true end
   table.sort(npcs, function(a, b) return (a.n or "") < (b.n or "") end)
   dirty = false
+end
+
+-- a Questie class trainer fits only your own class (a mage isn't shown warrior trainers)
+function ns.MyClassFits(q)
+  local cls = type(q.prof) == "string" and q.prof:match("^class:(.+)$")
+  if not cls then return true end
+  local mine = UnitClass and select(2, UnitClass("player"))
+  local name = UnitClass and UnitClass("player")
+  if not mine and not name then return true end
+  return (type(name) == "string" and name:lower() == cls) or (type(mine) == "string" and mine:lower() == cls)
 end
 
 -- a seed fits the player's faction (neutral towns fit both)
@@ -203,6 +214,11 @@ local function worldPos(m, x, y)
   if wx and wy then return cont, wx, wy end
 end
 
+local CAPITALS = {
+  Horde = { Orgrimmar = true, Undercity = true, ["Thunder Bluff"] = true },
+  Alliance = { ["Stormwind City"] = true, Ironforge = true, Darnassus = true },
+}
+
 -- Nearest first: across zones on your continent when the game can convert map positions,
 -- otherwise on your current map. Then other continents, by town. NPCs within about the same
 -- distance (same 50-yard band) put the ones you've met ahead of seen-only ones.
@@ -224,8 +240,20 @@ local function sortHits(hits)
     end
     h.band = math.floor(h.dist / 50)
   end
+  -- other continents (no distance): your faction's capitals first, where zeppelins and boats land,
+  -- then by zone, so "Magic Quarter" and "Undercity" sort together
+  local fac = UnitFactionGroup and UnitFactionGroup("player")
+  local caps = CAPITALS[fac] or {}
+  for _, h in ipairs(hits) do
+    local z = h.npc.z or h.npc.s or ""
+    h.zone, h.cap = z, caps[z] and 0 or 1
+  end
   table.sort(hits, function(a, b)
     if a.band ~= b.band then return a.band < b.band end
+    if a.dist >= 1e9 then
+      if a.cap ~= b.cap then return a.cap < b.cap end
+      if a.zone ~= b.zone then return a.zone < b.zone end
+    end
     if (a.seen or false) ~= (b.seen or false) then return not a.seen end
     if (a.npc.age or 0) ~= (b.npc.age or 0) then return (a.npc.age or 0) < (b.npc.age or 0) end
     if a.dist ~= b.dist then return a.dist < b.dist end

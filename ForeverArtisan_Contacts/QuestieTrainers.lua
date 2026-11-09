@@ -22,6 +22,7 @@ local PROF_WORDS = {
 local NOT_TRAINER = { "suppl", "vendor", "merchant", "goods", "wares", "reagent", "quartermaster", "import", "fabric", "tackle" }
 
 local state = { list = nil, status = "none", building = false }
+local SCHEMA = 2 -- 2: class trainers too (0.9.37); an older saved list is read again once
 
 local function Lib() return FA.QDB and FA.QDB.Lib() end
 
@@ -51,7 +52,12 @@ local function Read(L, id)
   local okT, title = pcall(L.Npc.subName, id)
   -- new Forever NPCs can lack the flag; a clear trainer title is enough then
   if not okT then return nil end
+  -- profession trainers, and class trainers ("Mage Trainer") as "class:mage"
   local prof = ProfFor(title)
+  if not prof then
+    local cls = ns.ClassTrainer and ns.ClassTrainer(title)
+    if cls then prof = "class:" .. cls end
+  end
   if not prof then return nil end
   if okF and flags and not hasTrainerFlag(flags) then return nil end
   local _, name = pcall(L.Npc.name, id)
@@ -69,15 +75,18 @@ local function Read(L, id)
 end
 
 -- how many of them are for this player's faction (neutral towns count for both)
+-- (class trainers count only for your own class)
 local function Fitting(list)
   local n = 0
-  for _, q in ipairs(list or {}) do if not ns.SeedFits or ns.SeedFits(q) then n = n + 1 end end
+  for _, q in ipairs(list or {}) do
+    if (not ns.SeedFits or ns.SeedFits(q)) and (not ns.MyClassFits or ns.MyClassFits(q)) then n = n + 1 end
+  end
   return n
 end
 
 local function Finish(list, L)
   local db = ForeverArtisanContactsDB
-  if db then db.questieCache = { version = Version(), contract = L.contractVersion, list = list } end
+  if db then db.questieCache = { version = Version(), contract = L.contractVersion, list = list, schema = SCHEMA } end
   state.list, state.status, state.building = list, "ready", false
   -- we read every NPC once; let QuestieDB drop what it cached for us
   if type(L.InvalidateCache) == "function" then pcall(L.InvalidateCache, "Npc") end
@@ -99,7 +108,8 @@ function ns.BuildQuestieTrainers()
   local L = Lib()
   if not L then state.status = rawget(_G, "LibQuestieDB") and "incompatible" or "missing"; return end
   local cache = ForeverArtisanContactsDB and ForeverArtisanContactsDB.questieCache
-  if cache and cache.version == Version() and cache.contract == L.contractVersion and type(cache.list) == "table" then
+  if cache and cache.version == Version() and cache.contract == L.contractVersion and type(cache.list) == "table"
+     and cache.schema == SCHEMA then
     state.list, state.status = cache.list, "ready"
     if ns.OnContactsChanged then ns.OnContactsChanged() end
     return

@@ -81,7 +81,7 @@ local function RefreshMainPage(p)
       local now = ns.PickNext()
       local top = now[1]
       p.color:SetText(top and ("Best skill-ups right now: " .. ns.COLOR_CODE[top.color] .. top.name .. "|r"
-        .. ((top.where or top.gm) and (GRAY .. "  (" .. (top.where or (top.gm .. ", from GatherMate2")) .. ")|r") or "")) or "")
+        .. ((top.where or top.gm) and (GRAY .. "  (" .. (top.where or (top.gm .. ", from " .. (ForeverArtisan.GatherSource and ForeverArtisan.GatherSource("mine", top.name) or "GatherMate2"))) .. ")|r") or "")) or "")
     end
   else
     p.skill:SetText("Mining")
@@ -124,7 +124,7 @@ local function BuildProgressPage(p)
   Header(p, -54, "Mine next")
   Text(p, "GameFontDisableSmall", "TOPLEFT", 90, -56):SetText("nodes that still give skill-ups")
   p.nextRows = MakeRows(p, 6, -72, true)
-  -- a click sets a waypoint to the nearest spot GatherMate2 knows (when it's installed)
+  -- a click sets a waypoint to the nearest spot GatherMate2 or Questie knows (when one is installed)
   for _, r in ipairs(p.nextRows) do
     r:SetScript("OnClick", function(self)
       local d = self.data
@@ -172,7 +172,7 @@ local function RefreshProgressPage(p)
   for _, h in ipairs(now) do
     data[#data + 1] = { id = h.id, icon = Icon(h.id),
       left = ns.COLOR_CODE[h.color] .. h.name .. "|r  " .. GRAY .. h.req .. "|r",
-      right = h.where or (h.gm and (h.gm .. GRAY .. "  (GatherMate2)|r")) or (GRAY .. "not logged yet|r"),
+      right = h.where or (h.gm and (h.gm .. GRAY .. "  (" .. (ForeverArtisan.GatherSource and ForeverArtisan.GatherSource("mine", h.name) or "GatherMate2") .. ")|r")) or (GRAY .. "not logged yet|r"),
       node = h.name, tipFn = FA.GatherTip and function() return (FA.GatherTip("mine", h.name)) end,
       act = "Goal", onAct = function() ns.AddGoal(h.id, Amount(), ns.ItemName(h.id)) end }
   end
@@ -272,14 +272,14 @@ local function GuideData()
     local where = ns.NodeZoneText(h[2])
     data[#data + 1] = { id = h[1], icon = Icon(h[1]), name = ns.ItemName(h[1]),
       left = ns.COLOR_CODE[c] .. h[2] .. "|r",
-      -- not logged yet: the zones GatherMate2 knows, when it's installed
+      -- not logged yet: the zones GatherMate2 or Questie knows, when one is installed
       gm = not where and FA.GatherZoneText and FA.GatherZoneText("mine", h[2], 1, true) or nil,
       node = h[2],
       right = GRAY .. h[3] .. "|r   " .. (where or (GRAY .. "not logged|r")),
       tip = "Right-click: add its ore as a goal." }
     local d = data[#data]
     if d.gm then
-      d.right = GRAY .. h[3] .. "|r   " .. d.gm .. GRAY .. "  (GatherMate2)|r"
+      d.right = GRAY .. h[3] .. "|r   " .. d.gm .. GRAY .. "  (" .. (ForeverArtisan.GatherSource and ForeverArtisan.GatherSource("mine", d.node) or "GatherMate2") .. ")|r"
       d.tip = nil
       d.tipFn = function() return (FA.GatherTip("mine", d.node) or "") .. "\nRight-click: add its ore as a goal." end
     end
