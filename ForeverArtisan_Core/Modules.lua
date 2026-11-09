@@ -1618,6 +1618,7 @@ NEWS = {
   { "0.9.36", "With Questie, the nearest vendor for any profession material, even ones you haven't met. Shopping list waypoints go to the nearest vendor, and a tidier Market tab." },
   { "0.9.37", "With Questie, where every herb and ore spawns, with a waypoint to the nearest one, and your class trainers in Nearest trainer." },
   { "0.9.38", "Shopping lists no longer count your reagent bag as bank. Open your bank once after updating." },
+  { "0.9.39", "The goals list updates what you still need as you loot and craft, with the profession window closed." },
 }
 
 local function verNum(v)

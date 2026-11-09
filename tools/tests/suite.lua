@@ -3596,6 +3596,48 @@ do
   T.Lines()
   assert(not ForeverArtisanSettings.track[ForeverArtisan.CharKey(ForeverArtisanSettings.track)].hidden, "new goal unhides")
   T.Goals("Testing2", nil)
+  -- 0.9.39: a material made from another (bolts from cloth) updates with the window closed
+  do
+    local gf for _,f in ipairs(frames) do if f.scripts.OnUpdate and f.scripts.OnEvent and not rawget(f,"_name") then
+      local src=debug.getinfo(f.scripts.OnUpdate,"S").source if src:find("Tracker.lua",1,true) then gf=f end end end
+    assert(gf, "tracker event frame")
+    local function tick() gf.scripts.OnUpdate(gf, 1.1) end
+    -- a stand-in plan: B is made from 3 A each, so A's need follows how many B you hold
+    local held={}
+    T.Planner("Testing3", function()
+      local bNeed=10 local bMiss=math.max(0,bNeed-(held.b or 0))
+      return {{id=91001,name="B",need=bNeed,have=held.b or 0},{id=91002,name="A",need=bMiss*3,have=0}} end)
+    T.TrackAll("Testing3", {{id=91001,name="B",need=10,have=0},{id=91002,name="A",need=30,have=0}})
+    local function want(id) for _,g in ipairs(T.Lines()) do for _,l in ipairs(g.lines) do if l.id==id then return l.want end end end end
+    assert(want(91002)==30, "A starts at 30")
+    held.b=2 COUNTS[91001]=2
+    fire("BAG_UPDATE_DELAYED") tick()
+    assert(want(91002)==24, "A follows B: "..tostring(want(91002)))
+    -- in combat: waits for the end of it
+    held.b=4 COUNTS[91001]=4
+    local realIC=InCombatLockdown InCombatLockdown=function() return true end
+    fire("BAG_UPDATE_DELAYED") tick()
+    assert(want(91002)==24, "no replan in combat")
+    InCombatLockdown=function() return false end tick()
+    assert(want(91002)==18, "replans after combat: "..tostring(want(91002)))
+    InCombatLockdown=realIC
+    -- a planner that can't plan yet (nil) leaves the list alone
+    T.Planner("Testing3", function() return nil end)
+    fire("BAG_UPDATE_DELAYED") tick()
+    assert(want(91002)==18 and T.IsTracked("Testing3", 91001), "nil plan keeps the list")
+    T.Planner("Testing3", nil) T.UntrackAll("Testing3") COUNTS[91001]=nil
+    -- every crafting module hands the tracker a plan
+    for _,m in ipairs({"Alchemy","Blacksmithing","Cooking","Enchanting","Engineering","First Aid","Leatherworking","Tailoring"}) do
+      local fn=T._planners and T._planners[m] assert(fn, "planner for "..m)
+      local ok,list=pcall(fn) assert(ok, m.." planner: "..tostring(list))
+    end
+    -- the real thing: Tailoring tracked, bags change, amounts follow the plan
+    T.TrackAll("Tailoring", shopping)
+    fire("BAG_UPDATE_DELAYED") tick()
+    assert(T.AllOn("Tailoring"), "still tracked after a replan")
+    T.UntrackAll("Tailoring")
+    print("goals replan ok")
+  end
   -- /fa goals
   for _,a in ipairs({"","lock","unlock","reset","clear",""}) do run("FOREVERARTISAN","goals "..a) end
   for k in pairs(COUNTS) do COUNTS[k]=nil end

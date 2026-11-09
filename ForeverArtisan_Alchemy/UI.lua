@@ -815,6 +815,19 @@ end
 function ns.OnChange()
   if f and f:IsShown() and REFRESH[view.tab] then REFRESH[view.tab](pages[view.tab]) end
 end
+-- the on-screen goals list asks for a fresh shopping list when your bags change, so a material
+-- made from another one (Light Leather from scraps, bolts from cloth) updates with the window closed
+if FA.Track and FA.Track.Planner then
+  FA.Track.Planner("Alchemy", function()
+    if ns.Knows() and not ns.HasRecipes() then return nil end
+    local i, ahead = ns.SkillInfo(), not ns.Knows()
+    local rank = i.rank or 1
+    local default = ahead and 75 or math.min((i.max and i.max > rank) and i.max or (rank + 25), 300)
+    local _, shopping, _, _, _, _, aheadInfo = ns.Plan(view.target or default)
+    if aheadInfo and aheadInfo.none then return nil end
+    return shopping
+  end)
+end
 -- new Auction House prices refresh the shopping list while it's open
 if FA.PriceWatchers then
   table.insert(FA.PriceWatchers, function() if view.tab == "progress" or view.tab == "best" then ns.OnChange() end end)

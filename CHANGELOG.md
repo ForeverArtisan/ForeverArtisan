@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.39 (2026-11-08)
+- Fixed: the on-screen goals list now updates what you still need when you loot, buy or craft a material that goes into another one (like Light Leather and Ruined Leather Scraps). Before, the need only refreshed when you reopened the profession window. Thanks to the player who reported it.
+
 ## 0.9.38 (2026-11-08)
 - Fixed: shopping lists counted items in your reagent bag as "in bank" too, so they showed more than you had. Open your bank once after updating and the bank numbers are right again. Thanks to the player who reported it.
 

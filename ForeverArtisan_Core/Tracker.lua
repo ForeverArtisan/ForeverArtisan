@@ -8,6 +8,7 @@
 --   FA.Track.TrackAll(prof, list)         track every item on the list; FA.Track.UntrackAll(prof)
 --   FA.Track.AllOn(prof)                  true while Track all is on for that profession
 --   FA.Track.Sync(prof, list)             the plan changed: amounts follow it, items it dropped go
+--   FA.Track.Planner(prof, fn)            fn() = the module's shopping list now; tracked lists follow it
 --   FA.Track.Goals(prof, rowsFn, knowsFn) a gathering module's goals (ns.GoalRows) show here too, on
 --                                         characters that have the profession (knowsFn)
 --   FA.Track.Lines()                      { { title, lines = { { id, name, have, want, note, done } } } }
@@ -368,13 +369,41 @@ function T.Slash(rest)
   end
 end
 
+---------------------------------------------------------------- fresh amounts
+-- a crafting module's shopping list for its current target (nil when it can't plan yet). When your
+-- bags, bank or skill change, tracked lists are planned again, so what one material still needs
+-- follows what you hold of another (scraps for Light Leather, cloth for bolts), window open or not
+local planners = {}
+function T.Planner(prof, fn) planners[prof] = fn end
+T._planners = planners -- for the test suite
+local dirty = true
+function T.Replan()
+  dirty = false
+  local s = S()
+  for prof, fn in pairs(planners) do
+    if s.items[prof] or s.all[prof] then
+      local ok, list = pcall(fn)
+      if ok and type(list) == "table" then T.Sync(prof, list) end
+    end
+  end
+end
+
 local ev = CreateFrame("Frame")
-ev:RegisterEvent("PLAYER_ENTERING_WORLD")
-ev:SetScript("OnEvent", function() Refresh() end)
+for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "BAG_UPDATE_DELAYED", "PLAYERBANKSLOTS_CHANGED",
+  "BANKFRAME_CLOSED", "SKILL_LINES_CHANGED", "CHAT_MSG_SKILL" }) do pcall(ev.RegisterEvent, ev, e) end
+ev:SetScript("OnEvent", function(_, e)
+  dirty = true
+  if e == "PLAYER_ENTERING_WORLD" then Refresh() end
+end)
 -- counts change as you loot, buy and bank, and gathering goals count on their own: a light redraw
--- every second covers all of it (also while the list is hidden, so a new goal can bring it back)
+-- every second covers all of it (also while the list is hidden, so a new goal can bring it back).
+-- Planning again waits for that tick (at most once a second) and for the end of combat.
 local acc = 0
 ev:SetScript("OnUpdate", function(_, el)
   acc = acc + (el or 0)
-  if acc >= 1 then acc = 0; Refresh() end
+  if acc >= 1 then
+    acc = 0
+    if dirty and next(planners) and not (InCombatLockdown and InCombatLockdown()) then T.Replan() end
+    Refresh()
+  end
 end)
