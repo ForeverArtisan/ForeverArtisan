@@ -1617,6 +1617,7 @@ NEWS = {
   { "0.9.35", "Fishing pool and rare catch alerts, session gold per hour, day and night fish, Where to sell on every item tooltip, and recipe lists from the live game." },
   { "0.9.36", "With Questie, the nearest vendor for any profession material, even ones you haven't met. Shopping list waypoints go to the nearest vendor, and a tidier Market tab." },
   { "0.9.37", "With Questie, where every herb and ore spawns, with a waypoint to the nearest one, and your class trainers in Nearest trainer." },
+  { "0.9.38", "Shopping lists no longer count your reagent bag as bank. Open your bank once after updating." },
 }
 
 local function verNum(v)

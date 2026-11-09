@@ -3271,6 +3271,27 @@ do
   FA._SetBankOpen(true); FA.ReadBank(); FA._SetBankOpen(false)
   GetContainerItemInfo=oldInfo; TEST_BAGS=nil
   assert(FA.BankCount(2320)==6 and FA.BankCount(2996)==6 and FA.BankSeenAt(), "bank read: "..tostring(FA.BankCount(2320)))
+  -- 0.9.38: bank tabs (Forever): read the tabs, not your reagent bag (slot 5)
+  do
+    local oE=Enum
+    Enum=setmetatable({BagIndex={CharacterBankTab_1=6,CharacterBankTab_2=7,ReagentBag=5}},{__index=oE})
+    local bb=FA._BankBags()
+    assert(#bb==2 and bb[1]==6 and bb[2]==7, "bank tabs only")
+    local function copy(t) if type(t)~="table" then return t end local o={} for k,v in pairs(t) do o[k]=copy(v) end return o end
+    local saved=copy(ForeverArtisanSettings.bank)
+    TEST_BAGS={[5]={2450,2450},[6]={2450}}
+    local oI=GetContainerItemInfo; GetContainerItemInfo=function() return 1, 1 end
+    FA._SetBankOpen(true); FA.ReadBank(); FA._SetBankOpen(false)
+    GetContainerItemInfo=oI; TEST_BAGS=nil
+    assert(FA.BankCount(2450)==1, "reagent bag isn't bank: "..tostring(FA.BankCount(2450)))
+    Enum=oE
+    -- an old snapshot (before 0.9.38) is set aside until the next bank visit
+    local key; for k in pairs(ForeverArtisanSettings.bank) do key=k end
+    ForeverArtisanSettings.bank[key].v=nil
+    local n, seen = FA.BankCount(2450)
+    assert(n==0 and not seen and not FA.BankSeenAt(), "old snapshot ignored")
+    ForeverArtisanSettings.bank=saved
+  end
   COUNTS[2996]=0
   m=FA.MakeCounts(r,C)
   assert(m.bags==0 and m.bank==2 and not m.buy, "bank: make 2, buying adds nothing")

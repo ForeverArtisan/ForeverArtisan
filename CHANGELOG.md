@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.38 (2026-11-08)
+- Fixed: shopping lists counted items in your reagent bag as "in bank" too, so they showed more than you had. Open your bank once after updating and the bank numbers are right again. Thanks to the player who reported it.
+
 ## 0.9.37 (2026-11-08)
 - Added: with Questie installed, Herbalism and Mining show where herbs and ores spawn even if you haven't gathered them yet, with a waypoint to the nearest spot. GatherMate2 still comes first when you have it.
 - Added: with Questie installed, Nearest trainer finds your class trainers too, even ones you haven't met.

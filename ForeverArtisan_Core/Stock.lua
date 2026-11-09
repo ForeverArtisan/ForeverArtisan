@@ -43,12 +43,28 @@ local function SlotItem(bag, slot)
   return id, tonumber(count) or 1
 end
 
+-- Forever has bank tabs (containers 6 to 11 in the game's Enum.BagIndex); slot 5 is your own
+-- reagent bag. Older clients: the bank container (-1) and the bank bag slots after your bags.
 local function BankBags()
-  local first = (NUM_BAG_SLOTS or 4) + 1
-  local list = { BANK_CONTAINER or -1 }
+  local E = Enum and Enum.BagIndex
+  local list = {}
+  if E and E.CharacterBankTab_1 then
+    for i = 1, 8 do
+      local b = E["CharacterBankTab_" .. i]
+      if b then list[#list + 1] = b end
+    end
+    if #list > 0 then return list end
+  end
+  list[1] = BANK_CONTAINER or -1
+  local first = (NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4) + 1
   for b = first, first + (NUM_BANKBAGSLOTS or 6) - 1 do list[#list + 1] = b end
   return list
 end
+FA._BankBags = BankBags -- for the tests
+
+-- 2: read from the bank tabs (0.9.38). Older snapshots also counted your reagent bag as bank, so
+-- they're set aside until your next bank visit.
+local BANK_V = 2
 
 local bankOpen = false
 function FA.ReadBank()
@@ -61,15 +77,16 @@ function FA.ReadBank()
     end
   end
   local b = Store()
-  b.items, b.at = items, time()
+  b.items, b.at, b.v = items, time(), BANK_V
 end
 
 function FA.BankCount(id)
   local b = Store()
+  if b.v ~= BANK_V then return 0, false end
   if not (id and b.items) then return 0, b.at ~= nil end
   return b.items[id] or 0, true
 end
-function FA.BankSeenAt() return Store().at end
+function FA.BankSeenAt() local b = Store(); return b.v == BANK_V and b.at or nil end
 
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "BANKFRAME_OPENED", "BANKFRAME_CLOSED", "PLAYERBANKSLOTS_CHANGED", "BAG_UPDATE_DELAYED" }) do
