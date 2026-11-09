@@ -391,6 +391,8 @@ end
 function ns.Plan(target)
   local skill = Skill()
   local recs, ahead = CharRec().recipes, nil
+  -- colors other players saw (built-in recipe list) fill in where yellow starts
+  if ForeverArtisan.SeedSeen then ForeverArtisan.SeedSeen(recs, ns.SeedRecipes) end
   if not skill then
     -- planning ahead: this character doesn't have it, so from skill 1 with an alt's recipes or the
     -- recipes seen on the Forever beta (SeedRecipes.lua)
@@ -433,6 +435,7 @@ function ns.Plan(target)
       byName[best.name] = st
     end
     st.crafts = st.crafts + 1 / bestChance
+    if bestChance < 1 then st.est = true end
     s = s + (best.ups or 1)
     st.to = s
   end

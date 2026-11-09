@@ -1,5 +1,9 @@
 # ForeverArtisan changelog
 
+## 0.9.40 (2026-11-09)
+- Changed: plans now know exactly where every recipe turns yellow and green, from the game's own data, so orange steps are exact counts. Steps that run into yellow or green say "about" ("about x8"): yellow and green skill-ups are estimates.
+- Changed: smarter plans for materials made from other made materials (Heavy Leather from Medium from Light). The plan crafts them from what you hold and puts the rest on the shopping list to buy, instead of crafting all the way up from scraps. Thanks to the player who suggested it.
+
 ## 0.9.39 (2026-11-08)
 - Fixed: the on-screen goals list now updates what you still need when you loot, buy or craft a material that goes into another one (like Light Leather and Ruined Leather Scraps). Before, the need only refreshed when you reopened the profession window. Thanks to the player who reported it.
 

@@ -1619,6 +1619,7 @@ NEWS = {
   { "0.9.37", "With Questie, where every herb and ore spawns, with a waypoint to the nearest one, and your class trainers in Nearest trainer." },
   { "0.9.38", "Shopping lists no longer count your reagent bag as bank. Open your bank once after updating." },
   { "0.9.39", "The goals list updates what you still need as you loot and craft, with the profession window closed." },
+  { "0.9.40", "Plans know exactly where recipes turn yellow and green, say \"about\" for yellow and green crafts, and buy Heavy Leather instead of crafting it up from scraps." },
 }
 
 local function verNum(v)

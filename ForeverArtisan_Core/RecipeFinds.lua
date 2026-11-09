@@ -430,8 +430,8 @@ function ForeverArtisan.TrainHint(prof, unknown)
 end
 
 ---------------------------------------------------------------- recipe colors you've seen
--- Forever only reports the skill where a recipe turns gray, so yellow and green are guessed
--- (40 and 20 below gray). Each time a crafting window shows a recipe's color we remember it at
+-- Forever only reports the skill where a recipe turns gray. RecipeBandsData.lua has the game's own
+-- yellow points; for a recipe it doesn't cover, yellow and green are guessed (40 and 20 below gray). Each time a crafting window shows a recipe's color we remember it at
 -- that skill, and the guess moves to fit: orange seen at 28 means yellow starts at 29 or later.
 function ForeverArtisan.NoteRecipeColor(old, new)
   if not new then return end
@@ -448,10 +448,62 @@ function ForeverArtisan.NoteRecipeColor(old, new)
   new.seen = next(seen) and seen or nil
 end
 
+-- the plan crafts materials you know how to make. A recipe whose own materials are things you'd
+-- make too (Heavy Leather from Medium from Light) is a chain: the plan only runs it on what you hold
+function ForeverArtisan.Chained(r, makes)
+  for _, g in ipairs(r.reagents or {}) do
+    if g.id and makes[g.id] and makes[g.id] ~= r then return true end
+  end
+  return false
+end
+-- how many times r can be made when availFn(id) says how many of each material you can have
+function ForeverArtisan.InputsCover(r, availFn)
+  local k
+  for _, g in ipairs(r.reagents or {}) do
+    if g.id then
+      local c = math.floor((availFn(g.id) or 0) / (g.n or 1))
+      k = k and math.min(k, c) or c
+    end
+  end
+  return k or 0
+end
+
 -- where yellow and green start for a recipe that turns gray at `gray`
+-- colors seen by other players, from a module's built-in recipe list (same gray level only). Kept
+-- beside the recipe, not in it, so your saved data only holds what you saw yourself
+local seedSeen = setmetatable({}, { __mode = "k" })
+function ForeverArtisan.SeedSeen(recs, seedFn)
+  if type(seedFn) ~= "function" then return end
+  local ok, seed = pcall(seedFn)
+  if not ok or type(seed) ~= "table" then return end
+  for name, r in pairs(recs or {}) do
+    local e = seed[name]
+    if e and e.seen and e.grayAt and r.grayAt == e.grayAt then seedSeen[r] = e.seen end
+  end
+end
+local function MergedSeen(r)
+  local a, b = r and r.seen, r and seedSeen[r]
+  if not b then return a end
+  if not a then return b end
+  local function lo(x, y) if x and y then return math.min(x, y) end return x or y end
+  local function hi(x, y) if x and y then return math.max(x, y) end return x or y end
+  return { o = hi(a.o, b.o), ylo = lo(a.ylo, b.ylo), yhi = hi(a.yhi, b.yhi), glo = lo(a.glo, b.glo) }
+end
+
+-- the game's own numbers for the recipe (RecipeBandsData.lua): exact, as long as its gray point
+-- matches what your window shows (a patch that moved the recipe falls back to the guess below)
+function ForeverArtisan.BandFor(r)
+  local b = r and r.id and ForeverArtisan.RECIPE_BANDS and ForeverArtisan.RECIPE_BANDS[r.id]
+  if not b then return nil end
+  if r.grayAt and r.grayAt ~= b[2] then return nil end
+  return b
+end
+
 function ForeverArtisan.RecipeBands(r, gray)
+  local b = ForeverArtisan.BandFor(r)
+  if b and b[2] == gray then return b[1], math.floor((b[1] + gray) / 2) end
   local y, g = gray - 40, gray - 20
-  local s = r and r.seen
+  local s = MergedSeen(r)
   if s then
     if s.o then y = math.max(y, s.o + 1); g = math.max(g, s.o + 1) end
     if s.ylo then y = math.min(y, s.ylo) end

@@ -435,6 +435,84 @@ do
   assert(not table.concat(names,","):find("Vest"), "same skill-up chance: the cloak uses less leather than the vest")
   GetProfessionInfo=baseProf2
 end
+-- 0.9.40: Heavy Leather from Medium from Light is a chain: the plan crafts it only from what you
+-- hold and buys the rest as Heavy Leather (Discord report: "Dusky Bracers x5 + 1403 Light Leather")
+do
+  local R={[2881]={name="Light Leather",maxTrivialLevel=40,out=2318,reag={{2934,3}}},
+   [20648]={name="Medium Leather",maxTrivialLevel=85,out=2319,reag={{2318,4}}},
+   [20649]={name="Heavy Leather",maxTrivialLevel=135,out=4234,reag={{2319,5}}},
+   [9201]={name="Dusky Bracers",maxTrivialLevel=200,out=7378,reag={{4234,16},{2325,1}}}}
+  C_TradeSkillUI={GetAllRecipeIDs=function() local t={} for k in pairs(R) do t[#t+1]=k end return t end,
+   GetRecipeInfo=function(id) local r=R[id] return {name=r.name,learned=true,maxTrivialLevel=r.maxTrivialLevel,relativeDifficulty=(r.out==7378) and 0 or 3} end,
+   GetTradeSkillLineForRecipe=function() return 165,"Leatherworking",165 end,
+   GetRecipeSchematic=function(id) local r=R[id] local sl={} for _,g in ipairs(r.reag) do sl[#sl+1]={reagents={{itemID=g[1]}},quantityRequired=g[2]} end return {outputItemID=r.out,reagentSlotSchematics=sl,quantityMin=1} end}
+  wipe(lw.CharRec().recipes)
+  local baseProf3=GetProfessionInfo
+  GetProfessionInfo=function(i) if i==8 then return "Leatherworking",1,150,225,0,0,165,0 end return baseProf3(i) end
+  fire("TRADE_SKILL_SHOW")
+  local function plan()
+    local st,sh=lw.Plan(155)
+    local subs={} for _,x in ipairs(st) do for r,k in pairs(x.sub) do subs[r.name]=(subs[r.name] or 0)+k end end
+    local by={} for _,e in ipairs(sh) do if e.id then by[e.id]=e end end
+    return subs,by,st
+  end
+  for _,id in ipairs({2318,2319,4234,2934}) do COUNTS[id]=nil end
+  local subs,by,st=plan()
+  local nm={} for _,x in ipairs(st) do nm[#nm+1]=x.r.name.." x"..x.crafts end print("CHAIN PLAN", table.concat(nm,", "), "stuck", select(3,lw.Plan(155)))
+  assert(#st==1 and st[1].r.name=="Dusky Bracers", "bracers planned")
+  assert(not subs["Light Leather"] and not subs["Medium Leather"] and not subs["Heavy Leather"], "nothing crafted up from scraps")
+  assert(by[4234] and not by[4234].craft and by[4234].need==16*st[1].crafts, "buys Heavy Leather: "..tostring(by[4234] and by[4234].need))
+  assert(not by[2934] and not by[2318], "no scraps or Light Leather on the list")
+  -- 40 Light Leather in the bags: 10 Medium, 2 Heavy made from them, the rest bought
+  COUNTS[2318]=40
+  subs,by=plan()
+  assert(subs["Heavy Leather"]==2 and subs["Medium Leather"]==10 and not subs["Light Leather"], "crafts what you hold: "..tostring(subs["Heavy Leather"]).."/"..tostring(subs["Medium Leather"]))
+  assert(by[4234].craft==2, "2 Heavy Leather crafted, the rest bought")
+  COUNTS[2318]=nil
+  -- "about": orange the whole way is an exact count, a step that runs into yellow is an estimate
+  local st1=lw.Plan(155) assert(not st1[1].est, "orange only: exact")
+  local st2=lw.Plan(185) local anyEst=false for _,x in ipairs(st2) do if x.est then anyEst=true end end
+  assert(anyEst, "yellow on the way: estimate")
+  -- the game's own numbers (RecipeBandsData.lua): Dusky Bracers yellow at 180, gray at 200, green at 190
+  local FA0=ForeverArtisan
+  local db={name="Dusky Bracers",id=9201,grayAt=200}
+  local y0,g0=FA0.RecipeBands(db,200) assert(y0==180 and g0==190, "exact bands: "..tostring(y0).."/"..tostring(g0))
+  assert(lw.ColorFor({name="x",id=9201,grayAt=200,learned=true},179)=="orange" and lw.ColorFor({name="x",id=9201,grayAt=200,learned=true},180)=="yellow"
+    and lw.ColorFor({name="x",id=9201,grayAt=200,learned=true},190)=="green", "colors from the game data")
+  -- orange to 179: plan to 179 from 150 is exactly 29 crafts, no "about"
+  local st3=lw.Plan(179) assert(st3[1].crafts==29 and not st3[1].est, "orange is exact: "..tostring(st3[1].crafts))
+  -- the Discord case: Barbaric Shoulders stays orange to 169, so 153 -> 160 is 7
+  local bs={name="Barbaric Shoulders",id=7151,grayAt=190,learned=true}
+  local n,sk=0,153 while sk<160 do sk=sk+lw.Chance(bs,sk) n=n+1 end
+  assert(n==7, "Barbaric Shoulders 153-160: "..n)
+  -- a patch moved the recipe (gray differs from the data): back to the guess
+  assert(FA0.RecipeBands({name="x",id=9201,grayAt=205},205)==165, "moved recipe: guess")
+  -- no gray read yet: the data's gray point is used
+  assert(lw.GrayAt({name="x",id=9201})==200, "gray from the data")
+  -- the data matches the built-in recipe lists (gray points read from real windows)
+  for _,m in ipairs({"Alchemy","Blacksmithing","Cooking","Enchanting","Engineering","FirstAid","Leatherworking","Tailoring"}) do
+    local ns=loadedFrames["ForeverArtisan_"..m].ns local have,bad=0,0
+    for _,r in pairs(ns.SeedRecipes()) do local b=FA0.RECIPE_BANDS[r.id]
+      if b and r.grayAt then have=have+1 if b[2]~=r.grayAt then bad=bad+1 end end end
+    assert(have>20 and bad==0, m.." bands vs built-in list: "..have.." checked, "..bad.." differ")
+  end
+  -- colors other players saw (the built-in list) move where yellow starts, same gray level only
+  local FA=ForeverArtisan
+  local r={name="Dusky Bracers",grayAt=200}
+  assert(FA.RecipeBands(r,200)==160, "default guess: 40 below gray")
+  FA.SeedSeen({["Dusky Bracers"]=r}, function() return {["Dusky Bracers"]={grayAt=200,seen={o=179}}} end)
+  assert(FA.RecipeBands(r,200)==180, "seed says orange at 179: yellow from 180")
+  assert(not r.seedSeen and not r.seen, "nothing written into the saved recipe")
+  local r2={name="Dusky Bracers",grayAt=205}
+  FA.SeedSeen({["Dusky Bracers"]=r2}, function() return {["Dusky Bracers"]={grayAt=200,seen={o=179}}} end)
+  assert(FA.RecipeBands(r2,205)==165, "different gray level: seed ignored")
+  -- your own yellow sighting wins over a later orange in the seed
+  local r3={name="Dusky Bracers",grayAt=200,seen={ylo=172}}
+  FA.SeedSeen({["Dusky Bracers"]=r3}, function() return {["Dusky Bracers"]={grayAt=200,seen={o=179}}} end)
+  assert(FA.RecipeBands(r3,200)==172, "seen yellow at 172 stays")
+  GetProfessionInfo=baseProf3
+  print("leather chain ok")
+end
 -- unlearning a profession: the saved skill must not keep it "learned"
 do
   local hns=loadedFrames["ForeverArtisan_Herbalism"].ns

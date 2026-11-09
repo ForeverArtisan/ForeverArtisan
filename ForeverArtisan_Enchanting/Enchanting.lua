@@ -125,6 +125,8 @@ function ns.Knows() return Skill() ~= nil end
 local GRAY_GUESS = { orange = 45, yellow = 30, green = 10, gray = 0 }
 local function GrayAt(r)
   if r.grayAt then return r.grayAt end
+  local b = ForeverArtisan.BandFor and ForeverArtisan.BandFor(r)
+  if b then return b[2] end
   local g = r.color and r.scanSkill and GRAY_GUESS[r.color]
   return g and (r.scanSkill + g) or nil
 end
@@ -548,6 +550,8 @@ local PLAN_LIMIT = 6000 -- crafts; stops a plan built on a nearly-gray recipe fr
 function ns.Plan(target)
   local skill = Skill()
   local recs, ahead = CharRec().recipes, nil
+  -- colors other players saw (built-in recipe list) fill in where yellow starts
+  if ForeverArtisan.SeedSeen then ForeverArtisan.SeedSeen(recs, ns.SeedRecipes) end
   if not skill then
     -- planning ahead: this character doesn't have it, so from skill 1 with an alt's recipes or the
     -- recipes seen on the Forever beta (SeedRecipes.lua)
@@ -574,11 +578,25 @@ function ns.Plan(target)
   local s, total, cur = skill, 0, nil
   local Craft
   -- make sure n of id are on hand, crafting the shortfall when you know a recipe for it
+  -- how many of id you could have from what you hold, crafting through recipes you know
+  local function Avail(id, depth)
+    local n = math.max(0, Have(id))
+    local via = makes[id]
+    if via and depth < 3 then n = n + ForeverArtisan.InputsCover(via, function(g) return Avail(g, depth + 1) end) * (via.makes or 1) end
+    return n
+  end
   local function Gather(id, n, depth)
     local via = makes[id]
     local short = n - Have(id)
     if short > 0 and via and depth < 3 then
-      for _ = 1, math.ceil(short / (via.makes or 1)) do Craft(via, depth + 1) end
+      local times = math.ceil(short / (via.makes or 1))
+      -- made from something you'd also make (Heavy Leather from Medium from Light): only as far as
+      -- what you hold goes, the rest is bought as is. One step from bought materials stays
+      -- (Light Leather from scraps, bolts from cloth)
+      if ForeverArtisan.Chained(via, makes) then
+        times = math.min(times, ForeverArtisan.InputsCover(via, function(g) return Avail(g, depth + 1) end))
+      end
+      for _ = 1, times do Craft(via, depth + 1) end
     end
   end
   Craft = function(r, depth)
@@ -656,6 +674,8 @@ function ns.Plan(target)
     end
     Craft(best, 0)
     cur.crafts = cur.crafts + 1
+    -- yellow or green: the count is an average, shown as "about"
+    if pick.ch < 1 then cur.est = true end
     cur.to = math.floor(s)
   end
   if not stuck and math.floor(s) < target then stuck = math.floor(s) end

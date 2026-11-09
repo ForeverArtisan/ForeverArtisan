@@ -261,7 +261,7 @@ local function BuildProgressPage(p)
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 20, -104); p.empty:SetWidth(420)
   p.open = FA.UI.ProfessionButton(p, "First Aid", 240); p.open:SetPoint("TOPLEFT", 20, -128)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
-  help:SetText("Craft counts are estimates: orange always skills up, yellow and green less often.")
+  help:SetText("Orange always skills up. Yellow and green counts are estimates (\"about\").")
 end
 
 local function RefreshProgressPage(p)
@@ -300,8 +300,8 @@ local function RefreshProgressPage(p)
   for _, st in ipairs(steps) do
     local c = ns.ColorFor(st.r, st.from)
     plan[#plan + 1] = { id = st.r.itemId, icon = Icon(st.r.itemId),
-      left = ns.COLOR_CODE[c] .. st.r.name .. "|r  " .. GRAY .. "x" .. st.crafts .. "|r",
-      right = GRAY .. ("skill %d-%d"):format(st.from, st.to) .. "|r", tip = ReagentTip(st.r) }
+      left = ns.COLOR_CODE[c] .. st.r.name .. "|r  " .. GRAY .. (st.est and "about x" or "x") .. st.crafts .. "|r",
+      right = GRAY .. ("skill %d-%d"):format(st.from, st.to) .. "|r", tip = ReagentTip(st.r) .. (st.est and ("\n" .. GRAY .. "Yellow and green skill-ups are estimates: those crafts can miss.|r") or "") }
   end
   -- recipes to train on the way: say where and when
   for k, st in ipairs(steps) do

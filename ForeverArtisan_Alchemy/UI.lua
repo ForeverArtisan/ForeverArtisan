@@ -273,7 +273,7 @@ local function BuildProgressPage(p)
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 20, -104); p.empty:SetWidth(420)
   p.open = FA.UI.ProfessionButton(p, "Alchemy", 240); p.open:SetPoint("TOPLEFT", 20, -128)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
-  help:SetText("Craft counts are estimates: orange always skills up, yellow and green less often.")
+  help:SetText("Orange always skills up. Yellow and green counts are estimates (\"about\").")
 end
 
 local function RefreshProgressPage(p)
@@ -319,10 +319,10 @@ local function RefreshProgressPage(p)
     end
     table.sort(extra)
     plan[#plan + 1] = { id = st.r.itemId, icon = Icon(st.r.itemId),
-      left = ns.COLOR_CODE[c] .. st.r.name .. "|r  " .. GRAY .. "x" .. st.crafts
+      left = ns.COLOR_CODE[c] .. st.r.name .. "|r  " .. GRAY .. (st.est and "about x" or "x") .. st.crafts
         .. (#extra > 0 and ("  + " .. table.concat(extra, ", ")) or "") .. "|r",
       right = GRAY .. ("skill %d-%d"):format(st.from, st.to) .. "|r",
-      tip = ReagentTip(st.r) .. (#tipExtra > 0 and ("\n" .. table.concat(tipExtra, "\n")) or "") }
+      tip = ReagentTip(st.r) .. (st.est and ("\n" .. GRAY .. "Yellow and green skill-ups are estimates: those crafts can miss.|r") or "") .. (#tipExtra > 0 and ("\n" .. table.concat(tipExtra, "\n")) or "") }
   end
   -- recipes to train on the way: say where and when
   for k, st in ipairs(steps) do

@@ -3,7 +3,7 @@
 -- learned and unlearned recipes, with their materials). Plans use it to plan ahead for a profession this
 -- character doesn't have yet. Trainer levels come from ForeverArtisan_Contacts/SeedTrainers.lua.
 --   lua5.1 tools/build_recipes.lua <SavedVariables folder> [repo folder]
--- Keeps only recipe facts (names, ids, materials, gray level, colors seen). No character names.
+-- Keeps only recipe facts (names, ids, materials, gray level, colors seen by all characters merged). No character names.
 -- A recipe counts when at least half the characters that read that window saw it (an old bug saved
 -- Alchemy recipes into one character's First Aid list). Never edit the output by hand; rerun this.
 -- Several SavedVariables folders can be given (your beta backup, your live folder, players' files):
@@ -85,6 +85,7 @@ for _, m in ipairs(MODULES) do
   m.live = live
   -- how many characters read this window, and how many saw each recipe
   local readers, seenBy, best, learnedBy, learners = 0, {}, {}, {}, 0
+  local seenAll = {} -- [name] = every character's record with colors seen, merged below
   local function countLearned(set)
     local by, n = {}, 0
     for _, c in pairs(set) do
@@ -104,6 +105,7 @@ for _, m in ipairs(MODULES) do
       if any then learners = learners + 1 end
       for name, r in pairs(c.recipes) do
         seenBy[name] = (seenBy[name] or 0) + 1
+        if r.seen and r.grayAt then seenAll[name] = seenAll[name] or {}; table.insert(seenAll[name], r) end
         -- keep the fullest record (gray level, colors seen)
         local b = best[name]
         local score = (r.grayAt and 2 or 0) + (r.seen and 1 or 0)
@@ -137,7 +139,18 @@ for _, m in ipairs(MODULES) do
       if ln == 0 then lb, ln = betaBy, betaN end -- no live learned marks: the beta's starting recipes
       local starter = not t and lb[name] and ((ln >= 2 and lb[name] == ln)
         or (ln == 1 and (r.grayAt or 999) <= 70))
-      local s = r.seen
+      -- colors every character saw, at the same gray level: latest orange, earliest yellow and green
+      local s
+      for _, x in ipairs(seenAll[name] or {}) do
+        if x.grayAt == r.grayAt then
+          local v = x.seen
+          s = s or {}
+          if v.o then s.o = math.max(s.o or v.o, v.o) end
+          if v.ylo then s.ylo = math.min(s.ylo or v.ylo, v.ylo) end
+          if v.yhi then s.yhi = math.max(s.yhi or v.yhi, v.yhi) end
+          if v.glo then s.glo = math.min(s.glo or v.glo, v.glo) end
+        end
+      end
       local seen = s and ("{o=%s,ylo=%s,yhi=%s,glo=%s}"):format(tostring(s.o), tostring(s.ylo), tostring(s.yhi), tostring(s.glo)) or "nil"
       out[#out + 1] = ("  {%s,%s,%s,%s,%s,{%s},{%s},%s,%s,%s,%s%s},"):format(q(name), tostring(r.id), tostring(r.itemId),
         tostring(r.makes or 1), tostring(r.grayAt), table.concat(mats, ","), table.concat(tools, ","),
