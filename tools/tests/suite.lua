@@ -489,6 +489,29 @@ do
   assert(FA0.RecipeBands({name="x",id=9201,grayAt=205},205)==165, "moved recipe: guess")
   -- no gray read yet: the data's gray point is used
   assert(lw.GrayAt({name="x",id=9201})==200, "gray from the data")
+  -- 0.9.41: color ranges and where you stand, from the game's numbers
+  local bs2={name="Barbaric Shoulders",id=7151,grayAt=190}
+  local plain=function(t) return (t:gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r","")) end
+  assert(plain(FA0.BandLine(bs2))=="Orange to 169  ·  Yellow 170-179  ·  Green 180-189  ·  Gray at 190", "band line: "..plain(FA0.BandLine(bs2)))
+  assert(plain(FA0.BandStatus(bs2,153))=="At 153: orange for 17 more points: every craft is a skill-up", "status orange")
+  assert(plain(FA0.BandStatus(bs2,169))=="At 169: orange for 1 more point: every craft is a skill-up", "one point")
+  assert(plain(FA0.BandStatus(bs2,175)):find("yellow: usually a skill%-up, green at 180") and plain(FA0.BandStatus(bs2,185)):find("green: sometimes a skill%-up, gray at 190")
+    and plain(FA0.BandStatus(bs2,190)):find("gray: no more skill%-ups"), "status yellow, green, gray")
+  assert(FA0.BandLine({name="Mystery",id=1}) == nil and FA0.BandStatus({name="Mystery",id=1},10) == nil, "no data: nothing")
+  assert(FA0.BandColor(bs2,169)=="orange" and FA0.BandColor(bs2,170)=="yellow" and FA0.BandColor(bs2,180)=="green" and FA0.BandColor(bs2,190)=="gray", "colors")
+  -- a recipe item on the AH or in your bags, for a profession you have: its ranges and your skill
+  local oldLT2=FA0.LearnedTrades
+  FA0.RegisterMarket({name="Testcraft", recipes=function() return {["Barbaric Shoulders"]={name="Barbaric Shoulders",id=7151,grayAt=190}} end})
+  FA0.LearnedTrades=function() return { testcraft={rank=160} } end
+  local bl=FA0.RecipeItemBandLines("Pattern: Barbaric Shoulders")
+  assert(bl and plain(bl[1]):find("Orange to 169",1,true) and plain(bl[2])=="At 160: orange for 10 more points: every craft is a skill-up", "recipe item lines")
+  assert(FA0.RecipeItemBandLines("Barbaric Shoulders")==nil and FA0.RecipeItemBandLines("Pattern: Nobody Knows")==nil, "not a recipe item / unknown recipe")
+  FA0.LearnedTrades=oldLT2
+  -- the profession window's tooltips start with the ranges (plan step, recipe book, best crafts)
+  local tipFound
+  run("FALW","")
+  for _,f in ipairs(frames) do local d=rawget(f,"data") if type(d)=="table" and type(d.tip)=="string" and plain(d.tip):find("Gray at",1,true) then tipFound=true end end
+  assert(tipFound, "a Leatherworking row tooltip shows the color ranges")
   -- the data matches the built-in recipe lists (gray points read from real windows)
   for _,m in ipairs({"Alchemy","Blacksmithing","Cooking","Enchanting","Engineering","FirstAid","Leatherworking","Tailoring"}) do
     local ns=loadedFrames["ForeverArtisan_"..m].ns local have,bad=0,0
@@ -2640,6 +2663,17 @@ do
   local pnl=_G.ForeverArtisanPanel
   local wt=pnl.AddonsText()
   assert(wt:find("GatherMate2"), "Add-ons tab names GatherMate2")
+  -- 0.9.42: a German client (GatherMate2 looks names up in the game's language): still readable
+  local enIDs=GatherMate2.nodeIDs
+  GatherMate2.nodeIDs={["Herb Gathering"]={["Friedensblume"]=401,["Silberblatt"]=402,["Lebenswurz"]=412}, Mining={["Kupfervorkommen"]=201}}
+  FA.GatherReset()
+  assert(FA.GatherStatus()=="on", "German client: on")
+  local _,tot2=FA.GatherZones("herb","Peacebloom")
+  assert(tot2==5 and FA.GatherZones("mine","Copper Vein"), "German client: spots by GatherMate2's fixed ids")
+  GatherMate2.nodeIDs=enIDs
+  -- the fixed ids cover every herb and ore the modules know
+  for _,h in ipairs(loadedFrames["ForeverArtisan_Herbalism"].ns.HERBS) do assert(FA._GM_IDS.herb[h[2]], "GatherMate2 id for "..h[2]) end
+  for _,n in ipairs(loadedFrames["ForeverArtisan_Mining"].ns.NODES) do assert(FA._GM_IDS.mine[n[2]], "GatherMate2 id for "..n[2]) end
   GatherMate2.GetIDForNode=function() error("changed") end; GatherMate2.nodeIDs=nil
   FA.GatherReset()
   assert(FA.GatherStatus()=="incompatible" and FA.GatherZones("herb","Peacebloom")==nil, "a GatherMate2 we can't read: nothing")

@@ -1085,6 +1085,10 @@ function showWatch()
       -- "Recipe: " / "Pattern: " is dropped here (the title says what they are), so the name and who it's
       -- for fit; the hover shows the whole item
       local short = e.name:gsub("^%a+: ", "")
+      -- learnable now: the name in the color it is at their skill (the game's numbers)
+      local rec = e.ready and FA.RecipeForName and FA.RecipeForName(short)
+      local col = rec and FA.BandColor and FA.BandColor(rec, have)
+      if col then short = FA.BAND_COL[col] .. short .. "|r" end
       -- "for Medz" only on the All list: once you've picked a character, every row is theirs
       r.left:SetText((e.ready and "" or GREY) .. short .. "|r" .. ((e.who and not v.filter) and (GOLD .. "  for " .. e.who .. "|r") or ""))
       local npcText, cheaper = FA.RecipeNpcText and FA.RecipeNpcText(e)
@@ -1168,6 +1172,14 @@ local function buildWatch(p)
       local e = self.e
       GameTooltip:AddLine("For: " .. (e.who or "you") .. " (" .. e.prof .. (e.whoRank and (" " .. e.whoRank) or "") .. ")"
         .. ((e.others or 0) > 0 and ("  ·  " .. e.others .. " more of your characters could use it") or ""), 0.83, 0.66, 0.31, true)
+      local rec = FA.RecipeForName and FA.RecipeForName((e.name:gsub("^%a+: ", "")))
+      local band = rec and FA.BandLine and FA.BandLine(rec)
+      if band then
+        GameTooltip:AddLine(band, 1, 1, 1, true)
+        local tr = FA.LearnedTrades and FA.LearnedTrades()[e.prof:lower()]
+        local st = FA.BandStatus(rec, e.whoRank or (tr and tr.rank))
+        if st then GameTooltip:AddLine(st, 1, 1, 1, true) end
+      end
       local npcText, cheaper, src = nil, nil, nil
       if FA.RecipeNpcText then npcText, cheaper, src = FA.RecipeNpcText(self.e) end
       if src then
@@ -1620,6 +1632,7 @@ NEWS = {
   { "0.9.38", "Shopping lists no longer count your reagent bag as bank. Open your bank once after updating." },
   { "0.9.39", "The goals list updates what you still need as you loot and craft, with the profession window closed." },
   { "0.9.40", "Plans know exactly where recipes turn yellow and green, say \"about\" for yellow and green crafts, and buy Heavy Leather instead of crafting it up from scraps." },
+  { "0.9.41", "Recipe tooltips show where each recipe turns yellow, green and gray, and where you are on it. GatherMate2 spots work in every game language." },
 }
 
 local function verNum(v)

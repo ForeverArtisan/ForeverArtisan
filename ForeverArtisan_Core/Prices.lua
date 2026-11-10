@@ -890,6 +890,21 @@ end
 
 -- Does this character know a recipe? true / false, or nil when that profession's window hasn't been read
 -- (or no module for it is on). profName is the module's name ("Cooking", "First Aid").
+-- a recipe by name in the professions you have (the window lists unlearned ones too): r, profession
+function FA.RecipeForName(recipeName)
+  if not recipeName then return nil end
+  local want = recipeName:lower()
+  for _, p in ipairs(market) do
+    local ok, recs = pcall(p.recipes)
+    if ok and type(recs) == "table" then
+      for _, r in pairs(recs) do
+        if r.name and r.name:lower() == want then return r, p.name end
+      end
+    end
+  end
+  return nil
+end
+
 function FA.MarketKnows(profName, recipeName)
   for _, p in ipairs(market) do
     if p.name == profName then

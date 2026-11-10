@@ -1,5 +1,10 @@
 # ForeverArtisan changelog
 
+## 0.9.41 (2026-11-10)
+- Added: recipe tooltips show where each recipe turns yellow, green and gray, and where you are on it ("At 153: orange for 17 more points"). In every profession window, and on recipe items in your bags, at vendors and on the Auction House.
+- Added: Recipes on the AH (Market tab) shows each recipe in the color it would be at your skill.
+- Fixed: GatherMate2 herb and ore spots work on game clients in other languages (German, French and so on). Thanks to the player who reported it.
+
 ## 0.9.40 (2026-11-09)
 - Changed: plans now know exactly where every recipe turns yellow and green, from the game's own data, so orange steps are exact counts. Steps that run into yellow or green say "about" ("about x8"): yellow and green skill-ups are estimates.
 - Changed: smarter plans for materials made from other made materials (Heavy Leather from Medium from Light). The plan crafts them from what you hold and puts the rest on the shopping list to buy, instead of crafting all the way up from scraps. Thanks to the player who suggested it.

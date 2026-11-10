@@ -20,6 +20,14 @@ local function S() return ns.DB().settings end
 
 local function ReagentTip(r, m)
   local lines = {}
+  -- where it turns yellow, green and gray (the game's numbers), and where you are on it
+  local band = FA.BandLine and FA.BandLine(r)
+  if band then
+    lines[#lines + 1] = band
+    local st = FA.BandStatus(r, ns.Skill and ns.Skill())
+    if st then lines[#lines + 1] = st end
+    lines[#lines + 1] = " "
+  end
   for _, g in ipairs(r.reagents or {}) do
     local have = ns.Count(g.id)
     local col = have >= (g.n or 1) and GREEN or RED

@@ -21,6 +21,14 @@ local function S() return ns.DB().settings end
 
 local function ReagentTip(r, m)
   local lines = {}
+  -- where it turns yellow, green and gray (the game's numbers), and where you are on it
+  local band = FA.BandLine and FA.BandLine(r)
+  if band then
+    lines[#lines + 1] = band
+    local st = FA.BandStatus(r, ns.Skill and ns.Skill())
+    if st then lines[#lines + 1] = st end
+    lines[#lines + 1] = " "
+  end
   for _, t in ipairs(r.tools or {}) do
     if t.station then
       lines[#lines + 1] = GRAY .. "Made at: |r" .. t.name

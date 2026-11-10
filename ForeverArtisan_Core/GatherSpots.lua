@@ -34,6 +34,34 @@ local function Off()
   return ForeverArtisanSettings and ForeverArtisanSettings.gatherOff
 end
 
+-- GatherMate2's own ids for the Classic herbs and ores (from its Constants.lua; they're the ids it
+-- saves, so they don't change). GatherMate2 looks names up in the game's language, so on a German or
+-- French client "Peacebloom" isn't found by name: these keep it working in every language.
+local GM_IDS = {
+  herb = { ["Peacebloom"] = 401, ["Silverleaf"] = 402, ["Earthroot"] = 403, ["Mageroyal"] = 404,
+    ["Briarthorn"] = 405, ["Stranglekelp"] = 407, ["Bruiseweed"] = 408, ["Wild Steelbloom"] = 409,
+    ["Grave Moss"] = 410, ["Kingsblood"] = 411, ["Liferoot"] = 412, ["Fadeleaf"] = 413, ["Goldthorn"] = 414,
+    ["Khadgar's Whisker"] = 415, ["Wintersbite"] = 416, ["Firebloom"] = 417, ["Purple Lotus"] = 418,
+    ["Arthas' Tears"] = 420, ["Sungrass"] = 421, ["Blindweed"] = 422, ["Ghost Mushroom"] = 423,
+    ["Gromsblood"] = 424, ["Golden Sansam"] = 425, ["Dreamfoil"] = 426, ["Mountain Silversage"] = 427,
+    ["Plaguebloom"] = 428, ["Icecap"] = 429, ["Black Lotus"] = 431 },
+  mine = { ["Copper Vein"] = 201, ["Tin Vein"] = 202, ["Iron Deposit"] = 203, ["Silver Vein"] = 204,
+    ["Gold Vein"] = 205, ["Mithril Deposit"] = 206, ["Ooze Covered Mithril Deposit"] = 207,
+    ["Truesilver Deposit"] = 208, ["Ooze Covered Silver Vein"] = 209, ["Ooze Covered Gold Vein"] = 210,
+    ["Ooze Covered Truesilver Deposit"] = 211, ["Ooze Covered Rich Thorium Vein"] = 212,
+    ["Ooze Covered Thorium Vein"] = 213, ["Small Thorium Vein"] = 214, ["Rich Thorium Vein"] = 215,
+    ["Dark Iron Deposit"] = 217, ["Lesser Bloodstone Deposit"] = 218, ["Incendicite Mineral Vein"] = 219,
+    ["Indurium Mineral Vein"] = 220 },
+}
+FA._GM_IDS = GM_IDS -- for the tests
+
+-- GatherMate2 has its name lookup at all (an update that removed it: we can't read it)
+local function HasLookup(g, t)
+  if type(g.nodeIDs) == "table" and type(g.nodeIDs[t]) == "table" then return true end
+  if type(g.GetIDForNode) == "function" then return (pcall(g.GetIDForNode, g, t, "")) end
+  return false
+end
+
 -- node name -> GatherMate2's id for it
 local function NodeId(kind, node)
   local g = GM()
@@ -44,7 +72,10 @@ local function NodeId(kind, node)
     if ok and id then return id end
   end
   local ids = type(g.nodeIDs) == "table" and g.nodeIDs[t]
-  return type(ids) == "table" and ids[node] or nil
+  if type(ids) == "table" and ids[node] then return ids[node] end
+  -- not found by its English name (another game language): GatherMate2's own fixed id
+  if HasLookup(g, t) then return GM_IDS[kind] and GM_IDS[kind][node] or nil end
+  return nil
 end
 
 -- the node table for a kind: [uiMapID] = { [coord] = nodeId }

@@ -283,13 +283,29 @@ end
 -- you've looted from a mob, whether or not you know a recipe that uses it yet.
 -- Also the Auction House price you last saw for it (when Auctionator isn't there to show its own).
 -- And "Where to sell": your Auction House and the goblin one after their cuts, once you've seen both.
+-- a recipe item ("Pattern: Barbaric Shoulders"): its color ranges and where you stand, for a profession
+-- you have. { line, line } or nil
+function FA.RecipeItemBandLines(itemName)
+  if not (itemName and IsRecipeItem(itemName) and FA.RecipeForName) then return nil end
+  local r, prof = FA.RecipeForName(itemName:gsub("^[^:]+:%s*", ""))
+  local band = r and FA.BandLine(r)
+  if not band then return nil end
+  local lines = { band }
+  local t = prof and FA.LearnedTrades and FA.LearnedTrades()[prof:lower()]
+  local st = t and FA.BandStatus(r, t.rank)
+  if st then lines[2] = st end
+  return lines
+end
+
 local function DropTip(tt, id)
   if not id or tt.faDropTip then return end
   local line = FA.MaterialWhere(id)
   local price = FA.TooltipPrice and FA.TooltipPrice(id)
   local house = (FA.PriceTipsOn == nil or FA.PriceTipsOn()) and FA.HouseLines and FA.HouseLines(id, 1, "each") or {}
-  if not line and not price and #house == 0 then return end
+  local bands = GetItemInfo and FA.RecipeItemBandLines((GetItemInfo(id)))
+  if not line and not price and #house == 0 and not bands then return end
   tt.faDropTip = true
+  for i, l in ipairs(bands or {}) do tt:AddLine((i == 1 and (FA.GOLD .. "ForeverArtisan:|r ") or "") .. l, 1, 1, 1, true) end
   if line then tt:AddLine(FA.GOLD .. "ForeverArtisan:|r " .. line, 1, 1, 1, true) end
   if price then tt:AddLine(FA.GOLD .. "ForeverArtisan:|r " .. price, 1, 1, 1, true) end
   for i, l in ipairs(house) do tt:AddLine((i == 1 and (FA.GOLD .. "ForeverArtisan:|r ") or "") .. l, 1, 1, 1, true) end
@@ -497,6 +513,48 @@ function ForeverArtisan.BandFor(r)
   if not b then return nil end
   if r.grayAt and r.grayAt ~= b[2] then return nil end
   return b
+end
+
+local BAND_COL = { orange = "|cffff8040", yellow = "|cffffff00", green = "|cff40c040", gray = "|cff808080" }
+ForeverArtisan.BAND_COL = BAND_COL
+-- the color a recipe is at a skill, from the game's numbers (nil when the data doesn't have it)
+function ForeverArtisan.BandColor(r, skill)
+  local b = ForeverArtisan.BandFor(r)
+  if not b or type(skill) ~= "number" then return nil end
+  local y, gray = b[1], b[2]
+  local g = math.floor((y + gray) / 2)
+  if skill >= gray then return "gray" elseif skill >= g then return "green" elseif skill >= y then return "yellow" end
+  return "orange"
+end
+-- "Orange to 169 · Yellow 170-179 · Green 180-189 · Gray at 190", or nil
+function ForeverArtisan.BandLine(r)
+  local b = ForeverArtisan.BandFor(r)
+  if not b then return nil end
+  local y, gray = b[1], b[2]
+  local g = math.floor((y + gray) / 2)
+  local function range(a, z) return a == z and tostring(a) or (a .. "-" .. z) end
+  local parts = {}
+  if y > 1 then parts[#parts + 1] = BAND_COL.orange .. "Orange to " .. (y - 1) .. "|r" end
+  if g > y then parts[#parts + 1] = BAND_COL.yellow .. "Yellow " .. range(y, g - 1) .. "|r" end
+  if gray > g then parts[#parts + 1] = BAND_COL.green .. "Green " .. range(g, gray - 1) .. "|r" end
+  parts[#parts + 1] = BAND_COL.gray .. "Gray at " .. gray .. "|r"
+  return table.concat(parts, "|cff9d9d9d  ·  |r")
+end
+-- where you stand on it: "At 153: orange for 17 more points", or nil
+function ForeverArtisan.BandStatus(r, skill)
+  local c = ForeverArtisan.BandColor(r, skill)
+  if not c then return nil end
+  local b = ForeverArtisan.BandFor(r)
+  local y, gray = b[1], b[2]
+  local g = math.floor((y + gray) / 2)
+  local text
+  if c == "orange" then
+    local n = y - skill
+    text = ("orange for %d more point%s: every craft is a skill-up"):format(n, n == 1 and "" or "s")
+  elseif c == "yellow" then text = "yellow: usually a skill-up, green at " .. g
+  elseif c == "green" then text = "green: sometimes a skill-up, gray at " .. gray
+  else text = "gray: no more skill-ups" end
+  return ("At %d: %s%s|r"):format(skill, BAND_COL[c], text)
 end
 
 function ForeverArtisan.RecipeBands(r, gray)
