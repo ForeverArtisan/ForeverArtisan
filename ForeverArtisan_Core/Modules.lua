@@ -1633,6 +1633,7 @@ NEWS = {
   { "0.9.39", "The goals list updates what you still need as you loot and craft, with the profession window closed." },
   { "0.9.40", "Plans know exactly where recipes turn yellow and green, say \"about\" for yellow and green crafts, and buy Heavy Leather instead of crafting it up from scraps." },
   { "0.9.41", "Recipe tooltips show where each recipe turns yellow, green and gray, and where you are on it. GatherMate2 spots work in every game language." },
+  { "0.9.42", "Material costs no longer use a trainer's price for learning a recipe of the same name." },
 }
 
 local function verNum(v)

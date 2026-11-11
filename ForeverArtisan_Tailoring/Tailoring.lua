@@ -433,7 +433,9 @@ local function VendorFor(name, id)
   if not (V and V.hitsForLink and (name or id)) then return end
   -- nearest first, Questie's vendors included for materials (Trade Contacts' sellers)
   local hits = V.sellers and V.sellers(id, name) or (name and V.hitsForLink(nil, name))
-  local h = hits and hits[1]
+  local h
+  -- a trainer teaching a recipe of the same name isn't a seller (its price is the training cost)
+  for _, x in ipairs(hits or {}) do if not (x.item and x.item.train) then h = x; break end end
   if not h then return end
   return h.npc.n .. " (" .. (h.npc.s or h.npc.z or "?") .. ")" .. (h.npc.questie and ", from Questie" or ""), h.item and h.item.p
 end

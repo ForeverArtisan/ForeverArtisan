@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.42 (2026-11-11)
+- Fixed: materials that share a name with a recipe a trainer teaches (Cerulean Dye, bolts of cloth, cured hides, grinding stones, Sulfuric Acid and others) no longer count at the price of learning the recipe. Material costs, profit, return and Cheapest to level use what they cost to buy. Thanks to the player who reported it.
+
 ## 0.9.41 (2026-11-10)
 - Added: recipe tooltips show where each recipe turns yellow, green and gray, and where you are on it ("At 153: orange for 17 more points"). In every profession window, and on recipe items in your bags, at vendors and on the Auction House.
 - Added: Recipes on the AH (Market tab) shows each recipe in the color it would be at your skill.

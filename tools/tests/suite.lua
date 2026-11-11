@@ -1446,7 +1446,24 @@ do
   FA.Vendors={hitsForLink=function() return {{npc={n="Tamar"},item={id=4306,p=500,stack=5}}} end}
   p,src=FA.ItemPrice(4306,"Silk Cloth")
   assert(p==100 and src=="vendor", "cheaper vendor wins")
+  -- 0.9.42: a trainer teaching a recipe with the item's name isn't a vendor (Cerulean Dye: 1s 50c to learn)
+  FA.Vendors={hitsForLink=function() return {{npc={n="Trainer"},item={n="Silk Cloth",p=50,train=true}}} end}
+  p,src=FA.ItemPrice(4306,"Silk Cloth")
+  assert(p==120 and src=="Auctionator", "training cost is not a price: "..tostring(p).." "..tostring(src))
   FA.Vendors=oldV Auctionator=nil
+  -- every recipe the built-in trainers teach: its name never gets a price from the trainer
+  local taught=0
+  if FA.Vendors and FA.Vendors.hitsForLink then
+    for _,nm in ipairs({"Bolt of Woolen Cloth","Bolt of Silk Cloth","Cured Light Hide","Cured Heavy Hide","Coarse Grinding Stone","Sulfuric Acid","Coarse Blasting Powder","Handful of Copper Bolts","Cerulean Dye","Minor Mana Potion"}) do
+      local isTrain=false
+      for _,h in ipairs(FA.Vendors.hitsForLink(nil,nm)) do if h.item and h.item.train then isTrain=true end end
+      if isTrain then taught=taught+1
+        local pp,ss=FA.ItemPrice(nil,nm)
+        assert(pp==nil, nm.." priced from a trainer: "..tostring(pp).." "..tostring(ss))
+      end
+    end
+  end
+  assert(taught>=1, "the built-in trainers teach these: "..taught)
   -- the shopping list total
   local list={{id=4306,name="Silk Cloth",need=10,have=2,price=150,priceAge=3},{id=2321,name="Fine Thread",need=4,have=0},
     {id=4305,name="Bolt of Silk Cloth",need=5,have=0,craft=5}}

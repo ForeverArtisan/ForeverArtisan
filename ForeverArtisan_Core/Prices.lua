@@ -432,7 +432,9 @@ local function Vendor(id, name)
   local best, who
   for _, h in ipairs(hits) do
     local it = h.item
-    if it and it.p and it.p > 0 and (not id or not it.id or it.id == id) then
+    -- a trainer teaching a recipe of the same name ("Cerulean Dye" at an Alchemy trainer, 1s 50c)
+    -- doesn't sell the item: its price is the training cost
+    if it and not it.train and it.p and it.p > 0 and (not id or not it.id or it.id == id) then
       local unit = it.p / (it.stack or 1)
       if not best or unit < best then best, who = unit, h.npc and h.npc.n end
     end
