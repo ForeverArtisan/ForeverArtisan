@@ -709,6 +709,8 @@ ns.HitsForLink = hitsForLink
 FA.Vendors = {
   search = search,
   hitsForLink = hitsForLink,
+  -- the same hits, nearest first (Core: the trainer a plan sends you to)
+  sortHits = function(hits) return sortHits(hits) end,
   -- everyone who sells an item, nearest first (vendors you've met, then Questie's for materials)
   sellers = function(id, name) return sellers(id, name) end,
   -- vendors of profession materials from Questie you haven't met (0 without Questie)

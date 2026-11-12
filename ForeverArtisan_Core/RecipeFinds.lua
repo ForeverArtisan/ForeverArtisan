@@ -346,22 +346,28 @@ function ForeverArtisan.TrainableRecipe(prof, name)
   if not (V and V.hitsForLink and name) then return nil end
   local ok, hits = pcall(V.hitsForLink, nil, name)
   if not ok or type(hits) ~= "table" then return nil end
-  local best
+  -- the trainers who teach it, nearest first (Trade Contacts' order: your continent by distance,
+  -- then the rest; within about the same distance, ones you've met first)
+  local list = {}
   for _, h in ipairs(hits) do
     local it = h.item
-    if it and it.train then
+    if it and it.train and h.npc then
       local sk = it.sk and tostring(it.sk)
-      if not sk or not prof or sk:find(prof, 1, true) then
-        local at = sk and tonumber(sk:match("(%d+)%s*$")) or 1
-        local who = h.npc and h.npc.n and (h.npc.n .. " (" .. (h.npc.s or h.npc.z or "?")
-          .. (h.npc.seed and ", built-in trainer list" or "") .. ")")
-        -- same skill: the cheaper one, and a trainer you've met over one from the Forever beta
-        local better = not best or at < best.at
-          or (at == best.at and ((best.npc and best.npc.seed and not h.npc.seed) or (it.p or 0) < (best.cost or 0)))
-        if better then
-          best = { at = at, cost = it.p, who = who, npc = h.npc }
-        end
-      end
+      if not sk or not prof or sk:find(prof, 1, true) then list[#list + 1] = h end
+    end
+  end
+  if #list == 0 then return nil end
+  if V.sortHits then pcall(V.sortHits, list) end
+  local best
+  for _, h in ipairs(list) do
+    local it = h.item
+    local sk = it.sk and tostring(it.sk)
+    local at = sk and tonumber(sk:match("(%d+)%s*$")) or 1
+    -- the nearest one, whatever it charges (a few copper cheaper across the map isn't worth the trip)
+    if not best then
+      local who = h.npc.n and (h.npc.n .. " (" .. (h.npc.s or h.npc.z or "?")
+        .. (h.npc.seed and ", built-in trainer list" or "") .. ")")
+      best = { at = at, cost = it.p, who = who, npc = h.npc }
     end
   end
   return best

@@ -1688,6 +1688,18 @@ do
   FA.Vendors={hitsForLink=function(_,name)
     if name=="X" then return {{npc=neela,item={n="X",train=true,sk="First Aid 40",p=100}}} end return {} end}
   assert(FA.TrainableRecipe("First Aid","X").npc==neela, "trainer contact kept")
+  -- 0.9.43: same skill: the nearest trainer, not the cheapest (Crossroads: Razor Hill, not Bloodhoof for 15c less)
+  local vira={n="Vira Younghoof",s="Bloodhoof Village"} local rawrk={n="Rawrk",s="Razor Hill"} local mary={n="Mary Edras",s="Undercity"}
+  FA.Vendors={hitsForLink=function(_,name)
+      return {{npc=vira,item={n=name,train=true,sk="First Aid 55",p=135}},{npc=mary,item={n=name,train=true,sk="First Aid 55",p=150}},
+              {npc=rawrk,item={n=name,train=true,sk="First Aid 55",p=150}}} end,
+    sortHits=function(l) local d={[rawrk]=1,[vira]=2,[mary]=3} table.sort(l,function(a,b) return d[a.npc]<d[b.npc] end) return l end}
+  local tn=FA.TrainableRecipe("First Aid","Lesser Healing Potion")
+  assert(tn.npc==rawrk and tn.cost==150 and tn.at==55, "nearest trainer: "..tostring(tn.npc and tn.npc.n))
+  -- distance is what matters: the nearest, with the skill that trainer asks for
+  FA.Vendors.hitsForLink=function(_,name) return {{npc=vira,item={n=name,train=true,sk="First Aid 55",p=135}},{npc=rawrk,item={n=name,train=true,sk="First Aid 60",p=150}}} end
+  local ty=FA.TrainableRecipe("First Aid","Y")
+  assert(ty.npc==rawrk and ty.at==60, "nearest, its own skill")
   FA.Vendors=oldV
   print("TOOLTIP PRICES ok")
 end
@@ -3778,8 +3790,11 @@ do
   NAMES[1111]="Test Dagger"; NAMES[2222]="Test Dirk"
   fns.SetGear("mh",1111); fns.SetGear("oh",2222)
   local wm=fns.swapButton.attrs.weaponmacro or ""
-  assert(wm:find("/equipslot 17 Test Dirk",1,true) and wm:find("/equipslot 16 Test Dagger",1,true)
+  assert(wm:find("/equipslot 17 item:2222",1,true) and wm:find("/equipslot 16 item:1111",1,true)
     and wm:find("17",1,true) < wm:find("16",1,true), "off hand first: "..wm)
+  -- 0.9.43: by item ID, not name ("Sturdy Quarterstaff of the Wolf" is "Sturdy Quarterstaff" by its ID)
+  assert(not wm:find("Test Dagger",1,true), "no names in the swap: "..wm)
+  assert((fns.swapButton.attrs.polemacro or ""):find("^/equip item:%d+") or (fns.swapButton.attrs.polemacro or "")=="", "pole by ID too")
   local pc=fns.swapButton.scripts.PreClick
   assert(pc, "swap PreClick")
   local ok,err=pcall(pc,fns.swapButton) assert(ok, "PreClick: "..tostring(err))

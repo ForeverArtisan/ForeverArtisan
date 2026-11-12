@@ -588,9 +588,12 @@ function ns.GearSet()
   return mh, oh, c.pole
 end
 
+-- what the swap's macro lines equip: the item's ID ("item:2030"), not its name. An item with a random
+-- suffix is named "Sturdy Quarterstaff" by its ID but "Sturdy Quarterstaff of the Wolf" in your bags,
+-- so equipping by name found nothing and the swap back did nothing. By ID it also works in every game
+-- language.
 local function EquipName(id)
-  local f = (C_Item and C_Item.GetItemInfo) or GetItemInfo
-  return (f and f(id)) or ("item:" .. id)
+  return "item:" .. id
 end
 
 -- The game won't put an off-hand item on while the two-handed pole is still in your hands, and

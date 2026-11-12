@@ -1,5 +1,9 @@
 # ForeverArtisan changelog
 
+## 0.9.43 (2026-11-12)
+- Fixed: the fishing weapon swap now puts back weapons with a random suffix (like "Sturdy Quarterstaff of the Wolf"). Before, the swap back did nothing for them. Thanks to the player who tracked it down.
+- Fixed: plans send you to the nearest trainer for a recipe, not the cheapest one across the map. The "Train now" waypoint goes there too.
+
 ## 0.9.42 (2026-11-11)
 - Fixed: materials that share a name with a recipe a trainer teaches (Cerulean Dye, bolts of cloth, cured hides, grinding stones, Sulfuric Acid and others) no longer count at the price of learning the recipe. Material costs, profit, return and Cheapest to level use what they cost to buy. Thanks to the player who reported it.
 
