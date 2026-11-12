@@ -1635,6 +1635,7 @@ NEWS = {
   { "0.9.41", "Recipe tooltips show where each recipe turns yellow, green and gray, and where you are on it. GatherMate2 spots work in every game language." },
   { "0.9.42", "Material costs no longer use a trainer's price for learning a recipe of the same name." },
   { "0.9.43", "The fishing weapon swap puts back weapons like \"... of the Wolf\". Plans send you to the nearest trainer." },
+  { "0.9.44", "Everything from 0.9.40 to 0.9.43 for CurseForge: exact recipe colors, \"about\" counts, color ranges on tooltips and the fishing swap fix." },
 }
 
 local function verNum(v)

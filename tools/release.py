@@ -134,6 +134,27 @@ def package(root, ver, out_root):
     return zpath
 
 
+def check_root(root):
+    """The player download is the ForeverArtisan_* folders. Anything else at the top of the repo must be
+    on .pkgmeta's ignore list, or the packager leaves it in a "ForeverArtisan" folder with no .toc and
+    CurseForge rejects the file (0.9.40 to 0.9.43: a data .csv saved at the top of the repo)."""
+    ignore = set()
+    pm = os.path.join(root, ".pkgmeta")
+    if os.path.exists(pm):
+        on = False
+        for line in open(pm, encoding="utf-8"):
+            if re.match(r"^ignore:", line): on = True; continue
+            if on:
+                m = re.match(r"^\s+-\s+(\S+)", line)
+                if m: ignore.add(m.group(1).strip("/"))
+                elif line.strip() and not line.startswith(" "): on = False
+    stray = [n for n in sorted(os.listdir(root))
+             if not n.startswith("ForeverArtisan_") and n not in ignore and n not in (".git", ".pkgmeta")]
+    if stray:
+        sys.exit("Not part of the addon and not in .pkgmeta's ignore list (CurseForge would reject the zip): "
+                 + ", ".join(stray) + "\nMove them into tools/ or docs/, or add them to the ignore list.")
+
+
 def main():
     args = sys.argv[1:]
     out = None
@@ -148,6 +169,7 @@ def main():
     if not re.fullmatch(VERSION_RE, ver):
         sys.exit("version must look like 0.9.0 or 1.1.0-beta.1")
     print("ForeverArtisan %s  (%s)" % (ver, channel(ver)))
+    check_root(root)
     set_versions(root, ver)
     set_release_date(root)
     check_syntax(root)

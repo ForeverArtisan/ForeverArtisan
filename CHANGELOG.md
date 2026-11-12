@@ -1,5 +1,15 @@
 # ForeverArtisan changelog
 
+## 0.9.44 (2026-11-12)
+- CurseForge missed 0.9.40 to 0.9.43, so this update brings all of them. If you use the CurseForge app, here's what's new:
+- Added: recipe tooltips show where each recipe turns yellow, green and gray, and where you are on it ("At 153: orange for 17 more points"). In every profession window, and on recipe items in your bags, at vendors and on the Auction House.
+- Changed: plans know exactly where every recipe turns yellow and green, from the game's own data, so orange steps are exact counts. Steps that run into yellow or green say "about" ("about x8").
+- Changed: smarter plans for materials made from other made materials (Heavy Leather from Medium from Light): crafted from what you hold, the rest goes on the shopping list.
+- Added: Recipes on the AH (Market tab) shows each recipe in the color it would be at your skill.
+- Fixed: the fishing weapon swap puts back weapons with a random suffix (like "Sturdy Quarterstaff of the Wolf").
+- Fixed: material costs no longer count a trainer's price for learning a recipe of the same name (dyes, bolts, cured hides, grinding stones and others), so profit and return are right.
+- Fixed: plans send you to the nearest trainer for a recipe. GatherMate2 spots work on game clients in every language.
+
 ## 0.9.43 (2026-11-12)
 - Fixed: the fishing weapon swap now puts back weapons with a random suffix (like "Sturdy Quarterstaff of the Wolf"). Before, the swap back did nothing for them. Thanks to the player who tracked it down.
 - Fixed: plans send you to the nearest trainer for a recipe, not the cheapest one across the map. The "Train now" waypoint goes there too.
