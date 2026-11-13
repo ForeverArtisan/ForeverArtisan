@@ -565,7 +565,10 @@ function UI.Kit(ns, view)
 
   -- data rows: { id, icon, left, right, tip, tipTitle, act, onAct,  goal rows also: pct, done, want, goalIndex }
   function K.Fill(rows, data, offset)
+    -- remembered so the mouse wheel can move through the same list without rebuilding it
+    rows._data = data
     for i, r in ipairs(rows) do
+      r._list = rows
       local d = data[i + (offset or 0)]
       if d then
         if d.noIcon then r.icon:SetTexture(nil) else r.icon:SetTexture(d.icon or 134400) end
@@ -669,22 +672,31 @@ function UI.Kit(ns, view)
     return data
   end
 
+  -- Scrolling only moves the rows over the list already built (rows._data from the last Fill):
+  -- no rebuild per wheel turn. Rebuilding (plans, recipe sources, prices) on every turn made the
+  -- game stutter, most of all while flying. Anything that really changes still rebuilds (Changed).
+  local function Scroll(list, key, d, getMax)
+    local old = view[key] or 0
+    view[key] = math.max(0, math.min(old - d * 3, math.max(0, getMax())))
+    if type(list) == "table" and type(rawget(list, "_data")) == "table" then
+      if view[key] ~= old then K.Fill(list, list._data, view[key]) end
+    else
+      Changed()
+    end
+  end
+  K.Scroll = Scroll
+
   function K.Wheel(p, key, getMax)
     p:EnableMouseWheel(true)
-    p:SetScript("OnMouseWheel", function(_, d)
-      view[key] = math.max(0, math.min((view[key] or 0) - d * 3, math.max(0, getMax())))
-      Changed()
-    end)
+    p:SetScript("OnMouseWheel", function(_, d) Scroll(p.rows, key, d, getMax) end)
   end
 
   -- A longer list than fits: the mouse wheel over any of its rows scrolls it (view[key] is the offset).
   function K.ScrollRows(rows, key, getMax)
     for _, r in ipairs(rows) do
       r:EnableMouseWheel(true)
-      r:SetScript("OnMouseWheel", function(_, d)
-        view[key] = math.max(0, math.min((view[key] or 0) - d * 3, math.max(0, getMax())))
-        Changed()
-      end)
+      -- r._list: the visible rows this one was last filled in (a list can show fewer rows than it has)
+      r:SetScript("OnMouseWheel", function(self, d) Scroll(self._list, key, d, getMax) end)
     end
   end
 

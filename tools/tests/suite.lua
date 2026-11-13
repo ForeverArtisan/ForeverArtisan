@@ -3743,6 +3743,7 @@ do
       local src=debug.getinfo(f.scripts.OnUpdate,"S").source if src:find("Tracker.lua",1,true) then gf=f end end end
     assert(gf, "tracker event frame")
     local function tick() gf.scripts.OnUpdate(gf, 1.1) end
+    local function settle() for _=1,3 do tick() end end
     -- a stand-in plan: B is made from 3 A each, so A's need follows how many B you hold
     local held={}
     T.Planner("Testing3", function()
@@ -3753,18 +3754,22 @@ do
     assert(want(91002)==30, "A starts at 30")
     held.b=2 COUNTS[91001]=2
     fire("BAG_UPDATE_DELAYED") tick()
-    assert(want(91002)==24, "A follows B: "..tostring(want(91002)))
+    assert(want(91002)==30, "0.9.45: no replan while the bags are still changing")
+    tick() fire("BAG_UPDATE_DELAYED") tick() tick()
+    assert(want(91002)==30, "0.9.45: another loot restarts the wait")
+    settle()
+    assert(want(91002)==24, "A follows B once the bags settle: "..tostring(want(91002)))
     -- in combat: waits for the end of it
     held.b=4 COUNTS[91001]=4
     local realIC=InCombatLockdown InCombatLockdown=function() return true end
-    fire("BAG_UPDATE_DELAYED") tick()
+    fire("BAG_UPDATE_DELAYED") settle()
     assert(want(91002)==24, "no replan in combat")
     InCombatLockdown=function() return false end tick()
     assert(want(91002)==18, "replans after combat: "..tostring(want(91002)))
     InCombatLockdown=realIC
     -- a planner that can't plan yet (nil) leaves the list alone
     T.Planner("Testing3", function() return nil end)
-    fire("BAG_UPDATE_DELAYED") tick()
+    fire("BAG_UPDATE_DELAYED") settle()
     assert(want(91002)==18 and T.IsTracked("Testing3", 91001), "nil plan keeps the list")
     T.Planner("Testing3", nil) T.UntrackAll("Testing3") COUNTS[91001]=nil
     -- every crafting module hands the tracker a plan
@@ -3774,7 +3779,7 @@ do
     end
     -- the real thing: Tailoring tracked, bags change, amounts follow the plan
     T.TrackAll("Tailoring", shopping)
-    fire("BAG_UPDATE_DELAYED") tick()
+    fire("BAG_UPDATE_DELAYED") settle()
     assert(T.AllOn("Tailoring"), "still tracked after a replan")
     T.UntrackAll("Tailoring")
     print("goals replan ok")
@@ -3861,5 +3866,70 @@ do
   GetInventoryItemID=realInv COUNTS[2222]=nil EquipItemByName=nil
   fns.SetGear("mh",nil); fns.SetGear("oh",nil)
   print("weapon swap order ok")
+end
+do -- 0.9.45: Keen Skinning Knife counts as a Skinning Knife (game tool category 166)
+  local sk=loadedFrames["ForeverArtisan_Skinning"].ns
+  local saved={} for _,id in ipairs({7005,269716,15138}) do saved[id]=COUNTS[id] COUNTS[id]=nil end
+  assert(sk.HasKnife()==false, "no knife -> missing")
+  COUNTS[269716]=1 assert(sk.HasKnife()==true, "Keen Skinning Knife counts") COUNTS[269716]=nil
+  COUNTS[7005]=1 assert(sk.HasKnife()==true, "Skinning Knife counts") COUNTS[7005]=nil
+  COUNTS[15138]=1 assert(sk.HasKnife()==false, "Onyxia Scale Cloak is not a knife") COUNTS[15138]=nil
+  COUNTS[260811]=1 assert(sk.HasKnife()==true, "Gnomish Army Knife counts as a knife") COUNTS[260811]=nil
+  for id,v in pairs(saved) do COUNTS[id]=v end
+  print("skinning knife ok")
+end
+do -- 0.9.45: Mining Picks from the game's tool data
+  local mn=loadedFrames["ForeverArtisan_Mining"].ns
+  local ids={2901,6206,259229,260811,778,1819,1893}
+  local saved={} for _,id in ipairs(ids) do saved[id]=COUNTS[id] COUNTS[id]=nil end
+  local has=mn.HasPick
+  assert(has, "Mining HasPick exposed")
+  assert(has()==false, "no pick -> missing")
+  for _,id in ipairs({2901,6206,259229,260811}) do COUNTS[id]=1 assert(has()==true, "pick "..id.." counts") COUNTS[id]=nil end
+  for _,id in ipairs({778,1819,1893}) do COUNTS[id]=1 assert(has()==false, "weapon "..id.." is not a pick") COUNTS[id]=nil end
+  for id,v in pairs(saved) do COUNTS[id]=v end
+  print("mining pick ok")
+end
+do -- 0.9.45: the mouse wheel moves through the list already built, no rebuild per turn (stutter while flying)
+  local aid=loadedFrames["ForeverArtisan_FirstAid"].ns
+  local oldNow, calls=aid.MakeNow, 0
+  aid.MakeNow=function() calls=calls+1 local t={} for i=1,30 do t[i]={r={name="Fake "..i,itemId=1251,reagents={}},color="orange",missing={},make=1,stations={}} end return t end
+  for _,f in ipairs(frames) do if f._text=="First Aid" and f.scripts.OnClick then f.scripts.OnClick(f) end end
+  aid.OnChange()
+  local function top()
+    local m for _,f in ipairs(frames) do
+      local t=f.left and f._shown and f.left._text
+      local i=t and tonumber(t:match("Fake (%d+)")) if i and (not m or i<m) then m=i end
+    end return m end
+  local row for _,f in ipairs(frames) do if f.left and f._shown and f.left._text and f.left._text:find("Fake 1|r",1,true) then row=f end end
+  assert(row, "make now row")
+  local before=calls
+  row.scripts.OnMouseWheel(row,-1); row.scripts.OnMouseWheel(row,-1)
+  assert(top()==7, "scrolled 6: "..tostring(top()))
+  assert(calls==before, "scrolling rebuilt the list "..(calls-before).." times")
+  row.scripts.OnMouseWheel(row,100) assert(top()==1, "back to the top")
+  aid.OnChange() assert(calls==before+1, "a real change still rebuilds")
+  aid.MakeNow=oldNow aid.OnChange()
+  print("scroll without rebuild ok")
+end
+do -- 0.9.45: the Recipe book isn't rebuilt when only your bags change; hover text is built on hover
+  local cns=loadedFrames["ForeverArtisan_Cooking"].ns
+  for _,f in pairs(frames) do if f._text=="Recipe book" and f.scripts.OnClick then f.scripts.OnClick(f) end end
+  cns.OnChange()
+  local book=cns.lastBook
+  assert(book and #book>1, "recipe book built")
+  local un for _,d in ipairs(book) do if d.recipe and not d.recipe.learned then un=d break end end
+  local any for _,d in ipairs(book) do if d.recipe then any=d break end end
+  assert(any and any.tipFn and not any.tip, "book rows build their hover text on hover")
+  local ok,txt=pcall(any.tipFn) assert(ok and type(txt)=="string", "hover text: "..tostring(txt))
+  if un then local _,u=pcall(un.tipFn) assert(u:find("Where to get it",1,true), "unlearned: where to get it") end
+  local realWhere, calls=ForeverArtisan.RecipeWhere, 0
+  ForeverArtisan.RecipeWhere=function(...) calls=calls+1 return realWhere(...) end
+  fire("BAG_UPDATE_DELAYED")
+  assert(cns.lastBook==book, "bags changed: recipe book not rebuilt")
+  cns.OnChange()
+  assert(cns.lastBook~=book, "a real change still rebuilds")
+  ForeverArtisan.RecipeWhere=realWhere
+  print("recipe book bags ok")
 end
 print("SUITE OK")

@@ -496,13 +496,20 @@ local function BookData()
         left = GOLD .. ("Not learned yet (%d)"):format(unknown) .. "|r", right = GRAY .. "hover one for where to get it|r" }
     end
     local col = ns.ColorFor(r, skill)
-    local tip = ReagentTip(r)
-    local tag, npc
+    -- the hover text is built only on hover: it counts what's in your bags, so the list itself
+    -- doesn't depend on them and isn't rebuilt when they change
+    local tag, npc, lines
     if not r.learned then
-      local lines = where[r].lines
+      lines = where[r].lines
       tag, npc = where[r].tag, where[r].npc
-      tip = GOLD .. "Where to get it|r\n" .. table.concat(lines, "\n")
-        .. (npc and ("\n|cff80c0ffClick for a waypoint|r") or "") .. "\n\n" .. tip
+    end
+    local function tipFn()
+      local tip = ReagentTip(r)
+      if lines then
+        tip = GOLD .. "Where to get it|r\n" .. table.concat(lines, "\n")
+          .. (npc and ("\n|cff80c0ffClick for a waypoint|r") or "") .. "\n\n" .. tip
+      end
+      return tip
     end
     data[#data + 1] = { id = r.itemId, icon = Icon(r.itemId), recipe = r,
       left = ns.COLOR_CODE[col] .. r.name .. "|r",
@@ -512,7 +519,7 @@ local function BookData()
         return GRAY .. ((g and t) and (g .. "  ·  " .. t) or g or t or "") .. "|r"
       end)(),
       npc = npc,
-      tip = tip }
+      tipFn = tipFn }
   end
   return data
 end
@@ -822,7 +829,10 @@ function ns.ToggleWindow()
   if f:IsShown() then f:Hide() else f:Show(); ShowTab(view.tab) end
 end
 
-function ns.OnChange()
+-- why: "bags" when only your bags changed. The Recipe book doesn't depend on them (its hover text
+-- reads your bags when shown), so it isn't rebuilt for every loot.
+function ns.OnChange(why)
+  if why == "bags" and view.tab == "guide" then return end
   if f and f:IsShown() and REFRESH[view.tab] then REFRESH[view.tab](pages[view.tab]) end
 end
 -- the on-screen goals list asks for a fresh shopping list when your bags change, so a material

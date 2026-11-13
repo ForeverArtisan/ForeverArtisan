@@ -1,5 +1,11 @@
 # ForeverArtisan changelog
 
+## 0.9.45 (2026-11-13)
+- Fixed: the Keen Skinning Knife and Gnomish Army Knife count as a Skinning Knife, so no more "No Skinning Knife" reminder while you carry one. Thanks to the player who reported it.
+- Fixed: Rock Chipper, Vindael's Spectral Pickaxe and Gnomish Army Knife count as a Mining Pick. The list now comes from the game's own tool data.
+- Fixed: scrolling lists (Recipe book, Progress plan and shopping list, Best crafts, logs) no longer rebuilds the whole list on every turn of the mouse wheel, so no more stutter while scrolling, most noticeable while flying. Thanks to the player who reported it.
+- Changed: less work in the background. With a profession window open on the Recipe book, looting no longer rebuilds it. The on-screen goals list re-plans once your bags have been quiet for a few seconds, not after every item you loot.
+
 ## 0.9.44 (2026-11-12)
 - CurseForge missed 0.9.40 to 0.9.43, so this update brings all of them. If you use the CurseForge app, here's what's new:
 - Added: recipe tooltips show where each recipe turns yellow, green and gray, and where you are on it ("At 153: orange for 17 more points"). In every profession window, and on recipe items in your bags, at vendors and on the Auction House.

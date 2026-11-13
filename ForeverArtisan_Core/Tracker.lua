@@ -391,19 +391,26 @@ end
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "BAG_UPDATE_DELAYED", "PLAYERBANKSLOTS_CHANGED",
   "BANKFRAME_CLOSED", "SKILL_LINES_CHANGED", "CHAT_MSG_SKILL" }) do pcall(ev.RegisterEvent, ev, e) end
+-- seconds since the bags last changed: planning again waits until they've been quiet a moment,
+-- so looting a pile of things (or buying a stack in clicks) plans once, not after every item
+local QUIET = 3
+local quiet = QUIET
+T.QUIET = QUIET
 ev:SetScript("OnEvent", function(_, e)
   dirty = true
+  if e == "BAG_UPDATE_DELAYED" or e == "PLAYERBANKSLOTS_CHANGED" then quiet = 0 end
   if e == "PLAYER_ENTERING_WORLD" then Refresh() end
 end)
 -- counts change as you loot, buy and bank, and gathering goals count on their own: a light redraw
 -- every second covers all of it (also while the list is hidden, so a new goal can bring it back).
--- Planning again waits for that tick (at most once a second) and for the end of combat.
+-- Planning again waits for that tick, for the bags to settle and for the end of combat.
 local acc = 0
 ev:SetScript("OnUpdate", function(_, el)
   acc = acc + (el or 0)
+  quiet = quiet + (el or 0)
   if acc >= 1 then
     acc = 0
-    if dirty and next(planners) and not (InCombatLockdown and InCombatLockdown()) then T.Replan() end
+    if dirty and quiet >= QUIET and next(planners) and not (InCombatLockdown and InCombatLockdown()) then T.Replan() end
     Refresh()
   end
 end)

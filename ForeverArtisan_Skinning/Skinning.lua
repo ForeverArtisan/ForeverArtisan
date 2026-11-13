@@ -11,8 +11,10 @@ local GREEN, YELLOW, RED, GRAY = "|cff40ff40", "|cffffff00", "|cffff4040", "|cff
 local RAW_CAP = 5000
 local SKINNING_SKILL_LINE = 393
 local SKIN_SPELLS = { [8613] = true, [8617] = true, [8618] = true, [10768] = true }
--- Skinning Knife, plus skinners that also count as one
-local KNIVES = { 7005, 15138, 19901 }
+-- Items the game counts as a Skinning Knife (TotemCategory 166, or 161 Gnomish Army Knife whose mask covers it;
+-- build 1.60.1.70862): Skinning Knife, Keen Skinning Knife (Forever), Gnomish Army Knife
+local KNIVES = { 7005, 269716, 260811 }
+ns.KNIVES = KNIVES
 
 local db
 local say = ForeverArtisan.Printer("Skinning")

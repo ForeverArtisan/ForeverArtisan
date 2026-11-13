@@ -1028,7 +1028,7 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
   elseif e == "SKILL_LINES_CHANGED" then
     Skill()
   elseif e == "BAG_UPDATE_DELAYED" then
-    if ns.OnChange then ns.OnChange() end
+    if ns.OnChange then ns.OnChange("bags") end
   end
 end)
 

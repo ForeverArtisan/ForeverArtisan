@@ -11,8 +11,10 @@ local RAW_CAP = 5000
 local MINING_SKILL_LINE = 186
 local MINE_SPELLS = { [2575] = true, [2576] = true, [3564] = true, [10248] = true }
 local FIND_MINERALS_ID = 2580
--- the Mining Pick, plus the weapons that also work as one
-local PICKS = { 2901, 756, 778, 1819, 1893, 1959, 9465 }
+-- Items the game counts as a Mining Pick (TotemCategory 165, or 161 Gnomish Army Knife whose mask covers it;
+-- build 1.60.1.70862): Mining Pick, Rock Chipper, Vindael's Spectral Pickaxe (Forever), Gnomish Army Knife
+local PICKS = { 2901, 6206, 259229, 260811 }
+ns.PICKS = PICKS
 
 local db
 local say = ForeverArtisan.Printer("Mining")

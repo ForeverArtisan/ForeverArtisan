@@ -1636,6 +1636,7 @@ NEWS = {
   { "0.9.42", "Material costs no longer use a trainer's price for learning a recipe of the same name." },
   { "0.9.43", "The fishing weapon swap puts back weapons like \"... of the Wolf\". Plans send you to the nearest trainer." },
   { "0.9.44", "Everything from 0.9.40 to 0.9.43 for CurseForge: exact recipe colors, \"about\" counts, color ranges on tooltips and the fishing swap fix." },
+  { "0.9.45", "Keen Skinning Knife and Gnomish Army Knife count as a Skinning Knife. Rock Chipper, Vindael's Spectral Pickaxe and Gnomish Army Knife count as a Mining Pick. Smoother scrolling in every list, and less work in the background while you loot." },
 }
 
 local function verNum(v)
