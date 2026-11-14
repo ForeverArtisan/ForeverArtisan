@@ -1,5 +1,5 @@
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
--- ForeverArtisan: Core: disenchanting (BETA).
+-- ForeverArtisan: Core: disenchanting.
 -- What a green, blue or purple item disenchants into, what that's worth at the Auction House, and a log of
 -- your own disenchants that checks the rules against what Forever really gives.
 -- No item list: the result follows from the item's quality, item level and armor/weapon (the game's rules,
@@ -11,7 +11,6 @@
 --   FA.DisenchantLogSummary()          /fa disenchant log
 local FA = ForeverArtisan
 local GOLD, GRAY, GREEN, RED = FA.GOLD or "|cffd4a94e", FA.GRAY or "|cff9d9d9d", FA.GREEN or "|cff40ff40", FA.RED or "|cffff4040"
-local BETA = "|cffff9020BETA|r"
 local PREFIX = FA.Prefix and FA.Prefix() or "ForeverArtisan: "
 local AH_CUT = 0.95
 local DE_SPELL = 13262
@@ -278,7 +277,7 @@ function FA.DisenchantTipLines(tt, item)
   if not res then return false end
   local _, key = FA.DisenchantInfo(item)
   local priced = value > 0
-  tt:AddDoubleLine(GOLD .. "Disenchant|r " .. BETA,
+  tt:AddDoubleLine(GOLD .. "Disenchant|r",
     priced and ("~" .. money(value) .. (#missing > 0 and "+" or "")) or (GRAY .. "no prices yet|r"), 1, 1, 1, 1, 1, 1)
   for _, r in ipairs(res) do
     local v, form = sellValue(r.id)
@@ -332,7 +331,7 @@ function FA.DisenchantRowLines(tt, itemId, makes, cost)
   if not value or value <= 0 then return end
   local each = value * (makes or 1)
   local profit = each - (cost or 0)
-  tt:AddDoubleLine("Disenchanted instead " .. BETA, money(each) .. " (" .. (profit >= 0 and (GREEN .. "+" .. money(profit)) or (RED .. "-" .. money(-profit))) .. "|r)",
+  tt:AddDoubleLine("Disenchanted instead", money(each) .. " (" .. (profit >= 0 and (GREEN .. "+" .. money(profit)) or (RED .. "-" .. money(-profit))) .. "|r)",
     1, 1, 1, 1, 1, 1)
 end
 

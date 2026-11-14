@@ -1,5 +1,10 @@
 # ForeverArtisan changelog
 
+## 0.9.46 (2026-11-14)
+- Changed: the Market tab and disenchant values are out of beta: no more BETA tags.
+- Fixed: the Skinning tooltip line now only shows on corpses the game marks "Skinnable", so it's never wrong: no more lines on beasts that can't be skinned (like Plains Creepers), and it shows on Forever's skinnable humanoids (like Moonrage worgen). Thanks to the player who reported it.
+- Changed: the Legacy points tooltip no longer says its rules are from the beta. They're confirmed for launch.
+
 ## 0.9.45 (2026-11-13)
 - Fixed: the Keen Skinning Knife and Gnomish Army Knife count as a Skinning Knife, so no more "No Skinning Knife" reminder while you carry one. Thanks to the player who reported it.
 - Fixed: Rock Chipper, Vindael's Spectral Pickaxe and Gnomish Army Knife count as a Mining Pick. The list now comes from the game's own tool data.

@@ -2031,7 +2031,9 @@ do
   assert(FA.MarketStage()=="beta" and mk.badge._text:find("BETA") and mk.note._text:find("beta Auction House prices"), "beta before launch")
   local oT=time
   time=function(t) if t then return oT(t) end return FA.LAUNCH_AT + 3*86400 end
-  assert(FA.MarketStage()=="early", "early days after launch")
+  assert(FA.MarketStage()==nil, "0.9.46: no flag after launch")
+  run("FOREVERARTISAN","market")
+  assert(mk.badge._text=="" and not mk.note._text:find("beta",1,true) and not mk.note._text:find("Early days",1,true), "0.9.46: no BETA badge or early-days note after launch")
   time=function(t) if t then return oT(t) end return FA.LAUNCH_AT + 30*86400 end
   assert(FA.MarketStage()==nil, "no flag a month in")
   time=oT
@@ -3931,5 +3933,39 @@ do -- 0.9.45: the Recipe book isn't rebuilt when only your bags change; hover te
   assert(cns.lastBook~=book, "a real change still rebuilds")
   ForeverArtisan.RecipeWhere=realWhere
   print("recipe book bags ok")
+end
+do -- 0.9.46: disenchant tooltip lines have no BETA tag
+  local src=io.open("ForeverArtisan_Core/Disenchant.lua"):read("*a")
+  assert(not src:find("BETA",1,true), "no BETA in disenchant")
+  print("no beta ok")
+end
+do -- 0.9.46: the Skinning line only on corpses the game marks "Skinnable" (Plains Creeper, Moonrage worgen)
+  local sk=loadedFrames["ForeverArtisan_Skinning"].ns
+  local sv={UnitCreatureType,UnitIsDead,UnitName,UnitLevel,UnitIsPlayer,UNIT_SKINNABLE_LEATHER}
+  local dead,ctype=false,"Beast"
+  UnitCreatureType=function() return ctype end UnitIsDead=function() return dead end
+  UnitName=function() return "Mob" end UnitLevel=function() return 10 end
+  UnitIsPlayer=function() return false end UNIT_SKINNABLE_LEATHER="Skinnable"
+  local function tip(lines)
+    local tt={added={}}
+    _G.FATestTipTextLeft2={GetText=function() return lines[1] end}
+    function tt:GetName() return "FATestTip" end
+    function tt:NumLines() return 1+#lines end
+    function tt:GetUnit() return "Mob","mouseover" end
+    function tt:AddLine(x) self.added[#self.added+1]=x end
+    function tt:AddDoubleLine(a) self.added[#self.added+1]=a end
+    function tt:Show() end
+    sk.UnitTip(tt)
+    for _,x in ipairs(tt.added) do if tostring(x):find("Skinning") then return true end end
+    return false
+  end
+  assert(tip({})==false, "a live beast: no line (can't know)")
+  dead=true assert(tip({})==false, "a beast corpse without Skinnable (Plains Creeper): no line")
+  assert(tip({"Skinnable"})==true, "a Skinnable corpse: line")
+  ctype="Humanoid" assert(tip({"Skinnable"})==true, "a Skinnable humanoid corpse (Moonrage): line")
+  assert(tip({})==false, "a humanoid corpse without Skinnable: no line")
+  _G.FATestTipTextLeft2=nil
+  UnitCreatureType,UnitIsDead,UnitName,UnitLevel,UnitIsPlayer,UNIT_SKINNABLE_LEATHER=sv[1],sv[2],sv[3],sv[4],sv[5],sv[6]
+  print("skinnable ok")
 end
 print("SUITE OK")

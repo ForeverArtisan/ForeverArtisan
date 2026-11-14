@@ -136,7 +136,7 @@ function FA.LegacyLines()
   local line = GOLD .. "Legacy points:|r " .. total .. GRAY .. " earned (estimate)|r"
     .. (#nexts > 0 and (GRAY .. "  ·  next: |r" .. table.concat(nexts, ", ")) or "")
   local tip = { "Legacy points (estimate)",
-    "1 point per class at level 25, 45 and 60, and 1 per crafting profession at skill 150, 225 and 300, shared by your account. Rules seen on the beta; recheck at launch.",
+    "1 point per class at level 25, 45 and 60, and 1 per crafting profession at skill 150, 225 and 300, earned across your account. Other challenges (PvP, exploring, dungeons, raids) aren't counted here.",
     " " }
   for _, r in ipairs(rows) do
     tip[#tip + 1] = ("%s: %d of 3  " .. GRAY .. "(best %d%s%s)|r"):format(r.name, r.earned, r.best,

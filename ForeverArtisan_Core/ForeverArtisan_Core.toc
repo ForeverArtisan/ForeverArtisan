@@ -3,8 +3,8 @@
 ## IconTexture: Interface\AddOns\ForeverArtisan_Core\Media\addon
 ## Notes: Required base for the ForeverArtisan crafting suite: the /fa hub, a panel to turn modules on or off, the minimap button and the shared look.
 ## Author: ForeverArtisan
-## Version: 0.9.45
-## X-Release-Date: 2026-11-13
+## Version: 0.9.46
+## X-Release-Date: 2026-11-14
 ## X-Copyright: Copyright (c) 2026 ForeverArtisan. All rights reserved.
 ## X-Website: https://foreverartisan.app
 ## X-Curse-Project-ID: 1716370

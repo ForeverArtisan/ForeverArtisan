@@ -786,7 +786,7 @@ local function buildSettingsTab(p)
 end
 
 -- Market: every profession's Best crafts in one list, by profit after the Auction House cut.
--- Flagged BETA until two weeks after launch: beta and launch-week prices swing too much to trust fully.
+-- Flagged BETA before launch only: beta realm prices swing too much to trust fully.
 local MARKET_ROWS = 15
 local MARKET_TOP = -106 -- first row, under the "click a craft" line
 -- this week's direction, on rows and in the trend view
@@ -798,11 +798,10 @@ local MARKET_DOT = {
 }
 local MARKET_CONF = { good = "steady price", ok = "price looks fair, check it", shaky = "shaky price: old, few listed or swinging" }
 
--- "beta" before launch, "early" for two weeks after, nil after that
+-- "beta" before launch, nil after (0.9.46: the launch-week "early days" flag is gone)
 function FA.MarketStage()
   local now, at = (time and time()) or 0, FA.LAUNCH_AT or 0
   if now < at then return "beta" end
-  if now < at + 14 * 86400 then return "early" end
 end
 
 local function marketData()
@@ -824,7 +823,6 @@ function refreshMarket()
   local stage = FA.MarketStage()
   p.badge:SetText(stage and ("|cffff9020BETA|r") or "")
   p.note:SetText(stage == "beta" and ("|cffff9020These are beta Auction House prices.|r " .. GREY .. "They swing a lot, so treat the ranking as a rough guide until launch.|r")
-    or stage == "early" and ("|cffff9020Early days:|r " .. GREY .. "launch prices swing a lot. Check the Auction House before you craft in bulk.|r")
     or (GREY .. "Recipes you know, in every profession, ranked by profit per craft after the Auction House cut.|r"))
   p.source:SetText(FA.PriceSourceLines and table.concat(FA.PriceSourceLines(), "\n") or "")
   local okW, wline, wtip = false, nil, nil
@@ -1637,6 +1635,7 @@ NEWS = {
   { "0.9.43", "The fishing weapon swap puts back weapons like \"... of the Wolf\". Plans send you to the nearest trainer." },
   { "0.9.44", "Everything from 0.9.40 to 0.9.43 for CurseForge: exact recipe colors, \"about\" counts, color ranges on tooltips and the fishing swap fix." },
   { "0.9.45", "Keen Skinning Knife and Gnomish Army Knife count as a Skinning Knife. Rock Chipper, Vindael's Spectral Pickaxe and Gnomish Army Knife count as a Mining Pick. Smoother scrolling in every list, and less work in the background while you loot." },
+  { "0.9.46", "The Market tab and disenchant values are out of beta. The Skinning tooltip line only shows on corpses the game marks Skinnable, so it's never wrong." },
 }
 
 local function verNum(v)
@@ -1822,7 +1821,7 @@ local function help()
   print("  /fa goals  - show or hide the on-screen goals list (lock | unlock | reset | clear)")
   print("  /fa new  - what's new in recent releases")
   if FA.RECIPE_WATCH_READY then print("  /fa recipewatch on | quiet | off  - recipes you or your alts don't know, noted when you see them on the Auction House (quiet: no chat)") end
-  print("  /fa disenchant on | off | log  - what greens, blues and purples disenchant into and what that's worth, on item tooltips (beta)")
+  print("  /fa disenchant on | off | log  - what greens, blues and purples disenchant into and what that's worth, on item tooltips")
   print("  /fa nameplates on | off  - the game's friendly nameplates (job titles in town need them; also shows them over players)")
   print("  /fa titles on | off | auto  - job titles under NPC names (auto leaves them to Plater and other nameplate addons)")
   print("  /fa prices on | off  - Auction House prices on item tooltips (off while Auctionator shows its own)")

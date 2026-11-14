@@ -491,14 +491,27 @@ local function ItemTip(tt)
   tt:Show()
 end
 
--- mouse over a beast: show the skill it needs and your color for it
-local SKINNABLE_TYPES = { Beast = true, Dragonkin = true }
+-- hover a corpse the game marks "Skinnable": the skill it needs and your color for it.
+-- Only corpses: whether a mob can be skinned is server data, and the game only says so on a
+-- corpse (Plains Creepers are beasts that can't be; Moonrage worgen are humanoids that can).
+-- Live mobs get no line, so it's never wrong. (0.9.46; before that every live beast had one.)
+local function TipSaysSkinnable(tt)
+  local want = UNIT_SKINNABLE_LEATHER or "Skinnable"
+  local name = tt.GetName and tt:GetName()
+  local n = (tt.NumLines and tt:NumLines()) or 0
+  for i = 2, n do
+    local fs = name and _G[name .. "TextLeft" .. i]
+    local t = fs and fs.GetText and fs:GetText()
+    if type(t) == "string" and t:find(want, 1, true) then return true end
+  end
+  return false
+end
+
 local function UnitTip(tt)
   if not db or db.settings.tooltips == false or not tt or tt.faSkinDone then return end
   local _, unit = tt:GetUnit()
   if not unit or UnitIsPlayer(unit) then return end
-  local ctype = UnitCreatureType and UnitCreatureType(unit)
-  if not (ctype and SKINNABLE_TYPES[ctype]) then return end
+  if not (UnitIsDead and UnitIsDead(unit)) or not TipSaysSkinnable(tt) then return end
   local lvl = UnitLevel(unit)
   if not lvl or lvl < 1 then return end
   tt.faSkinDone = true
@@ -509,6 +522,8 @@ local function UnitTip(tt)
     skill and ("  " .. ns.COLOR_CODE[c] .. ns.COLOR_WORD[c] .. "|r") or ""))
   tt:Show()
 end
+
+ns.UnitTip = function(tt) return UnitTip(tt) end
 
 local function HookTooltips()
   local function clear(self) self.faSkinDone = nil end

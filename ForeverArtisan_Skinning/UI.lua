@@ -48,7 +48,7 @@ local function BuildMainPage(p)
   p.checks = {
     Check(p, "Remind me when my Skinning Knife is missing", 16, -360,
       function() return S().reminder end, function(v) S().reminder = v; if v then ns.CheckReminders(true) end end),
-    Check(p, "Show skinning info on tooltips (beasts and leather)", 16, -386,
+    Check(p, "Show skinning info on tooltips (skinnable corpses and leather)", 16, -386,
       function() return S().tooltips end, function(v) S().tooltips = v end),
     Check(p, "Chat message for every skin", 16, -412,
       function() return S().verbose end, function(v) S().verbose = v end),
