@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.47 (2026-11-14)
+- Added: a Support section on the Info tab with a link to copy (foreverartisan.app/support), and /fa support. No popups. ForeverArtisan is free and always will be, and support never unlocks features.
+
 ## 0.9.46 (2026-11-14)
 - Changed: the Market tab and disenchant values are out of beta: no more BETA tags.
 - Fixed: the Skinning tooltip line now only shows on corpses the game marks "Skinnable", so it's never wrong: no more lines on beasts that can't be skinned (like Plains Creepers), and it shows on Forever's skinnable humanoids (like Moonrage worgen). Thanks to the player who reported it.

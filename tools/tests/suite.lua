@@ -3968,4 +3968,21 @@ do -- 0.9.46: the Skinning line only on corpses the game marks "Skinnable" (Plai
   UnitCreatureType,UnitIsDead,UnitName,UnitLevel,UnitIsPlayer,UNIT_SKINNABLE_LEATHER=sv[1],sv[2],sv[3],sv[4],sv[5],sv[6]
   print("skinnable ok")
 end
+-- 0.9.47 support link: a copy box on Info and /fa support, quiet (no popup)
+do
+  run("FOREVERARTISAN","")
+  local pnl=_G.ForeverArtisanPanel
+  assert(pnl.support and (pnl.support._text or pnl.support:GetText())=="foreverartisan.app/support", "Info has the support box")
+  local P0=print; local out={}
+  print=function(...) out[#out+1]=table.concat({...}," ") end
+  local shown
+  local SP=StaticPopup_Show; StaticPopup_Show=function(n) shown=n end
+  run("FOREVERARTISAN","support"); print=P0; StaticPopup_Show=SP
+  local txt=table.concat(out,"\n")
+  assert(#out==1 and txt:find("foreverartisan.app/support",1,true) and txt:find("free and always will be",1,true), "/fa support line: "..txt)
+  assert(not txt:find("!",1,true), "no exclamation marks")
+  assert(not shown, "no popup")
+  assert(pnl._shown and pnl.tab=="info", "/fa support opens Info")
+  print("0.9.47 support link ok")
+end
 print("SUITE OK")

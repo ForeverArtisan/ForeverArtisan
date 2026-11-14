@@ -1477,11 +1477,18 @@ local function buildInfoTab(p)
   Txt(p, "GameFontHighlightSmall", 16, y0 - 46, 428, "Guides, the changelog and the bug form: the site")
   panel.site = CopyBox(p, FA.WEBSITE, 300, "foreverartisan.app", "Guides, the changelog, ideas and the bug form.")
   panel.site:SetPoint("TOPLEFT", 22, y0 - 62)
-  Txt(p, "GameFontDisableSmall", 16, y0 - 90, 428, "The game can't open links: click a box, press Ctrl+C, then paste it in your browser.")
+
+  -- a quiet way to back it: no popups, never unlocks anything
+  Head(p, y0 - 96, "Support")
+  Txt(p, "GameFontHighlightSmall", 16, y0 - 118, 428, "ForeverArtisan is free and always will be. To help keep it going:")
+  panel.support = CopyBox(p, FA.SUPPORT, 300, "Support ForeverArtisan",
+    "Tip any amount or join monthly. Backers get an Artisan role in Discord and their name on the site. Support never unlocks features.")
+  panel.support:SetPoint("TOPLEFT", 22, y0 - 134)
+  Txt(p, "GameFontDisableSmall", 16, y0 - 162, 428, "The game can't open links: click a box, press Ctrl+C, then paste it in your browser.")
 
   -- the newest releases, from the same lines as the What's new note in chat
-  Head(p, y0 - 120, "What's new")
-  panel.news = Txt(p, "GameFontHighlightSmall", 16, y0 - 142, 428)
+  Head(p, y0 - 192, "What's new")
+  panel.news = Txt(p, "GameFontHighlightSmall", 16, y0 - 214, 428)
   panel.news:SetSpacing(3)
   local cur = FA.Version()
   local lines = {}
@@ -1636,6 +1643,7 @@ NEWS = {
   { "0.9.44", "Everything from 0.9.40 to 0.9.43 for CurseForge: exact recipe colors, \"about\" counts, color ranges on tooltips and the fishing swap fix." },
   { "0.9.45", "Keen Skinning Knife and Gnomish Army Knife count as a Skinning Knife. Rock Chipper, Vindael's Spectral Pickaxe and Gnomish Army Knife count as a Mining Pick. Smoother scrolling in every list, and less work in the background while you loot." },
   { "0.9.46", "The Market tab and disenchant values are out of beta. The Skinning tooltip line only shows on corpses the game marks Skinnable, so it's never wrong." },
+  { "0.9.47", "A Support section on the Info tab with a link to copy, and /fa support. ForeverArtisan stays free, and support never unlocks features." },
 }
 
 local function verNum(v)
@@ -1817,6 +1825,7 @@ local function help()
   print("  /fa feedback  - tell us what to build next (Discord)")
   print("  /fa bug  - where to report an error (" .. FA.BUG_URL .. ")")
   print("  /fa discord  - the ForeverArtisan Discord (" .. FA.DISCORD .. ")")
+  print("  /fa support  - help keep ForeverArtisan going (" .. FA.SUPPORT .. ")")
   print("  /fa market  - your most profitable crafts, every profession in one list")
   print("  /fa goals  - show or hide the on-screen goals list (lock | unlock | reset | clear)")
   print("  /fa new  - what's new in recent releases")
@@ -1868,6 +1877,9 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     showPanel("info")
   elseif lower == "discord" then
     print(PREFIX .. "Discord: " .. FA.DISCORD .. "  " .. GREY .. "(copy it from the box on the Info tab)|r")
+    showPanel("info")
+  elseif lower == "support" or lower == "donate" or lower == "tip" then
+    print(PREFIX .. "ForeverArtisan is free and always will be. To help keep it going: " .. FA.SUPPORT .. "  " .. GREY .. "(copy it from the box on the Info tab)|r")
     showPanel("info")
   elseif lower == "goals" or lower == "goal" or lower == "track" then
     if FA.Track then FA.Track.Slash(rest) end

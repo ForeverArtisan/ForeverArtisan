@@ -22,6 +22,7 @@ FA.BAR_DONE = { 0.25, 1, 0.25, 0.85 }
 FA.BAR_CAPPED = { 1, 0.25, 0.25, 0.85 }
 FA.WEBSITE = "foreverartisan.app"
 FA.DISCORD = "discord.gg/egbRhRtr2J"
+FA.SUPPORT = "foreverartisan.app/support"
 -- one line, same words everywhere it appears (What's new, /fa feedback)
 FA.BUG_URL = "foreverartisan.app/bug"
 FA.BUG_LINE = "Seeing an error? Tell us at " .. FA.BUG_URL
