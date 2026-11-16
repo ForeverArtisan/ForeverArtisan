@@ -1509,7 +1509,7 @@ local function buildInfoTab(p)
 end
 
 local function buildPanel()
-  panel = FA.UI.Frame({ name = "ForeverArtisanPanel", width = 460, height = 600, strata = "DIALOG",
+  panel = FA.UI.Frame({ name = "ForeverArtisanPanel", width = 460, height = 600,
     getPos = function() return ForeverArtisanSettings and ForeverArtisanSettings.panelPos end,
     setPos = function(pos) ForeverArtisanSettings = ForeverArtisanSettings or {}; ForeverArtisanSettings.panelPos = pos end,
     defaultPos = { "CENTER", 0, 0 } })
@@ -1644,6 +1644,7 @@ NEWS = {
   { "0.9.45", "Keen Skinning Knife and Gnomish Army Knife count as a Skinning Knife. Rock Chipper, Vindael's Spectral Pickaxe and Gnomish Army Knife count as a Mining Pick. Smoother scrolling in every list, and less work in the background while you loot." },
   { "0.9.46", "The Market tab and disenchant values are out of beta. The Skinning tooltip line only shows on corpses the game marks Skinnable, so it's never wrong." },
   { "0.9.47", "A Support section on the Info tab with a link to copy, and /fa support. ForeverArtisan stays free, and support never unlocks features." },
+  { "0.9.48", "ForeverArtisan windows are no longer always on top. Click the Auction House, a profession window or an FA window to bring it to the front." },
 }
 
 local function verNum(v)

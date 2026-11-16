@@ -1,5 +1,8 @@
 # ForeverArtisan changelog
 
+## 0.9.48 (2026-11-16)
+- Changed: ForeverArtisan windows are no longer always on top. Click the Auction House, a profession window or an FA window to bring it to the front. Thanks to the player who suggested it.
+
 ## 0.9.47 (2026-11-14)
 - Added: a Support section on the Info tab with a link to copy (foreverartisan.app/support), and /fa support. No popups. ForeverArtisan is free and always will be, and support never unlocks features.
 

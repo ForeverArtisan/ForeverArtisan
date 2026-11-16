@@ -374,7 +374,13 @@ function UI.Frame(opts)
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton"); close:SetPoint("TOPRIGHT", 2, 2)
   end
   f:SetSize(opts.width or UI.W, opts.height or UI.H)
-  f:SetFrameStrata(opts.strata or "HIGH")
+  -- same layer as the Auction House and profession windows (0.9.48): whichever you click comes to
+  -- the front, so you can switch between them instead of FA always covering them
+  f:SetFrameStrata(opts.strata or "MEDIUM")
+  if f.SetToplevel then f:SetToplevel(true) end
+  -- and in front when it opens (a child's OnShow, so the window's own OnShow stays free)
+  local raiser = CreateFrame("Frame", nil, f)
+  raiser:SetScript("OnShow", function() if f.Raise then f:Raise() end end)
   f:SetMovable(true); f:EnableMouse(true); f:SetClampedToScreen(true)
   f:RegisterForDrag("LeftButton")
   f:SetScript("OnDragStart", function(self) if not InCombatLockdown() then self:StartMoving() end end)

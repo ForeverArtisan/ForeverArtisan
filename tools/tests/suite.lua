@@ -25,6 +25,9 @@ local function obj()
     if k=="SetShown" then return function(s,v) s._shown=v and true or false end end
     if k=="GetChecked" or k=="HasFocus" then return function() return false end end
     if k=="SetSize" then return function(s,w,h) s._w, s._h = w, h end end
+    if k=="SetFrameStrata" then return function(s,v) s._strata=v end end
+    if k=="SetToplevel" then return function(s,v) s._top=v end end
+    if k=="Raise" then return function(s) s._raised=(rawget(s,"_raised") or 0)+1 end end
     if k=="SetWidth" then return function(s,w) s._w=w end end
     if k=="GetWidth" then return function(s) return s._w end end
     if k=="GetHeight" then return function(s) return s._h end end
@@ -3984,5 +3987,25 @@ do
   assert(not shown, "no popup")
   assert(pnl._shown and pnl.tab=="info", "/fa support opens Info")
   print("0.9.47 support link ok")
+end
+-- 0.9.48 windows share a layer with the AH and profession windows: click one to bring it forward
+do
+  local pnl=_G.ForeverArtisanPanel
+  assert(rawget(pnl,"_strata")=="MEDIUM", "panel not always on top: "..tostring(rawget(pnl,"_strata")))
+  assert(rawget(pnl,"_top")==true, "panel comes forward when clicked")
+  local wins=0
+  for _,f in ipairs(frames) do
+    if rawget(f,"_top")~=nil then
+      wins=wins+1
+      assert(rawget(f,"_strata")=="MEDIUM", "every FA window on the AH layer")
+    end
+  end
+  assert(wins>=5, "module windows too: "..wins)
+  local raiser
+  for _,f in ipairs(frames) do if rawget(f,"_parent")==pnl and f.scripts.OnShow and not rawget(f,"_strata") then raiser=f end end
+  local n=rawget(pnl,"_raised") or 0
+  raiser.scripts.OnShow(raiser)
+  assert((rawget(pnl,"_raised") or 0)==n+1, "opening it brings it to the front")
+  print("0.9.48 window layer ok")
 end
 print("SUITE OK")
