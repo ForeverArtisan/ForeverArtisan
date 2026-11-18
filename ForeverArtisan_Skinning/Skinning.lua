@@ -689,7 +689,7 @@ SlashCmdList.FASKIN = function(msg)
     for _, z in pairs(db.zones) do
       if z.nodes > 0 then any = true; say(("%s: %d skinned"):format(ns.Place(z), z.nodes)) end
     end
-    if not any then say("Nothing logged yet. Go skin something!") end
+    if not any then say("Nothing logged yet. Go skin something.") end
   elseif cmd == "goal" then
     local n, name = rest:match("^(%d+)%s+(.+)$")
     if n then ns.AddGoalByName(name, tonumber(n)) else say("Usage: /fa skin goal 20 Light Leather") end

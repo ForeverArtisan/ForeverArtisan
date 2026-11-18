@@ -10,6 +10,9 @@ ADDON = ADDON or "ForeverArtisan_Fishing"
 ns = ns or {}
 local LURE_GUARD = 8          -- seconds after applying a lure before we'd try again
 local LURE_MIN_LEFT = 5       -- treat a lure with less than this many seconds left as gone
+-- splash sound levels: the effects volume while the pole is on (nil = leave your settings alone)
+ns.SPLASH_VOL = { off = nil, soft = "0.5", medium = "0.75", loud = "1.0" }
+ns.SPLASH_ORDER = { "off", "soft", "medium", "loud" }
 local RAW_CAP = 5000          -- max raw catch entries kept
 
 BINDING_HEADER_FOREVERARTISAN_FISHING = "ForeverArtisan: Fishing"
@@ -436,8 +439,13 @@ local function WantedCVars()
     w.SoftTargetInteractArc = tostring(s.softArc or 2)
     w.SoftTargetInteractRange = tostring(s.softRange or 30)
   end
-  if s.soundBoost then
-    w.Sound_EnableSFX, w.Sound_SFXVolume, w.Sound_MusicVolume, w.Sound_AmbienceVolume = "1", "1.0", "0", "0"
+  -- Splash sound (0.9.49): Soft / Medium / Loud set the effects volume with music and ambience off, and
+  -- hear sounds from your character instead of the camera, so your own bobber (the nearest) sounds closer
+  -- than other players' splashes. Off leaves your sound settings alone.
+  local vol = ns.SPLASH_VOL[s.splash or "off"]
+  if vol then
+    w.Sound_EnableSFX, w.Sound_SFXVolume, w.Sound_MusicVolume, w.Sound_AmbienceVolume = "1", vol, "0", "0"
+    w.Sound_ListenerAtCharacter = "1"
   end
   return w
 end
@@ -1011,7 +1019,9 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3, ...)
     if s.swapKey == nil then s.swapKey = "" end
     if s.reelSameKey == nil then s.reelSameKey = true end
     if s.reelKey == nil then s.reelKey = "" end
-    if s.soundBoost == nil then s.soundBoost = false end
+    -- the old "Boost splash sound" checkbox becomes Loud
+    if s.splash == nil then s.splash = s.soundBoost and "loud" or "off" end
+    s.soundBoost = nil
     -- older versions let two jobs share one key; keep the first, clear the rest
     local seenKey = {}
     for _, f in ipairs({ "key", "swapKey", "reelKey" }) do

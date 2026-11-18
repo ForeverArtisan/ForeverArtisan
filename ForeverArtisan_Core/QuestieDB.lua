@@ -92,6 +92,12 @@ function QDB.Npc(id)
   local out = false
   if type(n) == "string" then
     out = { id = id, n = n, t = type(t) == "string" and t or nil, f = Faction(fr) }
+    -- mob levels, when this QuestieDB has them (used to pick the droppers nearest your level)
+    if type(L.Npc.minLevel) == "function" then
+      local _, lo = pcall(L.Npc.minLevel, id)
+      local _, hi = type(L.Npc.maxLevel) == "function" and pcall(L.Npc.maxLevel, id)
+      out.lo, out.hi = tonumber(lo), tonumber(hi) or tonumber(lo)
+    end
     for area, pts in pairs(type(spawns) == "table" and spawns or {}) do
       local m = QDB.UiMap(area)
       local p = type(pts) == "table" and pts[1]
@@ -212,7 +218,38 @@ end
 local function ListNames(npcs, max)
   local parts = {}
   for i = 1, math.min(max, #npcs) do parts[#parts + 1] = npcs[i].n .. ", " .. Where(npcs[i]) end
-  return table.concat(parts, "; ") .. (#npcs > max and ("  +" .. (#npcs - max) .. " more") or "")
+  local more = (npcs.more or 0) + math.max(0, #npcs - max)
+  return table.concat(parts, "; ") .. (more > 0 and ("  +" .. more .. " more") or "")
+end
+
+-- An item many mobs drop (wolf meat, cloth): the few worth hunting for you. Mobs in your zone first,
+-- then the ones closest to your level (a mob far above you is last). Looks at most LONG_LOOK of them.
+local LONG_LOOK, LONG_SHOW = 200, 3
+local function NearestDroppers(drops)
+  local here = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+  local lvl = UnitLevel and UnitLevel("player") or 1
+  local list = {}
+  for i = 1, math.min(LONG_LOOK, #drops) do
+    local npc = QDB.Npc(drops[i])
+    if npc and npc.m then list[#list + 1] = npc end
+  end
+  local function gap(n)
+    if not n.lo then return 30 end
+    if lvl < n.lo then return (n.lo - lvl) * 2 end  -- above you: worse than the same gap below
+    if lvl > (n.hi or n.lo) then return lvl - (n.hi or n.lo) end
+    return 0
+  end
+  table.sort(list, function(a, b)
+    local ah, bh = a.m == here, b.m == here
+    if ah ~= bh then return ah end
+    local ga, gb = gap(a), gap(b)
+    if ga ~= gb then return ga < gb end
+    return a.n < b.n
+  end)
+  local out = {}
+  for i = 1, math.min(LONG_SHOW, #list) do out[i] = list[i] end
+  out.more = #drops - #out
+  return out
 end
 
 -- sellers (your faction) and droppers of one item, already looked up
@@ -231,8 +268,12 @@ local function Sources(L, itemId)
       local npc = QDB.Npc(nid)
       if npc then droppers[#droppers + 1] = npc end
     end
+    SortHere(droppers)
+  elseif dropCount > 15 then
+    -- 0.9.49: was hidden; now the few nearest you, "+N more"
+    droppers = NearestDroppers(drops)
   end
-  return SortHere(sellers), SortHere(droppers), dropCount, foe
+  return SortHere(sellers), droppers, dropCount, foe
 end
 
 -- a quest that rewards an item: its name, who starts it (an NPC you can walk to) and which side can take it
@@ -368,15 +409,18 @@ function FA.QuestieVendorIds()
   return vendorFaction
 end
 
--- One shopping-list line for a material, or nil: a vendor for your faction first, then a short drop list.
--- Long drop lists (cloth from hundreds of mobs) stay with the shorter built-in answers.
+-- One shopping-list line for a material, or nil: a vendor for your faction first, then who drops it.
+-- An item many mobs drop shows the few nearest you (0.9.49); cloth keeps the built-in "humanoids" answer.
 function FA.QuestieMaterial(itemId)
   if QDB.Off() or not itemId then return nil end
   local L = QDB.Lib()
   if not (L and L.Item) then return nil end
   local sellers, droppers = Sources(L, itemId)
   if #sellers > 0 then return "Vendor: " .. ListNames(sellers, 1) .. " (from Questie)" end
-  if #droppers > 0 then return "Drops from: " .. ListNames(droppers, 2) .. " (from Questie)" end
+  local _, iname = pcall(L.Item.name, itemId)
+  if #droppers > 0 and not (droppers.more and FA.IsCloth and FA.IsCloth(itemId, iname)) then
+    return "Drops from: " .. ListNames(droppers, 2) .. " (from Questie)"
+  end
 end
 
 local ev = CreateFrame("Frame")

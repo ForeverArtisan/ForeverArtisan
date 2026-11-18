@@ -192,7 +192,7 @@ local function RefreshProgressPage(p)
 end
 
 ---------------------------------------------------------------- page 3: Mining log
-local LOG_ROWS = 14
+local LOG_ROWS, LOG_MAX = 14, 27   -- normal height / dragged taller (0.9.49)
 local function LogData()
   local db, data = ns.DB(), {}
   if view.mode == "all" then
@@ -229,8 +229,9 @@ local function BuildLogPage(p)
   tAll:SetPoint("LEFT", tZone, "RIGHT", 6, 0)
   p.tZone, p.tAll = tZone, tAll
   p.header = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -32); p.header:SetWidth(430)
-  p.rows = MakeRows(p, LOG_ROWS, -50, false)
-  for _, r in ipairs(p.rows) do
+  p.all = MakeRows(p, LOG_MAX, -50, false)
+  p.rows = K.Visible(p.all, LOG_ROWS)
+  for _, r in ipairs(p.all) do
     r:SetScript("OnClick", function(self, button)
       local d = self.data
       if not d then return end
@@ -250,21 +251,21 @@ local function BuildLogPage(p)
   reset:SetPoint("BOTTOMRIGHT", -16, 12)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(310)
   help:SetText("Wheel: scroll  ·  Click a spot: open it  ·  Right-click an item: goal")
-  Wheel(p, "logOff", function() return #(LogData()) - LOG_ROWS end)
+  Wheel(p, "logOff", function() return #(LogData()) - #p.rows end)
 end
 
 local function RefreshLogPage(p)
   local data, head = LogData()
   p.header:SetText(head)
-  view.logOff = math.min(view.logOff, math.max(0, #data - LOG_ROWS))
+  view.logOff = math.min(view.logOff, math.max(0, #data - #p.rows))
   Fill(p.rows, data, view.logOff)
-  p.empty:SetText(#data == 0 and "Nothing logged yet. Go mine something!" or "")
+  p.empty:SetText(#data == 0 and "Nothing logged yet. Go mine something." or "")
   p.tZone:SetEnabled(view.mode ~= "zone" or view.key ~= nil)
   p.tAll:SetEnabled(view.mode ~= "all")
 end
 
 ---------------------------------------------------------------- page 4: Node guide
-local GUIDE_ROWS = 17
+local GUIDE_ROWS, GUIDE_MAX = 17, 30
 local function GuideData()
   local skill, data = ns.EffSkill(), {}
   for _, h in ipairs(ns.NODES) do
@@ -290,8 +291,9 @@ end
 local function BuildGuidePage(p)
   p.header = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -4); p.header:SetWidth(430)
   p.header:SetText("Every node, the skill it needs, and where you've mined it. Colors are for your skill.")
-  p.rows = MakeRows(p, GUIDE_ROWS, -24, false)
-  for _, r in ipairs(p.rows) do
+  p.all = MakeRows(p, GUIDE_MAX, -24, false)
+  p.rows = K.Visible(p.all, GUIDE_ROWS)
+  for _, r in ipairs(p.all) do
     r:SetScript("OnClick", function(self, button)
       local d = self.data
       if d and button == "RightButton" then ns.AddGoal(d.id, Amount(), d.name)
@@ -300,12 +302,12 @@ local function BuildGuidePage(p)
   end
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("Classic skill levels. Forever may change some; your mining log shows what you actually saw.")
-  Wheel(p, "guideOff", function() return #ns.NODES - GUIDE_ROWS end)
+  Wheel(p, "guideOff", function() return #ns.NODES - #p.rows end)
 end
 
 local function RefreshGuidePage(p)
   local data = GuideData()
-  view.guideOff = math.min(view.guideOff, math.max(0, #data - GUIDE_ROWS))
+  view.guideOff = math.min(view.guideOff, math.max(0, #data - #p.rows))
   Fill(p.rows, data, view.guideOff)
 end
 
@@ -326,6 +328,11 @@ local function Build()
   BuildProgressPage(pages.progress)
   BuildLogPage(pages.log)
   BuildGuidePage(pages.guide)
+  -- drag the corner to make the window taller: the log and the guide show more rows (0.9.49)
+  K.Tall(f, "height", 900, function(extra)
+    if K.Grow(pages.log, LOG_ROWS, LOG_MAX, extra) and view.tab == "log" then ns.OnChange() end
+    if K.Grow(pages.guide, GUIDE_ROWS, GUIDE_MAX, extra) and view.tab == "guide" then ns.OnChange() end
+  end, "pos")
 
   f:SetScript("OnUpdate", function(self, el)
     self.t = (self.t or 0) + el

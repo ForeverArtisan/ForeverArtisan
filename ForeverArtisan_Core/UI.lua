@@ -722,6 +722,21 @@ function UI.Kit(ns, view)
     return vis
   end
 
+  -- A list built with max rows (p.all) that shows base rows at the normal height and one more per row
+  -- of extra height. p.under = { { frame, x, y }, ... }: things placed under the list (at the normal
+  -- height) that move down with it. True when the row count changed. (0.9.49)
+  function K.Grow(p, base, max, extra, rowH)
+    if not (p and p.all) then return false end
+    rowH = rowH or 24
+    local n = math.min(max, base + math.floor(math.max(0, extra or 0) / rowH))
+    if p.rows and #p.rows == n then return false end
+    p.rows = K.Visible(p.all, n, p.rows)
+    for _, u in ipairs(p.under or {}) do
+      u[1]:ClearAllPoints(); u[1]:SetPoint("TOPLEFT", u[2], u[3] - (n - base) * rowH)
+    end
+    return true
+  end
+
   -- Let a window be dragged taller from its bottom-right corner (the width stays). The height is
   -- remembered (settings[key]); onResize(extra) gets the pixels over the normal height, also while
   -- dragging, so lists can show more rows.
@@ -755,7 +770,7 @@ function UI.Kit(ns, view)
     end)
     UI.Tip(grip, function()
       GameTooltip:AddLine("Drag to make the window taller")
-      GameTooltip:AddLine("Longer plans and shopping lists fit. The size is remembered.", 1, 1, 1, true)
+      GameTooltip:AddLine("Every list shows more rows. The size is remembered.", 1, 1, 1, true)
     end)
     f:HookScript("OnSizeChanged", function(_, _, h) Fit(h) end)
     f:SetHeight(Fit(S()[key]))

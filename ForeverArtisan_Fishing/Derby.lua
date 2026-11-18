@@ -153,7 +153,7 @@ local function Tick()
     pcall(PlaySound, (SOUNDKIT and SOUNDKIT.RAID_WARNING) or 8959)
   elseif state == "live" and not warned[key .. "live"] then
     warned[key .. "live"] = true
-    ns.say(("|cff40ff40%s is live! Ends in %s.|r"):format(derby.title or "The derby", ns.DerbyClock(sec)))
+    ns.say(("|cff40ff40%s is live. Ends in %s.|r"):format(derby.title or "The derby", ns.DerbyClock(sec)))
     pcall(PlaySound, (SOUNDKIT and SOUNDKIT.RAID_WARNING) or 8959)
   end
 end

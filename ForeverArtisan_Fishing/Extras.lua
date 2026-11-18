@@ -22,6 +22,7 @@ local function Money(c) return FA.Money and FA.Money(c) or (tostring(c) .. "c") 
 -- on the Master channel: while the pole is on, splashes are turned up to full, and an alert on the
 -- sound effects channel gets lost in them
 local function Sound(kind, fallback)
+  if S().alertSound == false then return end -- "Alert sound" off: banner and chat line only (0.9.49)
   local k = SOUNDKIT and SOUNDKIT[kind]
   pcall(PlaySound, k or fallback, "Master")
 end
@@ -159,7 +160,7 @@ end
 ---------------------------------------------------------------- pool alerts
 -- Fishing pools (schools, wreckage, oil spills) are world objects. When one is in view (the game's soft
 -- target picks it up while the pole is on, or you mouse over it) you hear a ping and see its name, once a
--- minute per pool; its spot is remembered for the zone.
+-- minute per pool; its spot is remembered for the zone. The sound can be turned off on its own.
 local POOL_PATTERNS = { "school$", "swarm$", "wreckage$", "debris$", "oil spill$", "elemental water$", "^school of " }
 function ns.IsPoolName(name)
   if type(name) ~= "string" or name == "" then return false end
@@ -186,7 +187,8 @@ function ns.SeenPool(name)
   local now = GetTime()
   if ns.AlertsOn() and now - (lastPoolAlert[name] or -1000) > 60 then
     lastPoolAlert[name] = now
-    Sound("READY_CHECK", 8960)
+    -- a soft map ping (0.9.49): the ready check sound startled players mid-fishing
+    Sound("MAP_PING", 3175)
     ns.Alert("Fishing pool: " .. name, 136245, 0.35, 0.8, 1)
     ns.say(("Fishing pool in view: %s%s|r"):format(GOLD, name))
   end
@@ -240,6 +242,66 @@ local function RareAlert(entry)
     end
   end
 end
+
+---------------------------------------------------------------- fishing buff reminder (0.9.49)
+-- Forever's fish foods make you Well Fed with +Fishing (eat 10 s), and the Shiny Silver Coin (toss it in
+-- the water) gives +30. When you start fishing without either and carry one, one chat line names the best
+-- one in your bags, at most every 10 minutes. It never eats or uses anything for you. Game data, build 1.60.1.
+local BUFF_ITEMS = {
+  { 286732, 30 },               -- Shiny Silver Coin
+  { 8957, 18 }, { 13930, 18 },  -- Spinefin Halibut, Filet of Redgill
+  { 4594, 12 },                 -- Rockscale Cod
+  { 4593, 8 },                  -- Bristle Whisker Catfish
+  { 5476, 5 },                  -- Fillet of Frenzy
+  { 6316, 3 },                  -- Loch Frenzy Delight
+}
+local BUFF_AURAS = { 1249521, 1321323 }  -- Well Fed (+Fishing), Shiny Silver Coin
+local FISH_SPELLS = { [7620] = true, [7731] = true, [7732] = true, [18248] = true }
+local BUFF_EVERY = 600
+
+function ns.HasFishingBuff()
+  local get = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID
+  if get then
+    for _, id in ipairs(BUFF_AURAS) do
+      local ok, a = pcall(get, id)
+      if ok and a then return true end
+    end
+    return false
+  end
+  if not UnitBuff then return false end
+  for i = 1, 40 do
+    local ok, name, _, _, _, _, _, _, _, _, sid = pcall(UnitBuff, "player", i)
+    if not ok or not name then break end
+    for _, id in ipairs(BUFF_AURAS) do if sid == id then return true end end
+  end
+  return false
+end
+
+-- the strongest fishing buff item in your bags: id, bonus (or nil)
+function ns.BestFishingBuff()
+  for _, b in ipairs(BUFF_ITEMS) do
+    if (ns.ItemCount and ns.ItemCount(b[1]) or 0) > 0 then return b[1], b[2] end
+  end
+end
+
+local lastBuffNote = -1000
+function ns.BuffReminder()
+  if not ns.AlertsOn() or GetTime() - lastBuffNote < BUFF_EVERY then return end
+  if ns.HasFishingBuff() then return end
+  local id, bonus = ns.BestFishingBuff()
+  if not id then return end
+  lastBuffNote = GetTime()
+  local name = (ns.ItemName and ns.ItemName(id)) or (id == 286732 and "Shiny Silver Coin") or "fish food"
+  ns.say(("No fishing buff: %s %s%s|r for +%d Fishing."):format(
+    id == 286732 and "toss your" or "eat", GOLD, name, bonus))
+end
+
+local bev = CreateFrame("Frame")
+pcall(bev.RegisterUnitEvent, bev, "UNIT_SPELLCAST_CHANNEL_START", "player")
+bev:SetScript("OnEvent", function(_, _, unit, _, spellId)
+  if unit == "player" and FISH_SPELLS[spellId] then pcall(ns.BuffReminder) end
+end)
+if FA.GuardEvents then FA.GuardEvents(bev) end
 
 ---------------------------------------------------------------- hooks
 local baseOnCatch = ns.OnCatch

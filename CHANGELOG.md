@@ -1,5 +1,12 @@
 # ForeverArtisan changelog
 
+## 0.9.49 (2026-11-18)
+- Added: drag any profession, gathering, Trade Contacts or Fishing window, or the /fa panel, taller from its bottom-right corner and every list shows more rows. The size is remembered. Thanks to the player who asked.
+- Changed: with Questie, items many mobs drop (like wolf meat) now name the few nearest you instead of nothing.
+- Changed: the fishing pool alert plays a soft ping instead of the ready check sound. New "Alert sound" checkbox on the Fishing tab turns the sound off and keeps the on-screen alert. Thanks to the player who asked.
+- Changed: "Boost splash sound" is now a Splash sound button: Off, Soft, Medium or Loud. While fishing you hear sounds from your character, so your own bobber sounds closer than other players'. Thanks to the player who asked.
+- Added: start fishing without a fishing buff and FA names the best one in your bags (fish food or the Shiny Silver Coin). Thanks to the player who suggested it.
+
 ## 0.9.48 (2026-11-16)
 - Changed: ForeverArtisan windows are no longer always on top. Click the Auction House, a profession window or an FA window to bring it to the front. Thanks to the player who suggested it.
 

@@ -787,7 +787,7 @@ end
 
 -- Market: every profession's Best crafts in one list, by profit after the Auction House cut.
 -- Flagged BETA before launch only: beta realm prices swing too much to trust fully.
-local MARKET_ROWS = 15
+local MARKET_ROWS, MARKET_MAX = 15, 28 -- normal height / the panel dragged taller (0.9.49)
 local MARKET_TOP = -106 -- first row, under the "click a craft" line
 -- this week's direction, on rows and in the trend view
 local ARROW = { up = "|TInterface\\Buttons\\Arrow-Up-Up:12|t", down = "|TInterface\\Buttons\\Arrow-Down-Up:12|t" }
@@ -831,7 +831,8 @@ function refreshMarket()
   p.watch:SetShown(okW and wline ~= nil)
   local data, read = marketData()
   p.data = data
-  p.off = math.max(0, math.min(p.off or 0, #data - MARKET_ROWS))
+  p.off = math.max(0, math.min(p.off or 0, #data - #p.rows))
+  for i = #p.rows + 1, #(p.all or {}) do p.all[i].row = nil; p.all[i]:Hide() end
   for i, r in ipairs(p.rows) do
     local row = data[i + p.off]
     r.row = row
@@ -1359,8 +1360,8 @@ local function buildMarketTab(p)
   p.watch:SetScript("OnLeave", function() GameTooltip:Hide() end)
   p.watch:SetScript("OnMouseUp", function() GameTooltip:Hide(); if showWatch then showWatch() end end)
   p.source = Txt(p, "GameFontDisableSmall", 16, -58, 428)
-  p.rows = {}
-  for i = 1, MARKET_ROWS do
+  p.rows, p.all = {}, {}
+  for i = 1, MARKET_MAX do
     local r = CreateFrame("Button", nil, p)
     r:SetSize(428, 22); r:SetPoint("TOPLEFT", 16, MARKET_TOP - (i - 1) * 24)
     r:SetHighlightTexture(FA.UI.HIGHLIGHT, "ADD")
@@ -1399,11 +1400,12 @@ local function buildMarketTab(p)
     end)
     r:SetScript("OnLeave", function() GameTooltip:Hide() end)
     r:Hide()
-    p.rows[i] = r
+    p.all[i] = r
+    if i <= MARKET_ROWS then p.rows[i] = r end
   end
   p:EnableMouseWheel(true)
   p:SetScript("OnMouseWheel", function(_, delta)
-    p.off = math.max(0, math.min((p.off or 0) - delta * 3, #(p.data or {}) - MARKET_ROWS))
+    p.off = math.max(0, math.min((p.off or 0) - delta * 3, #(p.data or {}) - #p.rows))
     refreshMarket()
   end)
   p.empty = Txt(p, "GameFontDisable", 16, -140, 428)
@@ -1448,7 +1450,10 @@ local function buildMarketTab(p)
     "Arrows: the price is up or down this week. Dots: green steady price, yellow check it, gray shaky. "
     .. GOLD .. "Gold:|r a goblin Auction House pays that much more.")
   p.listParts = { p.hide, help, p.empty, p.clickHint }
-  for _, r in ipairs(p.rows) do p.listParts[#p.listParts + 1] = r end
+  for _, r in ipairs(p.all) do p.listParts[#p.listParts + 1] = r end
+  -- under the list: they move down when the panel is dragged taller (0.9.49)
+  local y = MARKET_TOP - MARKET_ROWS * 24
+  p.under = { { p.hide, 14, y - 6 }, { p.sortBtn, 160, y - 6 }, { ml, 306, y - 11 }, { p.min, 372, y - 7 }, { help, 16, y - 40 } }
   buildTrend(p)
   buildWatch(p)
 end
@@ -1520,6 +1525,14 @@ local function buildPanel()
   buildContactsTab(panel.pages.contacts)
   buildSettingsTab(panel.pages.settings)
   buildInfoTab(panel.pages.info)
+  -- drag the corner to make the panel taller: the Market list shows more rows (0.9.49)
+  local PK = FA.UI.Kit({
+    DB = function() ForeverArtisanSettings = ForeverArtisanSettings or {}; return { settings = ForeverArtisanSettings } end,
+    OnChange = function() if panel and panel.tab == "market" then refreshMarket() end end,
+  }, {})
+  PK.Tall(panel, "panelHeight", 900, function(extra)
+    if PK.Grow(panel.pages.market, MARKET_ROWS, MARKET_MAX, extra) and panel.tab == "market" then refreshMarket() end
+  end, "panelPos")
   panel.AddonsText = addonsText
   selectTab("modules")
   panel:SetScript("OnShow", refreshPanel)
@@ -1645,6 +1658,7 @@ NEWS = {
   { "0.9.46", "The Market tab and disenchant values are out of beta. The Skinning tooltip line only shows on corpses the game marks Skinnable, so it's never wrong." },
   { "0.9.47", "A Support section on the Info tab with a link to copy, and /fa support. ForeverArtisan stays free, and support never unlocks features." },
   { "0.9.48", "ForeverArtisan windows are no longer always on top. Click the Auction House, a profession window or an FA window to bring it to the front." },
+  { "0.9.49", "Drag any profession window, Trade Contacts, Fishing or this panel taller from its corner and every list shows more rows. Fishing: a soft ping for pools, splash sound levels, and a reminder when you fish without a fishing buff." },
 }
 
 local function verNum(v)

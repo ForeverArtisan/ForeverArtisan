@@ -409,7 +409,7 @@ local function RefreshProgressPage(p)
 end
 
 ---------------------------------------------------------------- page 3: Craft log
-local LOG_ROWS = 15
+local LOG_ROWS, LOG_MAX = 15, 28   -- at the normal window height / dragged taller (0.9.49)
 local function LogData()
   local c = ns.CharRec()
   local list, skill = {}, ns.Skill()
@@ -458,7 +458,8 @@ end
 local function BuildLogPage(p)
   p.header = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -4); p.header:SetWidth(430)
   p.header:SetText("Everything you've made on this character, then your disenchants. Colors are for your skill now.")
-  p.rows = MakeRows(p, LOG_ROWS, -24, false)
+  p.all = MakeRows(p, LOG_MAX, -24, false)
+  p.rows = K.Visible(p.all, LOG_ROWS)
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -100, p, "TOP"); p.empty:SetJustifyH("CENTER")
   local reset = Button(p, "Reset log", 110, function(self)
     if self.armed then
@@ -469,19 +470,19 @@ local function BuildLogPage(p)
     end
   end)
   reset:SetPoint("BOTTOMRIGHT", -16, 12)
-  Wheel(p, "logOff", function() return (p.count or 0) - LOG_ROWS end)
+  Wheel(p, "logOff", function() return (p.count or 0) - #p.rows end)
 end
 
 local function RefreshLogPage(p)
   local data = LogData()
   p.count = #data
-  view.logOff = math.min(view.logOff, math.max(0, #data - LOG_ROWS))
+  view.logOff = math.min(view.logOff, math.max(0, #data - #p.rows))
   Fill(p.rows, data, view.logOff)
-  p.empty:SetText(#data == 0 and "Nothing enchanted yet. Disenchant some greens for dust!" or "")
+  p.empty:SetText(#data == 0 and "Nothing enchanted yet. Disenchant some greens for dust." or "")
 end
 
 ---------------------------------------------------------------- page 4: Recipe book
-local BOOK_ROWS = 15
+local BOOK_ROWS, BOOK_MAX = 15, 28
 local function BookData()
   local c = ns.CharRec()
   local skill = ns.Skill()
@@ -566,9 +567,10 @@ local function BuildGuidePage(p)
   p.search = FA.UI.SearchBox(p, 220, function(text) view.bookFind, view.guideOff = text, 0; ns.OnChange() end,
     "Search recipes or materials")
   p.search:SetPoint("TOPLEFT", 24, -4)
-  p.rows = MakeRows(p, BOOK_ROWS, -30, false)
+  p.all = MakeRows(p, BOOK_MAX, -30, false)
+  p.rows = K.Visible(p.all, BOOK_ROWS)
   -- an unlearned recipe with a trainer or vendor you've met: click for a waypoint
-  for _, r in ipairs(p.rows) do
+  for _, r in ipairs(p.all) do
     r:SetScript("OnClick", function(self)
       local d = self.data
       if d and d.recipe and d.recipe.learned then OpenOnRecipe(d.recipe)
@@ -590,7 +592,7 @@ local function BuildGuidePage(p)
   end
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 16, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("Click a recipe you know to open it. Hover one you don't know for where to get it.")
-  Wheel(p, "guideOff", function() return (p.count or 0) - BOOK_ROWS end)
+  Wheel(p, "guideOff", function() return (p.count or 0) - #p.rows end)
 end
 
 local function RefreshGuidePage(p)
@@ -607,7 +609,7 @@ local function RefreshGuidePage(p)
     end
   end
   if (view.bookFind or "") == "" and (p.search:GetText() or "") ~= "" and not p.search:HasFocus() then p.search:Reset() end
-  view.guideOff = math.min(view.guideOff, math.max(0, #data - BOOK_ROWS))
+  view.guideOff = math.min(view.guideOff, math.max(0, #data - #p.rows))
   Fill(p.rows, data, view.guideOff)
   p.empty:SetText(#data > 0 and "" or ((view.bookFind or "") ~= "" and ('Nothing matches "' .. view.bookFind .. '". Press Escape to clear the search.'))
     or (not ns.Knows() and "This character hasn't learned Enchanting.")
@@ -620,7 +622,7 @@ end
 ---------------------------------------------------------------- page 5: Best crafts
 -- Your learned recipes ranked three ways. Prices: Auctionator's scan or your own Auction House
 -- visits; the dot says how much to trust each price. Never searches, posts or buys.
-local BEST_ROWS = 14
+local BEST_ROWS, BEST_MAX = 14, 27
 local BEST_MODES = {
   { "profit", "Profit", 62, "Ranked by profit per craft after the Auction House's cut, with the return." },
   { "return", "Return", 62, "Ranked by return: +150% means 1g of materials brings back 2g 50s." },
@@ -728,8 +730,9 @@ local function BuildBestPage(p)
   end
   p.explain = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -32); p.explain:SetWidth(430)
   p.source = Text(p, "GameFontDisableSmall", "TOPLEFT", 20, -48); p.source:SetWidth(430)
-  p.rows = MakeRows(p, BEST_ROWS, -80, false)
-  for _, row in ipairs(p.rows) do
+  p.all = MakeRows(p, BEST_MAX, -80, false)
+  p.rows = K.Visible(p.all, BEST_ROWS)
+  for _, row in ipairs(p.all) do
     row:SetScript("OnClick", function(self)
       local d = self.data
       if not (d and d.recipe) then return end
@@ -756,7 +759,7 @@ local function BuildBestPage(p)
   end
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 16, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText(GOLD_TAG .. "Gold:|r a goblin Auction House (Booty Bay, Gadgetzan, Everlook) pays that much more a craft. Hover for both houses. Dots: green steady, yellow check it, gray shaky. Click to open the recipe (at the Auction House: search it).")
-  Wheel(p, "bestOff", function() return (p.count or 0) - BEST_ROWS end)
+  Wheel(p, "bestOff", function() return (p.count or 0) - #p.rows end)
 end
 
 local function RefreshBestPage(p)
@@ -775,7 +778,7 @@ local function RefreshBestPage(p)
   local data = ns.Knows() and BestData() or {}
   p.count = #data
   ns.lastBest = data -- for the test suite
-  view.bestOff = math.min(view.bestOff or 0, math.max(0, #data - BEST_ROWS))
+  view.bestOff = math.min(view.bestOff or 0, math.max(0, #data - #p.rows))
   Fill(p.rows, data, view.bestOff)
   if p.hide.Sync then p.hide:Sync() end
   if p.min and p.min.Sync and not (p.min.HasFocus and p.min:HasFocus()) then p.min:Sync() end
@@ -829,6 +832,20 @@ end
 local REFRESH = { main = RefreshMainPage, progress = RefreshProgressPage, log = RefreshLogPage, guide = RefreshGuidePage,
   best = RefreshBestPage }
 
+-- Craft log, Recipe book and Best crafts show more rows when the window is taller (0.9.49).
+-- True when the row count changed. Best crafts moves its checkbox and minimum box under the rows.
+local function LayoutList(p, base, max, extra)
+  if not (p and p.all) then return false end
+  local n = math.min(max, base + math.floor(math.max(0, extra or 0) / ROW_H))
+  if p.rows and #p.rows == n then return false end
+  p.rows = K.Visible(p.all, n, p.rows)
+  if p.hide and p.minLabel then
+    p.hide:ClearAllPoints(); p.hide:SetPoint("TOPLEFT", 16, -(80 + n * 24 + 18))
+    p.minLabel:ClearAllPoints(); p.minLabel:SetPoint("TOPLEFT", 200, -(80 + n * 24 + 23))
+  end
+  return true
+end
+
 local function ShowTab(name)
   view.tab = name
   for k, pg in pairs(pages) do pg:SetShown(k == name) end
@@ -849,6 +866,9 @@ local function Build()
   K.Tall(f, "height", 900, function(extra)
     local main = LayoutMain(pages.main, extra)
     if LayoutProgress(pages.progress, extra) and view.tab == "progress" then ns.OnChange() end
+    if LayoutList(pages.log, LOG_ROWS, LOG_MAX, extra) and view.tab == "log" then ns.OnChange() end
+    if LayoutList(pages.guide, BOOK_ROWS, BOOK_MAX, extra) and view.tab == "guide" then ns.OnChange() end
+    if LayoutList(pages.best, BEST_ROWS, BEST_MAX, extra) and view.tab == "best" then ns.OnChange() end
     if main and view.tab == "main" then ns.OnChange() end
   end, "pos")
 

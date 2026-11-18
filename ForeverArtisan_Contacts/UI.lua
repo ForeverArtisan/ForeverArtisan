@@ -44,7 +44,7 @@ local function Counts()
 end
 
 ---------------------------------------------------------------- page 1: Search
-local SEARCH_ROWS = 15
+local SEARCH_ROWS, SEARCH_MAX = 15, 28   -- normal height / dragged taller (0.9.49)
 
 -- "350 yd" from a sorted hit; only the Nearest trainer list shows it
 local function DistText(h)
@@ -144,8 +144,9 @@ local function BuildSearchPage(p)
   p.box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   p.box:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
   p.status = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -32); p.status:SetWidth(430)
-  p.rows = MakeRows(p, SEARCH_ROWS, -50, false)
-  ClickToWaypoint(p.rows)
+  p.all = MakeRows(p, SEARCH_MAX, -50, false)
+  p.rows = K.Visible(p.all, SEARCH_ROWS)
+  ClickToWaypoint(p.all)
   p.checks = {
     K.Check(p, "Only not visited", 250, -414, function() return view.onlyNew end, function(v) view.onlyNew = v; RunSearch() end),
   }
@@ -167,12 +168,13 @@ local function BuildSearchPage(p)
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("Search items, recipes, vendors, towns or a profession. Click a row for a waypoint. Hover a checkbox to see what it does.")
   p.help = help
-  Wheel(p, "searchOff", function() return #view.results - SEARCH_ROWS end)
+  p.under = { { p.checks[1], 250, -414 }, { p.town, 16, -414 } }
+  Wheel(p, "searchOff", function() return #view.results - #p.rows end)
 end
 
 local function RefreshSearchPage(p)
   local data = SearchData()
-  view.searchOff = math.min(view.searchOff, math.max(0, #data - SEARCH_ROWS))
+  view.searchOff = math.min(view.searchOff, math.max(0, #data - #p.rows))
   Fill(p.rows, data, view.searchOff)
   for _, c in ipairs(p.checks) do c:Sync() end
   local platesOn = ns.ScoutOn()
@@ -225,7 +227,7 @@ end
 
 ---------------------------------------------------------------- page 2: Contacts
 -- Grouped by town, with a Zone picker and a Trade picker so the list stays short.
-local LIST_ROWS = 14
+local LIST_ROWS, LIST_MAX = 14, 27
 
 -- Which tradeskills an NPC is for, read from their title. Order is the picker's order.
 local TRADES = {
@@ -519,6 +521,8 @@ local function AddNearest(p)
     GameTooltip:AddLine("Pick your class or a profession for a waypoint to the closest trainer: ones you've met or passed, the built-in list, and Questie's when it's installed.", 1, 1, 1, true)
   end)
   p.nearest = b
+  p.under = p.under or {}
+  p.under[#p.under + 1] = { b, 16, -442 }
 end
 
 local function BuildListPage(p)
@@ -526,9 +530,10 @@ local function BuildListPage(p)
     function() return (ListFilters()) end, function(v) S().listZone = v; view.listOff = 0; ns.OnChange() end)
   p.tradePick = Picker(p, 234, 220, "Trade", TradeOptions,
     function() local _, t = ListFilters(); return t end, function(v) S().listTrade = v; view.listOff = 0; ns.OnChange() end)
-  p.rows = MakeRows(p, LIST_ROWS, -32, false)
+  p.all = MakeRows(p, LIST_MAX, -32, false)
+  p.rows = K.Visible(p.all, LIST_ROWS)
   -- town header: click to fold. NPC row: left-click waypoint, right-click twice (within 3 seconds) to forget.
-  for _, r in ipairs(p.rows) do
+  for _, r in ipairs(p.all) do
     r:SetScript("OnClick", function(self, button)
       local d = self.data
       if d and d.header then
@@ -558,9 +563,10 @@ local function BuildListPage(p)
     Check(p, "Show 'Sold by' on item tooltips", 16, -420,
       function() return S().tooltips ~= false end, function(v) S().tooltips = v end),
   }
+  p.under = { { p.header, 20, -32 - LIST_ROWS * 24 - 4 }, { p.checks[1], 16, -420 } }
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)
   help:SetText("Click a town to fold it  ·  Click an NPC: waypoint  ·  Right-click twice: forget")
-  Wheel(p, "listOff", function() return (p.count or 0) - LIST_ROWS end)
+  Wheel(p, "listOff", function() return (p.count or 0) - #p.rows end)
 end
 
 local function RefreshListPage(p)
@@ -574,7 +580,7 @@ local function RefreshListPage(p)
   p.zonePick.Sync(); p.tradePick.Sync()
   p.header:SetText(("Showing %d of %d contacts"):format(shown, total)
     .. (seeds > 0 and "  ·  built-in = from the built-in trainer list" or (old > 0 and "  ·  grey name = not seen since a game update" or "")))
-  view.listOff = math.min(view.listOff, math.max(0, #data - LIST_ROWS))
+  view.listOff = math.min(view.listOff, math.max(0, #data - #p.rows))
   Fill(p.rows, data, view.listOff)
   if total == 0 then p.empty:SetText("No contacts yet.\nTalk to a crafting vendor or profession trainer.")
   elseif shown == 0 then p.empty:SetText("Nobody here with these filters.\nSet Zone to All zones or Trade to All crafting.")
@@ -583,7 +589,7 @@ local function RefreshListPage(p)
 end
 
 ---------------------------------------------------------------- page 3: Limited stock
-local STOCK_ROWS = 17
+local STOCK_ROWS, STOCK_MAX = 17, 30
 local function StockData()
   local data = {}
   for _, npc in ipairs(ns.Contacts()) do
@@ -602,16 +608,17 @@ end
 local function BuildStockPage(p)
   p.header = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -4); p.header:SetWidth(430)
   p.header:SetText("Limited-stock items (recipes, rare reagents) and how many were left when you last looked.")
-  p.rows = MakeRows(p, STOCK_ROWS, -24, false)
-  ClickToWaypoint(p.rows)
+  p.all = MakeRows(p, STOCK_MAX, -24, false)
+  p.rows = K.Visible(p.all, STOCK_ROWS)
+  ClickToWaypoint(p.all)
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -100, p, "TOP"); p.empty:SetJustifyH("CENTER")
-  Wheel(p, "stockOff", function() return (p.count or 0) - STOCK_ROWS end)
+  Wheel(p, "stockOff", function() return (p.count or 0) - #p.rows end)
 end
 
 local function RefreshStockPage(p)
   local data = StockData()
   p.count = #data
-  view.stockOff = math.min(view.stockOff, math.max(0, #data - STOCK_ROWS))
+  view.stockOff = math.min(view.stockOff, math.max(0, #data - #p.rows))
   Fill(p.rows, data, view.stockOff)
   p.empty:SetText(#data == 0 and "No limited-stock items seen yet." or "")
 end
@@ -634,6 +641,12 @@ local function Build()
   BuildListPage(pages.contacts)
   AddNearest(pages.search)
   BuildStockPage(pages.stock)
+  -- drag the corner to make the window taller: every list shows more rows (0.9.49)
+  K.Tall(f, "height", 900, function(extra)
+    if K.Grow(pages.search, SEARCH_ROWS, SEARCH_MAX, extra) and view.tab == "search" then ns.OnChange() end
+    if K.Grow(pages.contacts, LIST_ROWS, LIST_MAX, extra) and view.tab == "contacts" then ns.OnChange() end
+    if K.Grow(pages.stock, STOCK_ROWS, STOCK_MAX, extra) and view.tab == "stock" then ns.OnChange() end
+  end, "pos")
   f:Hide()
   ShowTab("search")
 end

@@ -739,7 +739,7 @@ SlashCmdList.FAMINING = function(msg)
     for _, z in pairs(db.zones) do
       if z.nodes > 0 then any = true; say(("%s: %d nodes"):format(ns.Place(z), z.nodes)) end
     end
-    if not any then say("Nothing logged yet. Go mine something!") end
+    if not any then say("Nothing logged yet. Go mine something.") end
   elseif cmd == "goal" then
     local n, name = rest:match("^(%d+)%s+(.+)$")
     if n then ns.AddGoalByName(name, tonumber(n)) else say("Usage: /fa mine goal 20 Copper Ore") end

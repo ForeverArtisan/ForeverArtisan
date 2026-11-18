@@ -2326,6 +2326,12 @@ do
     [7940]={name="Darnall",sub="Cloth Merchant",flags=4,fr="AH",sp={[493]={{51,51}}}},
     [9100]={name="Ally Seller",sub="Trade Goods",flags=4,fr="A",sp={[1519]={{50,50}}}},
     [4831]={name="Gelihast",flags=0,sp={[719]={{30,40}}}},
+    -- wolves for a long drop list (0.9.49): levels and zones differ
+    [8001]={name="Elder Wolf",flags=0,sp={[493]={{20,20}}},lo=30,hi=31},
+    [8002]={name="Young Wolf",flags=0,sp={[1519]={{20,20}}},lo=11,hi=12},
+    [8003]={name="Gray Wolf",flags=0,sp={[1519]={{21,21}}},lo=13,hi=14},
+    [8004]={name="Dire Wolf",flags=0,sp={[1519]={{22,22}}},lo=40,hi=41},
+    [8005]={name="Mangy Wolf",flags=0,sp={[493]={{23,23}}},lo=12,hi=13},
   }
   local items={
     [14469]={name="Pattern: Runecloth Robe",class=9,vendors={7940,9100}},
@@ -2333,12 +2339,15 @@ do
     [16083]={name="Expert Fishing - The Bass and You",class=9,questRewards={555}},
     [3182]={name="Spider's Silk",class=7,npcDrops={4831}},
     [2589]={name="Linen Cloth",class=7,npcDrops={}},
+    [2672]={name="Stringy Wolf Meat",class=7,npcDrops={8001,8002,8003,8004,8005}},
   }
   for k=1,20 do items[2589].npcDrops[k]=4831 end
+  for k=6,18 do items[2672].npcDrops[k]=8001 end
   local function field(k) return function(id) local n=npcs[id]; return n and n[k] end end
   LibQuestieDB={ contractVersion=3, RequireContract=function(v) return v>=1 and v<=3 end,
     Npc={ GetAllIds=function() local t={} for id in pairs(npcs) do t[#t+1]=id end table.sort(t) return t end,
-      name=field("name"), subName=field("sub"), npcFlags=field("flags"), friendlyToFaction=field("fr"), spawns=field("sp") },
+      name=field("name"), subName=field("sub"), npcFlags=field("flags"), friendlyToFaction=field("fr"), spawns=field("sp"),
+      minLevel=field("lo"), maxLevel=field("hi") },
     Item={ GetAllIds=function() local t={} for id in pairs(items) do t[#t+1]=id end table.sort(t) return t end,
       name=function(id) return items[id] and items[id].name end, class=function(id) return items[id] and items[id].class end,
       vendors=function(id) return items[id] and items[id].vendors end, npcDrops=function(id) return items[id] and items[id].npcDrops end,
@@ -2414,7 +2423,19 @@ do
   rl = FA.RecipeWhere("Expert Fishing - The Bass and You", {"Pattern: "})
   assert(table.concat(rl," "):find("Quest reward: Nat Pagle, Angler Extreme"), "quest reward from Questie")
   assert(FA.QuestieMaterial(3182):find("Drops from: Gelihast"), "material drop")
-  assert(FA.QuestieMaterial(2589)==nil, "long drop lists left to the built-in answer")
+  assert(FA.QuestieMaterial(2589)==nil, "cloth keeps the built-in answer")
+  -- 0.9.49: an item many mobs drop names the ones nearest you: your zone first, then your level
+  do
+    local oMap, oLvl = C_Map, UnitLevel
+    C_Map={GetBestMapForUnit=function() return 1453 end} UnitLevel=function() return 12 end
+    local line=FA.QuestieMaterial(2672)
+    assert(line and line:find("Drops from: Young Wolf") and line:find("Gray Wolf") and not line:find("Dire Wolf")
+      and line:find("+16 more"), "nearest droppers first: "..tostring(line))
+    C_Map={GetBestMapForUnit=function() return 1450 end}
+    line=FA.QuestieMaterial(2672)
+    assert(line:find("Drops from: Mangy Wolf"), "your zone first: "..line)
+    C_Map, UnitLevel = oMap, oLvl
+  end
   -- a recipe you've seen at a vendor yourself: your contact, not Questie
   db.entries["vendor:7940"]={kind="vendor",npcId=7940,name="Darnall",title="Cloth Merchant",zone="Moonglade",mapID=1450,x=51,y=51,
     items={{name="Pattern: Runecloth Robe",itemId=14469,priceCopper=5000}}}
@@ -3052,7 +3073,7 @@ do
     and not fns.IsPoolName("Fishing Bobber") and not fns.IsPoolName("Mailbox"), "pool names")
   sounds=0; warned=nil
   assert(fns.SeenPool("Oily Blackmouth School") and sounds==1 and warned:find("Oily Blackmouth School"), "pool alert")
-  assert(lastSound==8960 and lastChannel=="Master", "pool sound: the ready check, on Master")
+  assert(lastSound==3175 and lastChannel=="Master", "pool sound: a soft map ping (not the ready check), on Master")
   fns.SeenPool("Oily Blackmouth School")
   assert(sounds==1, "once a minute")
   local zone, sub = fns.Where()
@@ -4007,5 +4028,142 @@ do
   raiser.scripts.OnShow(raiser)
   assert((rawget(pnl,"_raised") or 0)==n+1, "opening it brings it to the front")
   print("0.9.48 window layer ok")
+end
+-- 0.9.49 fishing alert sound: a soft ping for pools, and a switch for the sound alone
+do
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local oPS, oA, oGT = PlaySound, fns.Alert, GetTime
+  local clock=500000 GetTime=function() return clock end
+  local sounds, warned = 0, nil
+  PlaySound=function() sounds=sounds+1 end
+  fns.Alert=function(txt) warned=txt end
+  local st=ForeverArtisanFishingDB.settings
+  st.alertSound=false
+  assert(fns.SeenPool("Firefin Snapper School") and sounds==0 and warned and warned:find("Firefin"), "sound off: banner, no sound")
+  st.alertSound=nil; clock=clock+120; warned=nil
+  fns.SeenPool("Firefin Snapper School")
+  assert(sounds==1 and warned, "sound on again")
+  PlaySound, fns.Alert, GetTime = oPS, oA, oGT
+  print("0.9.49 alert sound ok")
+end
+-- 0.9.49 splash sound: Off / Soft / Medium / Loud, sounds from your character, old Boost = Loud
+do
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local st=ForeverArtisanFishingDB.settings
+  local oInv, oII, oCI, oCV, oSCV = GetInventoryItemID, GetItemInfoInstant, C_Item, GetCVar, SetCVar
+  local cv={Sound_EnableSFX="1", Sound_SFXVolume="0.3", Sound_MusicVolume="0.6", Sound_AmbienceVolume="0.6", Sound_ListenerAtCharacter="0"}
+  GetCVar=function(k) if cv[k] then return cv[k] end return oCV(k) end
+  SetCVar=function(k,v) if cv[k] then cv[k]=v end end
+  GetInventoryItemID=function(_,slot) if slot==16 then return 6256 end end
+  local inst=function() return 6256,"","","INVTYPE_2HWEAPON",1,2,20 end
+  GetItemInfoInstant=inst C_Item={GetItemInfoInstant=inst, GetItemInfo=function() end}
+  fns.RestoreEnv()
+  st.splash="off"; fns.UpdateEnv()
+  assert(cv.Sound_SFXVolume=="0.3" and cv.Sound_ListenerAtCharacter=="0", "off: your sound settings untouched")
+  st.splash="medium"; fns.UpdateEnv()
+  assert(cv.Sound_SFXVolume=="0.75" and cv.Sound_MusicVolume=="0" and cv.Sound_ListenerAtCharacter=="1", "medium: louder effects, heard from you")
+  st.splash="soft"; fns.UpdateEnv()
+  assert(cv.Sound_SFXVolume=="0.5", "soft")
+  fns.RestoreEnv()
+  assert(cv.Sound_SFXVolume=="0.3" and cv.Sound_MusicVolume=="0.6" and cv.Sound_ListenerAtCharacter=="0", "pole off: all put back")
+  -- the button steps Off > Soft > Medium > Loud > Off
+  st.splash="loud"
+  if SlashCmdList.FAFISH then pcall(SlashCmdList.FAFISH,"") end
+  local btn
+  for _,f in ipairs(frames) do
+    if f.scripts.OnClick and rawget(f,"_w")==90 and rawget(f,"_h")==22 then
+      st.splash="loud"; pcall(f.scripts.OnClick, f)
+      if st.splash=="off" then btn=f break end
+    end
+  end
+  assert(btn, "splash button: loud wraps to off")
+  btn.scripts.OnClick(btn); assert(st.splash=="soft", "then soft")
+  GetInventoryItemID, GetItemInfoInstant, C_Item, GetCVar, SetCVar = oInv, oII, oCI, oCV, oSCV
+  st.splash="off"
+  print("0.9.49 splash sound ok")
+end
+-- 0.9.49 taller windows: every list in the crafting, gathering, Trade Contacts and Fishing windows shows more rows
+do
+  local wins={
+    {"ForeverArtisan_Tailoring","ForeverArtisanTailoringFrame"},{"ForeverArtisan_Alchemy","ForeverArtisanAlchemyFrame"},
+    {"ForeverArtisan_Herbalism","ForeverArtisanHerbalismFrame"},{"ForeverArtisan_Contacts","ForeverArtisanContactsFrame"},
+    {"ForeverArtisan_Fishing","ForeverArtisanFishingFrame"}, {"ForeverArtisan_Core","ForeverArtisanPanel"},
+  }
+  for _,w in ipairs(wins) do
+    local ns=loadedFrames[w[1]] and loadedFrames[w[1]].ns
+    local f=_G[w[2]]
+    if not f and ns then
+      local open=ns.ToggleWindow or ns.ToggleUI
+      if open then pcall(open) end
+      f=_G[w[2]]
+    end
+    assert(f, "window built: "..w[2])
+    local pages={}
+    for _,fr in ipairs(frames) do if rawget(fr,"_parent")==f and type(rawget(fr,"all"))=="table" then pages[#pages+1]=fr end end
+    assert(#pages>0, "lists that grow: "..w[2])
+    local before={}
+    for i,pg in ipairs(pages) do before[i]=#pg.rows end
+    local hook=f.scripts.OnSizeChanged
+    assert(hook, "corner grip: "..w[2])
+    local baseH=rawget(f,"_h") or 578
+    hook(f, 470, baseH+240)     -- ten rows taller
+    for i,pg in ipairs(pages) do
+      assert(#pg.rows==math.min(#pg.all, before[i]+10), w[2].." list grew: "..before[i].." -> "..#pg.rows)
+      for j=#pg.rows+1,#pg.all do assert(not pg.all[j]._shown, "rows past the bottom stay hidden") end
+    end
+    hook(f, 470, baseH)
+    for i,pg in ipairs(pages) do assert(#pg.rows==before[i], w[2].." back to normal") end
+    if f:IsShown() then f:Hide() end
+  end
+  print("0.9.49 taller windows ok")
+end
+-- 0.9.49 fishing buff reminder: no buff + one in your bags = one chat line naming the best; never more than every 10 minutes
+do
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local oCount, oCU, oGT, oSay, oName = fns.ItemCount, C_UnitAuras, GetTime, fns.say, fns.ItemName
+  local clock=900000 GetTime=function() return clock end
+  local bag={[4594]=2, [6316]=5}
+  fns.ItemCount=function(id) return bag[id] or 0 end
+  fns.ItemName=function(id) return ({[4594]="Rockscale Cod",[6316]="Loch Frenzy Delight",[286732]="Shiny Silver Coin"})[id] end
+  local buffed=false
+  C_UnitAuras={GetPlayerAuraBySpellID=function(id) if buffed and id==1249521 then return {spellId=id} end end}
+  local said
+  fns.say=function(t) said=t end
+  fns.BuffReminder()
+  assert(said and said:find("eat") and said:find("Rockscale Cod") and said:find("+12 Fishing"), "best food named: "..tostring(said))
+  said=nil; clock=clock+60; fns.BuffReminder()
+  assert(not said, "not again for 10 minutes")
+  clock=clock+600; bag[286732]=1; fns.BuffReminder()
+  assert(said and said:find("toss your") and said:find("Shiny Silver Coin") and said:find("+30"), "coin beats food: "..tostring(said))
+  said=nil; clock=clock+700; buffed=true; fns.BuffReminder()
+  assert(not said, "already buffed: quiet")
+  buffed=false; bag={}; fns.BuffReminder()
+  assert(not said, "nothing in your bags: quiet")
+  fns.ItemCount, C_UnitAuras, GetTime, fns.say, fns.ItemName = oCount, oCU, oGT, oSay, oName
+  print("0.9.49 fishing buff reminder ok")
+end
+-- 0.9.49 no exclamation marks in player-facing text (only "Enjoy the journey!" and the game's own fish-escaped message)
+do
+  local mods={"Alchemy","Blacksmithing","Camping","Contacts","Cooking","Core","Enchanting","Engineering","FirstAid","Fishing",
+    "Herbalism","Leatherworking","Mining","Skinning","Tailoring"}
+  local hits={}
+  for _,m in ipairs(mods) do
+    local dir=ROOT.."/ForeverArtisan_"..m.."/"
+    for _,name in ipairs({m..".lua","UI.lua","Extras.lua","Derby.lua","Progress.lua","Modules.lua","Finder.lua"}) do
+      local fh=io.open(dir..name)
+      if fh then
+        local n=0
+        for line in fh:lines() do
+          n=n+1
+          local code=line:gsub("%-%-.*$","")
+          if code:find('[%a%.]![" |]') and not code:find("Enjoy the journey!",1,true) and not code:find("Fish escaped!",1,true)
+            and not code:find("~=",1,true) then hits[#hits+1]=m.."/"..name..":"..n end
+        end
+        fh:close()
+      end
+    end
+  end
+  assert(#hits==0, "exclamation marks in text: "..table.concat(hits,", "))
+  print("0.9.49 no exclamation marks ok")
 end
 print("SUITE OK")

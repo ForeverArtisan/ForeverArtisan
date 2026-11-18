@@ -4,6 +4,7 @@ local _, ns = ...
 if not ns or not ns.DB then return end
 
 local LOG_ROWS, GOAL_ROWS, ROW_H, GOAL_H, BAR_W = 12, 7, 24, 34, 250
+local LOG_MAX = 25   -- catch log rows when the window is dragged taller (0.9.49)
 local GOLD, GRAY, GREEN, YELLOW, RED = ForeverArtisan.GOLD, ForeverArtisan.GRAY, ForeverArtisan.GREEN, ForeverArtisan.YELLOW, ForeverArtisan.RED
 
 ---------------------------------------------------------------- shared style kit (ForeverArtisan Core)
@@ -208,8 +209,6 @@ local function BuildFishingPage(p)
   Header(p, -86, "Settings")
   p.checks = {
     Check(p, "Put a lure on automatically", 16, -104, function() return S().autoLure end, function(v) S().autoLure = v end),
-    Check(p, "Boost splash sound while fishing (music and ambience off)", 16, -128,
-      function() return S().soundBoost end, function(v) S().soundBoost = v end, ApplyFishing),
     Check(p, "Same key reels in (press it again on the splash)", 16, -152,
       function() return S().reelSameKey end, function(v) S().reelSameKey = v end, ApplyFishing),
     Check(p, "Chat line for each catch", 16, -176, function() return S().verbose end, function(v) S().verbose = v end),
@@ -217,7 +216,27 @@ local function BuildFishingPage(p)
     -- a ping and a line on screen for a fishing pool in view or a rare catch (Extras.lua)
     Check(p, "Alerts: pools and rare catches", 240, -176, function() return S().alerts ~= false end,
       function(v) S().alerts = v and nil or false end),
+    Check(p, "Alert sound", 240, -200, function() return S().alertSound ~= false end,
+      function(v) S().alertSound = v and nil or false end),
   }
+
+  -- Splash sound: Off / Soft / Medium / Loud, click to step through (0.9.49)
+  Text(p, nil, "TOPLEFT", 22, -133):SetText("Splash sound:")
+  local sb = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
+  sb:SetSize(90, 22); sb:SetPoint("TOPLEFT", 130, -128)
+  sb:SetScript("OnClick", function()
+    local order, cur, nxt = ns.SPLASH_ORDER, S().splash or "off", 1
+    for i, k in ipairs(order) do if k == cur then nxt = i % #order + 1 end end
+    S().splash = order[nxt]
+    ApplyFishing(); ns.OnChange()
+  end)
+  Tip(sb, function()
+    GameTooltip:AddLine("Splash sound while fishing")
+    GameTooltip:AddLine("Soft, Medium or Loud: turns up sound effects and mutes music and ambience while your pole is on, "
+      .. "and you hear sounds from your character instead of the camera, so your own bobber sounds closer than "
+      .. "other players' splashes. Off: your sound settings stay as they are. Everything goes back when the pole comes off.", 1, 1, 1, true)
+  end)
+  p.splashBtn = sb
 
   Text(p, nil, "TOPLEFT", 22, -238):SetText("Fishing key:")
   p.keyBtn = KeyButton(p, 130, -234, "key", ApplyFishing)
@@ -331,6 +350,8 @@ local function RefreshFishingPage(p)
   p.lureCount:SetText(id and ns.ItemCount(id) or "")
 
   for _, c in ipairs(p.checks) do c:Sync() end
+  local sp = s.splash or "off"
+  p.splashBtn:SetText(sp:sub(1, 1):upper() .. sp:sub(2))
   SyncKey(p.keyBtn); SyncKey(p.reelBtn); SyncKey(p.swapKeyBtn)
   p.reelHint:SetText(GRAY .. "Right now: |r" .. ns.KeyNow() .. GRAY .. ".|r")
 
@@ -544,8 +565,11 @@ local function BuildLogPage(p)
     GameTooltip:AddLine("Adds everything on this list, using the Amount on the Progress tab. Skips anything already a goal.", 1, 1, 1, true)
   end)
   p.header = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -32); p.header:SetWidth(430)
-  p.rows = MakeRows(p, LOG_ROWS, -50, false, "offset")
-  for _, r in ipairs(p.rows) do
+  p.all = MakeRows(p, LOG_MAX, -50, false, "offset")
+  p.rows = {}
+  for i = 1, LOG_ROWS do p.rows[i] = p.all[i] end
+  for i = LOG_ROWS + 1, LOG_MAX do p.all[i]:Hide() end
+  for _, r in ipairs(p.all) do
     r:SetScript("OnClick", function(self, button)
       if button == "RightButton" and self.itemId then
         ns.AddGoal(self.itemId, 20, self.itemName)
@@ -596,7 +620,7 @@ local function RefreshLogPage(p)
         right = ("%d catches   %s"):format(z.catches, rate), spotKey = sp.key }
     end
     p.header:SetText(("%d spots logged, %d catches total"):format(#spots, total))
-    p.empty:SetText(#spots == 0 and "Nothing logged yet. Go catch something!" or "")
+    p.empty:SetText(#spots == 0 and "Nothing logged yet. Go catch something." or "")
   else
     local z
     if view.key then z = db.zones[view.key] end
@@ -629,7 +653,7 @@ local function RefreshLogPage(p)
   p.shown = data
   local spotView = view.mode ~= "all"
   p.addAll:SetShown(spotView)
-  view.offset = math.min(view.offset, math.max(0, #data - LOG_ROWS))
+  view.offset = math.min(view.offset, math.max(0, #data - #p.rows))
   for i, r in ipairs(p.rows) do
     local d = data[i + view.offset]
     if d then
@@ -641,7 +665,7 @@ local function RefreshLogPage(p)
     end
   end
   p.footer:SetText(p.poolLine or ("%d catches in the raw log%s"):format(#db.raw,
-    #data > LOG_ROWS and ("   |   showing %d-%d of %d"):format(view.offset + 1, math.min(#data, view.offset + LOG_ROWS), #data) or ""))
+    #data > #p.rows and ("   |   showing %d-%d of %d"):format(view.offset + 1, math.min(#data, view.offset + #p.rows), #data) or ""))
 end
 
 ---------- page 4: Cast marker (marker tools on top, fishing derby below)
@@ -741,6 +765,15 @@ local function Build()
   BuildProgressPage(pages.progress)
   BuildLogPage(pages.log)
   BuildDerbyPage(pages.derby)
+  -- drag the corner to make the window taller: the catch log shows more rows (0.9.49)
+  K.Tall(f, "height", 900, function(extra)
+    local lp = pages.log
+    local n = math.min(LOG_MAX, LOG_ROWS + math.floor(math.max(0, extra or 0) / ROW_H))
+    if #lp.rows == n then return end
+    lp.rows = {}
+    for i, r in ipairs(lp.all) do if i <= n then lp.rows[i] = r else r:Hide() end end
+    if view.tab == "log" then ns.OnChange() end
+  end, "pos")
 
   f:SetScript("OnUpdate", function(self, el)
     self.t = (self.t or 0) + el
