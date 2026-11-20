@@ -25,6 +25,26 @@ local ADVICE = {
     [300] = "Top rank. Nothing left to train.",
   },
 }
+-- who to see for each rank, for the Waypoint button (0.9.50). Journeyman: the nearest Fishing trainer
+-- you've met or passed (or the built-in list). Expert and Artisan: one NPC each, from Questie when
+-- installed, else these Classic spots (Questie NPC ids 2626 Old Man Heming, 12919 Nat Pagle).
+local RANK_NPC = {
+  [150] = { id = 2626, n = "Old Man Heming", z = "Stranglethorn Vale", s = "Booty Bay", m = 1434, x = 27.6, y = 76.8 },
+  [225] = { id = 12919, n = "Nat Pagle", z = "Dustwallow Marsh", m = 1445, x = 58.4, y = 60.2 },
+}
+local function RankNPC(max)
+  if max == 75 then
+    local V = ForeverArtisan.Vendors
+    return V and V.nearestTrainer and V.nearestTrainer("Fishing") or nil
+  end
+  local base = RANK_NPC[max]
+  if not base then return nil end
+  local q = ForeverArtisan.QDB and ForeverArtisan.QDB.Npc and ForeverArtisan.QDB.Npc(base.id)
+  if q and q.m and q.x then return { n = q.n or base.n, m = q.m, x = q.x, y = q.y, z = q.z or base.z, s = base.s } end
+  return base
+end
+ns.RankNPC = RankNPC
+
 -- character level each rank needs (Classic: the Expert book and Nat Pagle's quest)
 local RANK_LEVEL = { [150] = 20, [225] = 35 }
 
@@ -62,6 +82,7 @@ function ns.SkillInfo()
   info.capped = max and rank >= max and max < 300
   info.faction = Faction()
   info.advice = max and ADVICE[info.faction][max]
+  info.rankNPC = max and max < 300 and RankNPC(max) or nil
   -- too low to train the next rank yet? say so, and when you can
   local need = max and RANK_LEVEL[max]
   local lvl = UnitLevel and UnitLevel("player")
@@ -154,9 +175,9 @@ function ns.AddGoal(id, want, name)
   want = math.max(1, math.min(9999, tonumber(want) or 20))
   local goals = ns.DB().goals
   for _, g in ipairs(goals) do
-    if g.id == id then g.want = want; g.met = nil; ns.say(("Goal updated: %d %s."):format(want, g.name or ns.ItemName(id))); ns.OnChange(); return end
+    if g.id == id then g.want = want; g.met = nil; ns.say(("Goal updated: %d %s."):format(want, ns.NameOr(g.name, id))); ns.OnChange(); return end
   end
-  goals[#goals + 1] = { id = id, want = want, name = name or ns.ItemName(id) }
+  goals[#goals + 1] = { id = id, want = want, name = name or ns.KnownName(id) }
   ns.say(("Goal added: %d %s."):format(want, name or ns.ItemName(id)))
   ns.OnChange()
 end
@@ -168,7 +189,7 @@ function ns.AddGoals(list, want)
   for _, g in ipairs(goals) do have[g.id] = true end
   for _, it in ipairs(list) do
     if not have[it.id] then
-      goals[#goals + 1] = { id = it.id, want = want, name = it.name or ns.ItemName(it.id) }
+      goals[#goals + 1] = { id = it.id, want = want, name = (not ns.PlaceholderName(it.name) and it.name) or ns.KnownName(it.id) }
       have[it.id] = true; added = added + 1
     end
   end
@@ -200,7 +221,7 @@ function ns.GoalRows()
   local rows = {}
   for i, g in ipairs(ns.DB().goals) do
     local z, pct = ns.BestSpot(g.id)
-    rows[#rows + 1] = { i = i, id = g.id, name = g.name or ns.ItemName(g.id), want = g.want, have = Have(g.id),
+    rows[#rows + 1] = { i = i, id = g.id, name = ns.NameOr(g.name, g.id), want = g.want, have = Have(g.id),
       best = z and ("%s (%s) %d%%"):format(z.sub, z.zone, pct) or nil }
   end
   return rows
@@ -213,7 +234,7 @@ local function CheckGoals()
     local have = Have(g.id)
     if have >= g.want and not g.met then
       g.met = true
-      ns.say(GREEN .. ("Goal done: %d %s.|r"):format(g.want, g.name or ns.ItemName(g.id)))
+      ns.say(GREEN .. ("Goal done: %d %s.|r"):format(g.want, ns.NameOr(g.name, g.id)))
       pcall(PlaySound, (SOUNDKIT and SOUNDKIT.RAID_WARNING) or 8959)
     elseif have < g.want then
       g.met = nil
@@ -275,7 +296,7 @@ function ns.CookingSuggestions()
         local id = g.itemId
         if id and ((g.name and g.name:match("^Raw ")) or caught[id]) then
           local left = math.min(r.grayAt - rank, 25)
-          out[#out + 1] = { recipe = rname, grayAt = r.grayAt, id = id, name = g.name or ns.ItemName(id),
+          out[#out + 1] = { recipe = rname, grayAt = r.grayAt, id = id, name = ns.NameOr(g.name, id),
             per = g.count or 1, want = (g.count or 1) * left, left = left }
         end
       end

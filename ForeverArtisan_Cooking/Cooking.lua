@@ -409,7 +409,13 @@ function ns.Plan(target)
   for _, r in ipairs(learned) do canMake[r] = ns.Makeable(r) > 0 end
   -- what each recipe's materials cost, looked up once per plan
   local memo = {}
-  local function Money(r) return ForeverArtisan.CraftMoney(r, nil, memo) end
+  -- materials you still own at this point in the plan count as free, so the plan keeps using them
+  local left = {}
+  local function Left(id) if left[id] == nil then left[id] = Own(id) end; return left[id] end
+  local function Money(r)
+    if ForeverArtisan.OwnedMoney then return ForeverArtisan.OwnedMoney(r, Left, nil, memo) end
+    return ForeverArtisan.CraftMoney(r, nil, memo)
+  end
   local steps, byName, s, stuck = {}, {}, skill, nil
   local guard = 0
   while s < target and guard < 400 do
@@ -431,6 +437,9 @@ function ns.Plan(target)
       byName[best.name] = st
     end
     st.cooks = st.cooks + 1 / bestChance
+    for _, g in ipairs(best.reagents or {}) do
+      if g.id then left[g.id] = Left(g.id) - (g.n or 1) / bestChance end
+    end
     if bestChance < 1 then st.est = true end
     s = s + (best.ups or 1)
     st.to = s

@@ -403,6 +403,15 @@ function FA.QuestieMaterialSearch(q)
   return out
 end
 
+-- an item's name from QuestieDB, for an item the game hasn't loaded yet (0.9.50), or nil
+function FA.QuestieItemName(id)
+  if QDB.Off() or not id then return nil end
+  local L = QDB.Lib()
+  if not (L and L.Item and L.Item.name) then return nil end
+  local ok, n = pcall(L.Item.name, id)
+  return ok and type(n) == "string" and n ~= "" and n or nil
+end
+
 -- every vendor who sells a material: [npcId] = "Horde" / "Alliance" / "Both" / false (unknown), or nil
 function FA.QuestieVendorIds()
   if QDB.Off() then return nil end

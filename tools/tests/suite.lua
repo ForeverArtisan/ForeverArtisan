@@ -233,6 +233,39 @@ loadedFrames["ForeverArtisan_Contacts"].ns.OnContactsChanged()
 GetProfessionInfo=function(i) if i==8 then return "Leatherworking",1,225,225,0,0,165,0 end return baseProf(i) end
 local inf=lw.SkillInfo(); print("LW CAPPED", inf.capped, inf.advice)
 assert(inf.capped and inf.advice:find("Una") and inf.advice:find("Trade Contacts"), "trainer from contacts")
+-- 0.9.50: capped, the main page's Waypoint button goes to that trainer
+assert(inf.trainer and inf.trainer.n=="Una", "trainer for the Waypoint button")
+do
+  if not _G.ForeverArtisanLeatherworkingFrame then pcall(lw.ToggleWindow) end
+  local f=_G.ForeverArtisanLeatherworkingFrame
+  if f and not f:IsShown() then pcall(lw.ToggleWindow) end
+  if lw.ShowTab then lw.ShowTab("main") end
+  local went
+  local V=ForeverArtisan.Vendors; local oW=V.waypoint; V.waypoint=function(n) went=n end
+  -- the Leatherworking main page's Waypoint button (other windows have their own)
+  local btn
+  for _,fr in ipairs(frames) do
+    if rawget(fr,"_text")=="Waypoint" and rawget(fr,"_shown") then
+      went=nil; fr.scripts.OnClick(fr)
+      if went and went.n=="Una" then btn=fr end
+    end
+  end
+  V.waypoint=oW
+  assert(btn, "Waypoint button shown when capped, and it waypoints the trainer")
+  -- Progress: the trainer for the next rank is the first shopping list line, click for a waypoint
+  if lw.ShowTab then lw.ShowTab("progress") end
+  local row
+  for _,fr in ipairs(frames) do
+    local d=rawget(fr,"data")
+    if type(d)=="table" and d.waypoint and d.waypoint.n=="Una" and type(d.left)=="string" and d.left:find("Train Artisan: Una",1,true) then row=fr end
+  end
+  assert(row, "capped: Train Artisan: Una on the shopping list")
+  went=nil; V.waypoint=function(n) went=n end
+  row.scripts.OnClick(row, "LeftButton")
+  V.waypoint=oW
+  assert(went and went.n=="Una", "shopping list line waypoints the trainer")
+  if f and f:IsShown() then pcall(lw.ToggleWindow) end
+end
 GetProfessionInfo=baseProf
 -- Alchemy window: transmute must be skipped by the plan; herb points to Herbalism log
 local AL={[2330]={name="Minor Healing Potion",learned=true,maxTrivialLevel=55,relativeDifficulty=0,out=118,reag={{2447,1},{765,1},{3371,1}}},
@@ -4165,5 +4198,94 @@ do
   end
   assert(#hits==0, "exclamation marks in text: "..table.concat(hits,", "))
   print("0.9.49 no exclamation marks ok")
+end
+-- 0.9.50 fishing: an item the game hasn't loaded shows "Loading item..." (not "item:6361"), asks for it,
+-- and a saved placeholder name gives way to the real one
+do
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local oGI, oCI = GetItemInfo, C_Item
+  local loaded=false; local asked
+  GetItemInfo=function(id) if id==6361 and loaded then return "Raw Rainbow Fin Albacore" end end
+  C_Item={RequestLoadItemDataByID=function(id) asked=id end}
+  fns.namePending[6361]=nil
+  assert(fns.ItemName(6361)=="Loading item..." and asked==6361 and fns.namePending[6361], "loading, and asked the game")
+  assert(fns.KnownName(6361)==nil, "nothing to save yet")
+  loaded=true
+  assert(fns.NameOr("item:6361", 6361)=="Raw Rainbow Fin Albacore", "old saved placeholder replaced")
+  assert(fns.NameOr("Loading item...", 6361)=="Raw Rainbow Fin Albacore", "new placeholder replaced")
+  assert(fns.NameOr("My Fish", 6361)=="My Fish", "real saved names kept")
+  GetItemInfo, C_Item = oGI, oCI
+  fns.namePending[6361]=nil
+  print("0.9.50 loading item names ok")
+end
+-- 0.9.50 built-in recipe data names its reagents (filled from the game's item data, tools/fill_seed_names.py)
+do
+  local left={}
+  for _,m in ipairs({"Alchemy","Blacksmithing","Cooking","Enchanting","Engineering","FirstAid","Leatherworking","Tailoring"}) do
+    local fh=io.open(ROOT.."/ForeverArtisan_"..m.."/SeedRecipes.lua")
+    local txt=fh:read("*a"); fh:close()
+    for id in txt:gmatch('%[(%d+)%]="item:%d+"') do left[#left+1]=m..":"..id end
+  end
+  assert(#left<=4, "reagents without a name: "..table.concat(left,", "))
+  print("0.9.50 seed names ok ("..#left.." not in the game data)")
+end
+-- 0.9.50 Fishing: the next rank's trainer or book seller gets a Waypoint button
+do
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local n=fns.RankNPC(150)
+  assert(n and n.n=="Old Man Heming" and n.m and n.x, "Expert: Old Man Heming with a spot")
+  n=fns.RankNPC(225)
+  assert(n and n.n=="Nat Pagle" and n.m, "Artisan: Nat Pagle")
+  assert(fns.RankNPC(300)==nil, "nothing past the top rank")
+  print("0.9.50 fishing rank waypoint ok")
+end
+-- 0.9.50 shopping list: "have" counts your bags; the bank part shows as "N in bank" (5 / 5 read as ready with all 5 banked)
+do
+  local fa=loadedFrames["ForeverArtisan_FirstAid"].ns
+  local FA=ForeverArtisan
+  local oPlan, oCount, oBank = fa.Plan, fa.Count, FA.BankCount
+  fa.Plan=function() return {}, {{id=2447,name="Peacebloom",need=5,have=5,source="Herb"}}, nil end
+  fa.Count=function(id) return 0 end
+  FA.BankCount=function(id) if id==2447 then return 77, true end return 0, true end
+  if not _G.ForeverArtisanFirstAidFrame then pcall(fa.ToggleWindow) end
+  local f=_G.ForeverArtisanFirstAidFrame
+  if f and not f:IsShown() then pcall(fa.ToggleWindow) end
+  fa.ShowTab("progress")
+  local row
+  for _,fr in ipairs(frames) do local d=rawget(fr,"data"); if type(d)=="table" and d.name=="Peacebloom" and d.entry then row=d end end
+  assert(row, "Peacebloom on the shopping list")
+  local plain=(row.right:gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r",""))
+  assert(plain:find("^0 / 5") and plain:find("77 in bank"), "bags count, bank noted: "..plain)
+  assert(row.right:find("|cff80c0ff0 / 5",1,true), "blue: covered by the bank")
+  fa.Count=function(id) return 5 end
+  fa.ShowTab("progress")
+  for _,fr in ipairs(frames) do local d=rawget(fr,"data"); if type(d)=="table" and d.name=="Peacebloom" and d.entry then row=d end end
+  plain=(row.right:gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r",""))
+  assert(plain:find("^5 / 5") and not plain:find("in bank"), "all in bags: 5 / 5: "..plain)
+  fa.Plan, fa.Count, FA.BankCount = oPlan, oCount, oBank
+  if f and f:IsShown() then pcall(fa.ToggleWindow) end
+  print("0.9.50 bank on the shopping list ok")
+end
+-- 0.9.50 plans keep using what you own: owned materials cost nothing when picking between close recipes
+do
+  local FA=ForeverArtisan
+  local oIP=FA.ItemPrice
+  FA.ItemPrice=function(id) return ({[2589]=100,[3371]=4,[2447]=10,[2678]=1})[id] end
+  local bandage={name="Heavy Linen Bandage",reagents={{id=2589,n=2}}}            -- 200c a craft to buy
+  local potion={name="Minor Healing Potion",reagents={{id=3371,n=1},{id=2447,n=1},{id=2678,n=1}}} -- 15c
+  local own={[2589]=34}
+  local have=function(id) return own[id] or 0 end
+  assert(FA.OwnedMoney(bandage,have)==0, "linen in your bags: free")
+  assert(FA.OwnedMoney(potion,have)==15, "potion mats to buy: 15c")
+  own[2589]=1
+  assert(FA.OwnedMoney(bandage,have)==100, "one short: buy one")
+  own[2589]=34
+  local opts={{r=bandage,ch=1,bag=true,score=1.15},{r=potion,ch=1,bag=true,score=1.15}}
+  local pick=FA.PickRecipe(opts, function(r) return FA.OwnedMoney(r,have) end)
+  assert(pick.r==bandage, "keeps using the linen you bought")
+  pick=FA.PickRecipe({{r=bandage,ch=1,bag=true,score=1.15},{r=potion,ch=1,bag=true,score=1.15}}, function(r) return FA.CraftMoney(r) end)
+  assert(pick.r==potion, "(market price alone would switch to potions)")
+  FA.ItemPrice=oIP
+  print("0.9.50 plans use what you own ok")
 end
 print("SUITE OK")

@@ -585,6 +585,32 @@ function ForeverArtisan.FadeChance(r, gray, skill)
   return math.max(0.05, math.min(1, (gray - skill) / math.max(1, gray - y)))
 end
 
+-- What one craft costs you to buy, counting materials you already own (bags and bank) as free
+-- (0.9.50). have(id) is what's left of yours at this point in the plan. Without it the plan
+-- switched recipes as prices moved, and the materials you'd just bought stopped being used.
+-- nil when a material you'd have to buy has no price yet.
+function ForeverArtisan.OwnedMoney(r, have, makes, memo)
+  if not r.reagents or #r.reagents == 0 then return nil end
+  local total = 0
+  for _, g in ipairs(r.reagents) do
+    local n = g.n or 1
+    local short = g.id and math.max(0, n - math.max(0, have(g.id) or 0)) or n
+    if short > 0 then
+      local via = g.id and makes and makes[g.id]
+      local each
+      if via and via ~= r then
+        local m = ForeverArtisan.CraftMoney(via, makes, memo, 1)
+        each = m and m / (via.makes or 1)
+      elseif ForeverArtisan.ItemPrice then
+        each = ForeverArtisan.ItemPrice(g.id, g.name)
+      end
+      if not each then return nil end
+      total = total + each * short
+    end
+  end
+  return total
+end
+
 ---------------------------------------------------------------- cheapest way up
 -- What one craft's materials cost, in copper. Materials you'd make yourself count at what their
 -- own materials cost (`makes`: item id -> recipe). nil when anything has no price yet.

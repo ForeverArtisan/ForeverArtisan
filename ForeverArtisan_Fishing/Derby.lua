@@ -124,7 +124,7 @@ function ns.OnDerbyCatch(entry)
   db.derbies[key] = d
   d.catches = d.catches + 1
   for _, it in ipairs(entry.items or {}) do
-    local r = d.items[it.id] or { n = 0, name = ns.ItemName(it.id) }
+    local r = d.items[it.id] or { n = 0, name = ns.KnownName(it.id) }
     r.n = r.n + (it.n or 1)
     d.items[it.id] = r
   end

@@ -1,5 +1,12 @@
 # ForeverArtisan changelog
 
+## 0.9.50 (2026-11-20)
+- Fixed: shopping lists counted materials in your bank as already in hand ("5 / 5" with none in your bags). The count is what's in your bags now; "in bank" says what to pick up, in blue when the bank covers it.
+- Fixed: skill-up plans no longer switch recipes when prices move and leave the materials you bought unused. Materials you own count as free when the plan picks a recipe, so it keeps using them.
+- Fixed: hundreds of materials in the built-in recipe lists showed as "item:1234" until the game loaded them. They have their names now, and an item the game is still loading says "Loading item..." instead.
+- Added: capped at your rank? The profession window has a Waypoint button to the nearest trainer for the next rank, and the Progress tab's shopping list starts with that trainer (click for a waypoint).
+- Added: Fishing's Progress tab has a Waypoint button to whoever teaches your next rank (a Fishing trainer, Old Man Heming in Booty Bay, or Nat Pagle).
+
 ## 0.9.49 (2026-11-18)
 - Added: drag any profession, gathering, Trade Contacts or Fishing window, or the /fa panel, taller from its bottom-right corner and every list shows more rows. The size is remembered. Thanks to the player who asked.
 - Changed: with Questie, items many mobs drop (like wolf meat) now name the few nearest you instead of nothing.

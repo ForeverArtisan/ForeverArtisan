@@ -58,10 +58,36 @@ local function ItemInstant(id)
   if f then return f(id) end
 end
 
+-- An item the game hasn't loaded yet has no name: ask for it, show "Loading..." meanwhile, and redraw
+-- when it arrives (GET_ITEM_INFO_RECEIVED below). Was "item:6361" until something else redrew (0.9.50).
+local namePending = {}
 local function ItemName(id)
   local f = (C_Item and C_Item.GetItemInfo) or GetItemInfo
   local n = f and f(id)
-  return n or ("item:" .. id)
+  if n then return n end
+  if id and not namePending[id] then
+    namePending[id] = true
+    local req = C_Item and C_Item.RequestLoadItemDataByID
+    if req then pcall(req, id) end
+  end
+  -- meanwhile, Questie knows most items by name
+  local q = ForeverArtisan.QuestieItemName and ForeverArtisan.QuestieItemName(id)
+  return q or "Loading item..."
+end
+ns.namePending = namePending
+-- the name only when the game has it (nil while loading): for names that get saved
+function ns.KnownName(id)
+  local f = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+  return id and f and (f(id)) or nil
+end
+-- a saved name that is really a placeholder ("item:6361", "Loading item...")
+function ns.PlaceholderName(n)
+  return type(n) == "string" and (n:find("^item:%d+$") ~= nil or n == "Loading item...")
+end
+-- a saved name if it's real, else the game's (or "Loading item...")
+function ns.NameOr(saved, id)
+  if saved and not ns.PlaceholderName(saved) then return saved end
+  return ItemName(id)
 end
 
 local NumSlots = (C_Container and C_Container.GetContainerNumSlots) or GetContainerNumSlots
@@ -1093,6 +1119,14 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3, ...)
   elseif e == "LOOT_CLOSED" then
     StopChannel()
   elseif e == "GET_ITEM_INFO_RECEIVED" then
+    -- a name we were waiting for: redraw once (fires for every item the game loads, so only ours)
+    if a1 and namePending[a1] then
+      namePending[a1] = nil
+      if not ns.nameRedraw and C_Timer then
+        ns.nameRedraw = true
+        C_Timer.After(0.2, function() ns.nameRedraw = nil; if ns.OnChange then ns.OnChange() end end)
+      end
+    end
     -- fires for every item the game loads (Auction House, vendors): only our gear matters
     local mh, oh, pole = ns.GearSet()
     if a1 and (a1 == mh or a1 == oh or a1 == pole) then ns.UpdateGear() end

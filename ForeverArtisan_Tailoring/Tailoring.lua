@@ -649,7 +649,11 @@ function ns.Plan(target)
   for _, r in ipairs(cands) do canMake[r] = ns.Makeable(r) > 0 end
   -- what each recipe's materials cost in money, looked up once per plan
   local moneyMemo = {}
-  local function Money(r) return ForeverArtisan.CraftMoney(r, makes, moneyMemo) end
+  -- materials you still own at this point in the plan count as free, so the plan keeps using them
+  local function Money(r)
+    if ForeverArtisan.OwnedMoney then return ForeverArtisan.OwnedMoney(r, Have, makes, moneyMemo) end
+    return ForeverArtisan.CraftMoney(r, makes, moneyMemo)
+  end
 
   local steps, stuck = {}, nil
   while math.floor(s) < target and total < PLAN_LIMIT do
@@ -801,8 +805,10 @@ local function TrainerFor(rankName)
   if not (V and V.hitsForLink) then return end
   for _, key in ipairs({ PROF .. " (" .. rankName .. ")", rankName .. " " .. PROF }) do
     local hits = V.hitsForLink(nil, key)
+    -- nearest first (0.9.50): the trainer the Waypoint button sends you to
+    if hits and V.sortHits then hits = V.sortHits(hits) or hits end
     local h = hits and hits[1]
-    if h then return h.npc.n .. ", " .. (h.npc.s or h.npc.z or "?"), h.npc.seed end
+    if h then return h.npc.n .. ", " .. (h.npc.s or h.npc.z or "?"), h.npc.seed, h.npc end
   end
 end
 ns.TrainerFor = TrainerFor
@@ -815,8 +821,9 @@ function ns.SkillInfo()
   info.capped = max and rank >= max and max < 300
   info.faction = Faction()
   local next = max and RANK_AT[max]
-  local met, seed
-  if next then met, seed = TrainerFor(next[1]) end
+  local met, seed, npc
+  if next then met, seed, npc = TrainerFor(next[1]) end
+  info.trainer, info.nextRank = npc, next and next[1]
   if met then
     info.advice = ("%s: %s, %s (needs %d, level %d)."):format(next[1], met,
       seed and "from the built-in trainer list" or "from your Trade Contacts", next[2], next[3])

@@ -93,6 +93,11 @@ local function BuildMainPage(p)
     if p.learnFrom and V and V.waypoint then V.waypoint(p.learnFrom) end
   end)
   p.learnBtn:SetPoint("TOPRIGHT", -20, -56); p.learnBtn:Hide()
+  FA.UI.Tip(p.learnBtn, function()
+    local n = p.learnFrom
+    GameTooltip:AddLine("Waypoint")
+    if n then GameTooltip:AddLine(n.n .. ", " .. (n.s or n.z or "?"), 1, 1, 1) end
+  end)
 
   Header(p, -88, "This session")
   p.sess = Text(p, "GameFontHighlight", "TOPLEFT", 18, -108); p.sess:SetWidth(430)
@@ -203,6 +208,8 @@ local function RefreshMainPage(p)
       p.find:SetText(GRAY .. "Ask a city guard for " .. (("Blacksmithing"):find("^[AEIOU]") and "an" or "a") .. " Blacksmithing trainer.|r")
     end
   end
+  -- capped: the Waypoint button goes to the nearest trainer for the next rank (0.9.50)
+  if i.rank and i.capped and i.trainer then p.learnFrom = i.trainer end
   p.find:SetWidth(p.learnFrom and 330 or 430)
   p.learnBtn:SetShown(p.learnFrom ~= nil)
   for _, c in ipairs(p.checks) do c:Sync() end
@@ -367,9 +374,21 @@ local function RefreshProgressPage(p)
 
   -- training first: what you can learn now in one line, then the rest by the skill you need
   local shop = FA.TrainShopRows and FA.TrainShopRows(shopping, i.rank or (ahead and 1)) or {}
+  -- capped: the trainer for the next rank comes first, click for a waypoint (0.9.50)
+  if i.capped and i.trainer then
+    local t = i.trainer
+    table.insert(shop, 1, { icon = 136235, tipTitle = "Train " .. (i.nextRank or "the next rank"),
+      left = YELLOW .. "Train " .. (i.nextRank or "next rank") .. ": " .. t.n .. "|r",
+      right = YELLOW .. (t.s or t.z or "") .. "|r", waypoint = t,
+      tip = ("Capped at %d. Train %s to keep gaining skill.\n|cff80c0ffClick for a waypoint to %s|r"):format(i.max, i.nextRank or "the next rank", t.n) })
+  end
   for _, e in ipairs(shopping) do
     if not e.train then
     local done = e.have >= e.need
+    -- what's in your bags right now; the bank part shows as "· N in bank" (0.9.50: 5 / 5 with all 5 in
+    -- the bank read as ready to craft). Green = in your bags, blue = covered once you visit the bank.
+    local inBags = (e.tool or not e.id) and e.have or math.min(e.have, ns.Count(e.id))
+    local ready = inBags >= e.need
     local cost = (not done and not e.craft and e.price) and (GRAY .. "  ·  " .. FA.Money(e.price * (e.need - e.have)) .. "|r") or ""
     -- what your other characters hold (Syndicator), when it could save you buying
     local altNote, altTip = "", nil
@@ -380,8 +399,8 @@ local function RefreshProgressPage(p)
     if inBank > 0 then altNote = GREEN .. "  ·  " .. inBank .. " in bank|r" .. altNote end
     local tracked = FA.Track and FA.Track.IsTracked("Blacksmithing", e.id)
     shop[#shop + 1] = { id = e.id, icon = Icon(e.id), name = e.name, entry = e,
-      left = (tracked and "|TInterface\\RaidFrame\\ReadyCheck-Ready:12|t " or "") .. (done and GREEN or "") .. e.name .. (done and "|r" or "") .. (e.tool and (GRAY .. "  (tool)|r") or ""),
-      right = ("%s%d / %d|r"):format(done and GREEN or YELLOW, math.min(e.have, e.need), e.need)
+      left = (tracked and "|TInterface\\RaidFrame\\ReadyCheck-Ready:12|t " or "") .. (ready and GREEN or "") .. e.name .. (ready and "|r" or "") .. (e.tool and (GRAY .. "  (tool)|r") or ""),
+      right = ("%s%d / %d|r"):format(ready and GREEN or (done and "|cff80c0ff") or YELLOW, math.min(inBags, e.need), e.need)
         .. (e.craft and (GOLD .. "  ·  craft " .. e.craft .. "|r") or "") .. altNote .. cost,
       tip = " \n" .. GOLD .. "Shopping list|r\n" .. e.source .. "\n|cff80c0ff" .. (tracked and "Right-click to stop tracking it on screen" or "Right-click to track it on screen") .. "|r"
         .. ((not e.craft and FA.VendorNPC and FA.VendorNPC(e.id, e.name)) and "\n|cff80c0ffClick for a waypoint to the vendor (at the Auction House: search it)|r" or "") .. ((not e.craft and FA.RowPriceLine and FA.RowPriceLine(e.id, e.name)) and ("\n" .. FA.RowPriceLine(e.id, e.name)) or "")

@@ -1659,6 +1659,7 @@ NEWS = {
   { "0.9.47", "A Support section on the Info tab with a link to copy, and /fa support. ForeverArtisan stays free, and support never unlocks features." },
   { "0.9.48", "ForeverArtisan windows are no longer always on top. Click the Auction House, a profession window or an FA window to bring it to the front." },
   { "0.9.49", "Drag any profession window, Trade Contacts, Fishing or this panel taller from its corner and every list shows more rows. Fishing: a soft ping for pools, splash sound levels, and a reminder when you fish without a fishing buff." },
+  { "0.9.50", "Shopping lists count what's in your bags (bank shown apart), and plans keep using materials you already bought. Capped? A Waypoint button takes you to the next rank's trainer." },
 }
 
 local function verNum(v)

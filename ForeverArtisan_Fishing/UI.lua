@@ -403,6 +403,17 @@ local function BuildProgressPage(p)
   p.l3 = Text(p, nil, "TOPLEFT", 20, -104)
   for _, fs in ipairs({ p.l1, p.l2, p.l3 }) do fs:SetWidth(430); fs:SetWordWrap(false) end
   p.l4 = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -126); p.l4:SetWidth(430)
+  -- Waypoint to whoever teaches the next rank (0.9.50)
+  p.rankWay = Button(p, "Waypoint", 84, function()
+    local V = ForeverArtisan.Vendors
+    if p.rankNPC and V and V.waypoint then V.waypoint(p.rankNPC) end
+  end)
+  p.rankWay:SetPoint("TOPRIGHT", -16, -124); p.rankWay:Hide()
+  Tip(p.rankWay, function()
+    local n = p.rankNPC
+    GameTooltip:AddLine("Waypoint")
+    if n then GameTooltip:AddLine(n.n .. ", " .. (n.s or n.z or "?"), 1, 1, 1) end
+  end)
 
   Header(p, -176, "Catch goals")
   p.newId = nil
@@ -465,6 +476,9 @@ local function RefreshProgressPage(p)
     p.l3:SetText(GRAY .. "Skill up once to see your pace.|r")
   end
   p.l4:SetText(i.advice and (GOLD .. "Next rank (" .. (i.faction or "") .. "): |r" .. i.advice) or "")
+  p.rankNPC = i.rankNPC
+  p.rankWay:SetShown(i.rankNPC ~= nil)
+  p.l4:SetWidth(i.rankNPC and 340 or 430)
   if st and st.perHour then
     p.l3:SetText(p.l3:GetText() .. GRAY .. ("   ·   per hour: %d catches, ~%s|r"):format(st.perHour.catches,
       FA.Money and FA.Money(st.perHour.value) or st.perHour.value))
@@ -629,7 +643,7 @@ local function RefreshLogPage(p)
     for _, e in ipairs(SpotItems(z)) do
       local it = e.it
       data[#data + 1] = { icon = Icon(e.id), itemId = e.id, itemName = it.name,
-        left = QColor(it.q) .. (it.name or ns.ItemName(e.id)) .. "|r",
+        left = QColor(it.q) .. (ns.NameOr(it.name, e.id)) .. "|r",
         right = ("%d%%   %d caught%s%s"):format(math.floor(it.hauls * 100 / c + 0.5), it.n,
           it.minSkill and ("   skill " .. it.minSkill) or "",
           (ns.FishTime and ns.FishTime(e.id)) and (GOLD .. "   " .. ns.FishTime(e.id) .. "|r") or ""),
@@ -734,7 +748,7 @@ RefreshDerbyPage = function(p)
   for i, r in ipairs(p.rows) do
     local e = list[i + (view.doffset or 0)]
     if e then
-      r.icon:SetTexture(Icon(e.id)); r.left:SetText(e.name or ns.ItemName(e.id)); r.right:SetText(e.n .. " caught")
+      r.icon:SetTexture(Icon(e.id)); r.left:SetText(ns.NameOr(e.name, e.id)); r.right:SetText(e.n .. " caught")
       r.itemId, r.tip = e.id, nil
       r:Show()
     else
