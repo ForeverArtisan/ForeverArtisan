@@ -1,6 +1,9 @@
 # ForeverArtisan changelog
 
-## 0.9.52 (unreleased)
+## 0.9.53 (2026-11-22)
+- Fixed: 0.9.52 showed its version as 0.9.51 in game, so its What's new didn't show. Same features, right number.
+
+## 0.9.52 (2026-11-22)
 - Added: one search box at the top of the /fa panel. Type a word and see your crafts (with profit), Auction House prices you've seen, recipes in your profession windows, recipes you can learn from a trainer, and vendors from Trade Contacts, all in one list. Click a craft for its price chart, a recipe to open its profession, an item at the Auction House to search it, a vendor or trainer for a waypoint. With Questie installed it also finds the nearest innkeeper, flight master, bank, auctioneer or stable master. In Trade Contacts, a recipe a trainer teaches reads "learn at Cooking 125". /fa find <words> opens it with your search filled in. The Contacts tab's own search box is gone, since the box at the top covers it.
 - Added: Pop out on a crafting Progress tab shows its Plan to skill in a small see-through window on screen, like the goals list: same steps, colors and hover text, and it keeps up as you skill with the profession window closed. Click its heading to open that profession, right-click it to put the plan back. /fa plan lock | unlock | reset.
 - Added: Pop out on the Fishing window's Cast marker tab: the marker controls in a small see-through window you can drag anywhere.

@@ -1854,6 +1854,8 @@ NEWS = {
   { "0.9.49", "Drag any profession window, Trade Contacts, Fishing or this panel taller from its corner and every list shows more rows. Fishing: a soft ping for pools, splash sound levels, and a reminder when you fish without a fishing buff." },
   { "0.9.50", "Shopping lists count what's in your bags (bank shown apart), and plans keep using materials you already bought. Capped? A Waypoint button takes you to the next rank's trainer." },
   { "0.9.51", "New Tooltips tab: turn each kind of tooltip line on or off. Click a Goals line for the nearest vendor, and track training there too. Linked professions from chat no longer count as yours." },
+  { "0.9.52", "One search box at the top of /fa for crafts, prices, recipes, trainers and vendors (/fa find). Pop out your crafting plan, fishing or gathering skill and the cast marker. The Modules tab shows your alts' professions. A Waypoint to your next rank in every profession." },
+  { "0.9.53", "0.9.52 showed its version as 0.9.51. This build has the right number, so you see what's new." },
 }
 
 local function verNum(v)
