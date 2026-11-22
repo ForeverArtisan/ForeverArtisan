@@ -392,6 +392,13 @@ end
 ---------- page 2: Progress
 local function BuildProgressPage(p)
   Header(p, -4, "Fishing skill")
+  -- pop the skill bar out into a see-through window on screen (0.9.52)
+  p.pop = Button(p, "Pop out", 70, function() ns.SkillPopSet(not ns.SkillPopOn()) end)
+  p.pop:SetHeight(20); p.pop:SetPoint("TOPRIGHT", -24, -2)
+  Tip(p.pop, function()
+    GameTooltip:AddLine("Pop the skill bar out")
+    GameTooltip:AddLine("Your skill, its bar and this session's pace in a small see-through window you can drag anywhere. The x puts it back.", 1, 1, 1, true)
+  end)
   p.big = Text(p, "GameFontNormalLarge", "TOPLEFT", 20, -24)
   local bar = CreateFrame("Frame", nil, p)
   bar:SetSize(420, 10); bar:SetPoint("TOPLEFT", 20, -50)
@@ -451,31 +458,56 @@ local function BuildProgressPage(p)
   p.empty = Text(p, "GameFontDisable", "TOPLEFT", 30, -286); p.empty:SetWidth(400)
 end
 
-local function RefreshProgressPage(p)
+-- the skill block's text: { big, pct, capped, l1, l2, l3 } (the tab and its pop-out say the same thing)
+function ns.SkillBlock()
   local i = ns.SkillInfo()
+  local out = { info = i, pct = 0 }
   if i.rank then
-    p.big:SetText(("%d%s"):format(i.rank, i.max and (" / " .. i.max) or ""))
-    local pct = (i.max and i.max > 0) and math.min(1, i.rank / i.max) or 0
-    p.fill:SetWidth(math.max(1, 420 * pct))
-    p.fill:SetColorTexture(i.capped and 1 or 0.83, i.capped and 0.25 or 0.66, i.capped and 0.25 or 0.31, 0.85)
+    out.big = ("%d%s"):format(i.rank, i.max and (" / " .. i.max) or "")
+    out.pct = (i.max and i.max > 0) and math.min(1, i.rank / i.max) or 0
+    out.capped = i.capped
   else
-    p.big:SetText(i.notLearned and (GRAY .. "Fishing not learned yet|r") or (GRAY .. "Skill unknown|r")); p.fill:SetWidth(1)
+    out.big = i.notLearned and (GRAY .. "Fishing not learned yet|r") or (GRAY .. "Skill unknown|r")
   end
   local ses = ns.session
   -- this session: skill-ups, catches and what the catch is worth (Extras.lua); per hour on the pace line
   local st = ns.SessionStats and ns.SessionStats()
   local worth = (st and st.value > 0) and (GRAY .. "   ·   worth ~|r" .. (FA.Money and FA.Money(st.value) or st.value)) or ""
-  p.l1:SetText(("This session: %s+%d|r skill-ups from %d catches%s"):format(GREEN, i.gained or 0, ses.catches, worth))
-  p.l2:SetText(("%d catch%s since the last point%s"):format(i.sinceUp or 0, (i.sinceUp or 0) == 1 and "" or "es",
-    i.cpp and ("   ·   about %.1f catches per point"):format(i.cpp) or ""))
+  out.l1 = ("This session: %s+%d|r skill-ups from %d catches%s"):format(GREEN, i.gained or 0, ses.catches, worth)
+  out.l2 = ("%d catch%s since the last point%s"):format(i.sinceUp or 0, (i.sinceUp or 0) == 1 and "" or "es",
+    i.cpp and ("   ·   about %.1f catches per point"):format(i.cpp) or "")
   if i.capped then
-    p.l3:SetText(RED .. "Capped. Catches aren't giving skill until you train.|r")
+    out.l3 = RED .. "Capped. Catches aren't giving skill until you train.|r"
   elseif i.catchesToCap then
-    p.l3:SetText(("~%d catches to %d%s"):format(i.catchesToCap, i.max,
-      i.minsToCap and (" (~" .. i.minsToCap .. " min at this pace)") or ""))
+    out.l3 = ("~%d catches to %d%s"):format(i.catchesToCap, i.max,
+      i.minsToCap and (" (~" .. i.minsToCap .. " min at this pace)") or "")
   else
-    p.l3:SetText(GRAY .. "Skill up once to see your pace.|r")
+    out.l3 = GRAY .. "Skill up once to see your pace.|r"
   end
+  -- short forms for the pop-out window (Kerry, Nov 22: "about 2.0 catches per..." was cut off)
+  local sep = GRAY .. "  ·  |r"
+  out.s1 = ("%s+%d|r skill-up%s%s%d catch%s"):format(GREEN, i.gained or 0, (i.gained or 0) == 1 and "" or "s", sep,
+    ses.catches, ses.catches == 1 and "" or "es") .. ((st and st.value > 0) and (sep .. GRAY .. "worth ~|r" .. (FA.Money and FA.Money(st.value) or st.value)) or "")
+  out.s2 = ("%d since the last point"):format(i.sinceUp or 0) .. (i.cpp and (sep .. ("~%.1f per point"):format(i.cpp)) or "")
+  if i.capped then out.s3 = RED .. "Capped: train to keep going|r"
+  elseif i.catchesToCap then
+    out.s3 = ("~%d catches to %d"):format(i.catchesToCap, i.max) .. (i.minsToCap and (sep .. "~" .. i.minsToCap .. " min") or "")
+  else out.s3 = GRAY .. "Skill up once to see your pace|r" end
+  out.perHour = st and st.perHour and (GRAY .. ("%d catches an hour, ~%s|r"):format(st.perHour.catches,
+    FA.Money and FA.Money(st.perHour.value) or st.perHour.value)) or nil
+  return out
+end
+
+local function RefreshProgressPage(p)
+  local sb = ns.SkillBlock()
+  local i = sb.info
+  p.big:SetText(sb.big)
+  p.fill:SetWidth(math.max(1, 420 * sb.pct))
+  p.fill:SetColorTexture(sb.capped and 1 or 0.83, sb.capped and 0.25 or 0.66, sb.capped and 0.25 or 0.31, 0.85)
+  local st = ns.SessionStats and ns.SessionStats()
+  p.l1:SetText(sb.l1); p.l2:SetText(sb.l2); p.l3:SetText(sb.l3)
+  if p.pop then p.pop:SetText(ns.SkillPopOn() and "Pop in" or "Pop out") end
+  if ns.RefreshSkillPop then ns.RefreshSkillPop() end
   p.l4:SetText(i.advice and (GOLD .. "Next rank (" .. (i.faction or "") .. "): |r" .. i.advice) or "")
   p.rankNPC = i.rankNPC
   p.rankWay:SetShown(i.rankNPC ~= nil)
@@ -683,10 +715,16 @@ local function RefreshLogPage(p)
     #data > #p.rows and ("   |   showing %d-%d of %d"):format(view.offset + 1, math.min(#data, view.offset + #p.rows), #data) or ""))
 end
 
----------- page 4: Cast marker (marker tools on top, fishing derby below)
-local DERBY_ROWS = 5
+---------- page 4: Cast marker
 BuildDerbyPage = function(p)
   Header(p, -2, "Cast marker")
+  -- pop it out into a see-through window on screen (0.9.52)
+  p.pop = Button(p, "Pop out", 70, function() ns.CastPopSet(not ns.CastPopOn()) end)
+  p.pop:SetHeight(20); p.pop:SetPoint("TOPRIGHT", -24, 0)
+  Tip(p.pop, function()
+    GameTooltip:AddLine("Pop the cast marker out")
+    GameTooltip:AddLine("Its controls in a small see-through window you can drag anywhere. The x puts it back.", 1, 1, 1, true)
+  end)
   p.mstat = Text(p, nil, "TOPLEFT", 20, -20); p.mstat:SetWidth(430)
   local set = Button(p, "Set marker", 96, function() ns.CalibrateMarker(false) end)
   set:SetPoint("TOPLEFT", 16, -40)
@@ -715,60 +753,181 @@ BuildDerbyPage = function(p)
     "Add cast each time; then turn so the ring covers the pool. Hold right mouse to turn so the camera stays behind you. " ..
     "Red = zoom changed: click Snap camera.")
 
-  Header(p, -130, "Fishing derby")
-  p.title = Text(p, "GameFontNormal", "TOPLEFT", 20, -148)
-  p.big = Text(p, "GameFontNormalLarge", "TOPLEFT", 20, -166)
-  p.when = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -190); p.when:SetWidth(430)
-  p.rules = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -210); p.rules:SetWidth(430); p.rules:SetJustifyV("TOP")
-  p.rules:SetHeight(60)
-  Header(p, -276, "This derby")
-  p.dhead = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -294); p.dhead:SetWidth(430)
-  p.rows = MakeRows(p, DERBY_ROWS, -310, false, "doffset")
+  -- (0.9.52: the fishing derby section is gone; the game announces the derby itself, Kerry, Nov 22)
 end
 
 RefreshDerbyPage = function(p)
-  local st, sec = ns.DerbyStatus()
-  local d = ns.derby
-  p.title:SetText(d.title or "Fishing derby")
-  if st == "live" then
-    p.big:SetText(GREEN .. "LIVE now|r  ·  ends in " .. ns.DerbyClock(sec))
-  else
-    p.big:SetText((st == "soon" and YELLOW or "") .. "Starts in " .. ns.DerbyClock(sec) .. (st == "soon" and "|r" or ""))
-  end
-  p.when:SetText(ns.DerbyWhen() .. (d.source == "calendar" and GRAY .. "  ·  from the in-game calendar|r"
-    or GRAY .. "  ·  Classic schedule (open your calendar once to use the real one)|r"))
-  p.rules:SetText(d.rules or (GRAY .. "The rules show here once the calendar has the event. Also try talking to the derby NPC in Booty Bay.|r"))
+  p.mstat:SetText(ns.MarkerLine())
+  p.show:SetChecked(S().showMarker and true or false)
+  if p.pop then p.pop:SetText(ns.CastPopOn() and "Pop in" or "Pop out") end
+  if ns.RefreshCastPop then ns.RefreshCastPop() end
+end
 
-  local list, catches = ns.DerbyCatches()
-  if st == "live" or catches > 0 then
-    p.dhead:SetText(("%d catches this derby"):format(catches))
-  else
-    p.dhead:SetText(GRAY .. "Catches during the derby are counted here.|r")
-  end
-  view.doffset = math.min(view.doffset or 0, math.max(0, #list - DERBY_ROWS))
-  for i, r in ipairs(p.rows) do
-    local e = list[i + (view.doffset or 0)]
-    if e then
-      r.icon:SetTexture(Icon(e.id)); r.left:SetText(ns.NameOr(e.name, e.id)); r.right:SetText(e.n .. " caught")
-      r.itemId, r.tip = e.id, nil
-      r:Show()
-    else
-      r:Hide()
-    end
-  end
-
+-- the marker's status line (the tab and the pop-out window say the same thing)
+function ns.MarkerLine()
   local m = S().marker
   if m and m.x then
     local z = GetCameraZoom and GetCameraZoom()
     local off = z and m.zoom and math.abs(z - m.zoom) > 0.75
     local n = m.samples and #m.samples or 1
-    p.mstat:SetText(off and (RED .. "Marker set, but your camera zoom changed. Click Snap camera.|r")
+    return off and (RED .. "Marker set, but your camera zoom changed. Click Snap camera.|r")
       or (GREEN .. ("Marker set from %d cast%s.|r "):format(n, n == 1 and "" or "s") ..
-        (n < 4 and "Add a few more casts for a reliable spot." or "Shows while your pole is equipped.")))
-  else
-    p.mstat:SetText(GRAY .. "Not set yet. Cast, click Set marker, then click on your bobber.|r")
+        (n < 4 and "Add a few more casts for a reliable spot." or "Shows while your pole is equipped."))
   end
-  p.show:SetChecked(S().showMarker and true or false)
+  return GRAY .. "Not set yet. Cast, click Set marker, then click on your bobber.|r"
+end
+
+---------- the Cast marker tab, popped out (0.9.52)
+-- Kerry, Nov 22 (fishing the Extravaganza): "make cast marker pop out and transparent?". A small
+-- see-through window like the goals list: the marker line and its four controls. Drag to move; x puts
+-- it back. Saved per account.
+local cp
+function ns.CastPopOn() return S().castPop and S().castPop.on and true or false end
+local function PopSet(on)
+  S().castPop = S().castPop or {}
+  S().castPop.on = on or nil
+  if ns.RefreshCastPop then ns.RefreshCastPop() end
+  if pages and pages.derby and pages.derby.pop then pages.derby.pop:SetText(on and "Pop in" or "Pop out") end
+end
+ns.CastPopSet = PopSet
+local CP_W = 300
+local function BuildCastPop()
+  cp = CreateFrame("Frame", "ForeverArtisanCastMarkerFrame", UIParent)
+  cp:SetSize(CP_W, 100); cp:SetFrameStrata("LOW"); cp:SetClampedToScreen(true)
+  cp:SetMovable(true); cp:EnableMouse(true); cp:RegisterForDrag("LeftButton")
+  cp:SetScript("OnDragStart", function(self) self:StartMoving() end)
+  cp:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    local point, _, rel, x, y = self:GetPoint()
+    S().castPop = S().castPop or {}
+    S().castPop.pos = { point, rel, x, y }
+  end)
+  cp.bg = cp:CreateTexture(nil, "BACKGROUND"); cp.bg:SetAllPoints(); cp.bg:SetColorTexture(0, 0, 0, 0.35)
+  cp.title = Text(cp, "GameFontNormal", "TOPLEFT", 6, -4); cp.title:SetText(GOLD .. "Cast marker|r")
+  if FA.UI.Badge then FA.UI.Badge(cp, cp.title) end
+  cp.close = CreateFrame("Button", nil, cp); cp.close:SetSize(16, 16); cp.close:SetPoint("TOPRIGHT", -4, -2)
+  cp.close.t = Text(cp.close, "GameFontHighlight", "CENTER", 0, 0); cp.close.t:SetText("x")
+  cp.close:SetScript("OnClick", function() PopSet(false) end)
+  Tip(cp.close, function() GameTooltip:AddLine("Put it back on the Cast marker tab") end)
+  cp.stat = Text(cp, "GameFontHighlightSmall", "TOPLEFT", 8, -22); cp.stat:SetWidth(CP_W - 16); cp.stat:SetText("")
+  local set = Button(cp, "Set", 54, function() ns.CalibrateMarker(false) end)
+  set:SetHeight(20); set:SetPoint("TOPLEFT", 6, -52)
+  Tip(set, function()
+    GameTooltip:AddLine("Set marker (start over)")
+    GameTooltip:AddLine("Cast first, then click this and click on your bobber. Also saves your camera view.", 1, 1, 1, true)
+  end)
+  local add = Button(cp, "Add cast", 74, function() ns.CalibrateMarker(true) end)
+  add:SetHeight(20); add:SetPoint("LEFT", set, "RIGHT", 4, 0)
+  Tip(add, function()
+    GameTooltip:AddLine("Add cast")
+    GameTooltip:AddLine("Cast again without turning, then click this and click the new bobber. 4-5 casts gives a reliable average and scatter ring.", 1, 1, 1, true)
+  end)
+  local snap = Button(cp, "Snap camera", 92, function() ns.SnapCamera() end)
+  snap:SetHeight(20); snap:SetPoint("LEFT", add, "RIGHT", 4, 0)
+  Tip(snap, function()
+    GameTooltip:AddLine("Snap camera")
+    GameTooltip:AddLine("Puts the camera back where it was when you set the marker. Also bindable: Key Bindings > AddOns > Snap to fishing camera.", 1, 1, 1, true)
+  end)
+  cp.show = CreateFrame("CheckButton", nil, cp, "UICheckButtonTemplate")
+  cp.show:SetSize(22, 22); cp.show:SetPoint("LEFT", snap, "RIGHT", 4, 0)
+  local sl = Text(cp.show, "GameFontHighlightSmall", "LEFT", 22, 0, cp.show, "LEFT"); sl:SetText("Show")
+  cp.show:SetScript("OnClick", function(self) S().showMarker = self:GetChecked() and true or false; ns.UpdateMarker() end)
+  local acc = 0
+  cp:SetScript("OnUpdate", function(_, el)
+    acc = acc + (el or 0)
+    if acc >= 2 then acc = 0; ns.RefreshCastPop() end -- the zoom warning and derby clock
+  end)
+  local pos = S().castPop and S().castPop.pos
+  if pos then cp:SetPoint(pos[1], UIParent, pos[2] or pos[1], pos[3] or 0, pos[4] or 0)
+  else cp:SetPoint("CENTER", UIParent, "CENTER", 0, 180) end
+end
+function ns.RefreshCastPop()
+  if not ns.CastPopOn() then if cp then cp:Hide() end return end
+  if not cp then BuildCastPop() end
+  cp:Show()
+  cp.stat:SetText(ns.MarkerLine())
+  cp.show:SetChecked(S().showMarker and true or false)
+  -- (0.9.52: no derby clock here; the game announces the derby itself, Kerry, Nov 22)
+  cp:SetHeight(80)
+end
+
+---------- the skill bar, popped out (0.9.52)
+-- Kerry, Nov 22: "Also pop out the progress bar in a similar fashion". Fishing skill, the bar and the
+-- three pace lines from the Progress tab, in a see-through window like the cast marker's.
+local sp
+function ns.SkillPopOn() return S().skillPop and S().skillPop.on and true or false end
+function ns.SkillPopSet(on)
+  S().skillPop = S().skillPop or {}
+  S().skillPop.on = on or nil
+  ns.RefreshSkillPop()
+  if pages and pages.progress and pages.progress.pop then pages.progress.pop:SetText(on and "Pop in" or "Pop out") end
+end
+local SP_W = 300
+local function BuildSkillPop()
+  sp = CreateFrame("Frame", "ForeverArtisanFishingSkillFrame", UIParent)
+  sp:SetSize(SP_W, 96); sp:SetFrameStrata("LOW"); sp:SetClampedToScreen(true)
+  sp:SetMovable(true); sp:EnableMouse(true); sp:RegisterForDrag("LeftButton")
+  sp:SetScript("OnDragStart", function(self) self:StartMoving() end)
+  sp:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    local point, _, rel, x, y = self:GetPoint()
+    S().skillPop = S().skillPop or {}
+    S().skillPop.pos = { point, rel, x, y }
+  end)
+  sp.bg = sp:CreateTexture(nil, "BACKGROUND"); sp.bg:SetAllPoints(); sp.bg:SetColorTexture(0, 0, 0, 0.35)
+  sp.title = Text(sp, "GameFontNormal", "TOPLEFT", 6, -4); sp.title:SetText("")
+  if FA.UI.Badge then FA.UI.Badge(sp, sp.title) end
+  sp.close = CreateFrame("Button", nil, sp); sp.close:SetSize(16, 16); sp.close:SetPoint("TOPRIGHT", -4, -2)
+  sp.close.t = Text(sp.close, "GameFontHighlight", "CENTER", 0, 0); sp.close.t:SetText("x")
+  sp.close:SetScript("OnClick", function() ns.SkillPopSet(false) end)
+  Tip(sp.close, function() GameTooltip:AddLine("Put it back on the Progress tab") end)
+  local bar = CreateFrame("Frame", nil, sp)
+  bar:SetSize(SP_W - 16, 8); bar:SetPoint("TOPLEFT", 8, -24)
+  local bg = bar:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(); bg:SetColorTexture(1, 1, 1, 0.1)
+  sp.fill = bar:CreateTexture(nil, "ARTWORK"); sp.fill:SetPoint("TOPLEFT"); sp.fill:SetPoint("BOTTOMLEFT")
+  sp.lines = {}
+  for k = 1, 4 do
+    sp.lines[k] = Text(sp, "GameFontHighlightSmall", "TOPLEFT", 8, -24 - k * 14); sp.lines[k]:SetWidth(SP_W - 16)
+    sp.lines[k]:SetWordWrap(true); sp.lines[k]:SetText("")
+  end
+  local acc = 0
+  sp:SetScript("OnUpdate", function(_, el)
+    acc = acc + (el or 0)
+    if acc >= 5 then acc = 0; ns.RefreshSkillPop() end -- catches redraw it too (Progress refresh)
+  end)
+  local pos = S().skillPop and S().skillPop.pos
+  if pos then sp:SetPoint(pos[1], UIParent, pos[2] or pos[1], pos[3] or 0, pos[4] or 0)
+  else sp:SetPoint("CENTER", UIParent, "CENTER", 0, 300) end
+end
+function ns.RefreshSkillPop()
+  if not ns.SkillPopOn() then
+    if sp then sp:Hide() end
+    if ns.DockHUD then ns.DockHUD(nil) end
+    return
+  end
+  if not sp then BuildSkillPop() end
+  sp:Show()
+  local sb = ns.SkillBlock()
+  sp.title:SetText(GOLD .. "Fishing|r  " .. sb.big)
+  sp.fill:SetWidth(math.max(1, (SP_W - 16) * sb.pct))
+  sp.fill:SetColorTexture(sb.capped and 1 or 0.83, sb.capped and 0.25 or 0.66, sb.capped and 0.25 or 0.31, 0.85)
+  -- short forms of the tab's lines, so nothing is cut off; the per-hour pace on a line of its own
+  local lines = { sb.s1, sb.s2, sb.s3 }
+  if sb.perHour then lines[#lines + 1] = sb.perHour end
+  -- a line too long for the window wraps instead of being cut off
+  local y = -38
+  for k, fs in ipairs(sp.lines) do
+    fs:SetText(lines[k] or "")
+    fs:ClearAllPoints(); fs:SetPoint("TOPLEFT", 8, y)
+    if lines[k] and lines[k] ~= "" then
+      local h = tonumber(fs.GetStringHeight and fs:GetStringHeight()) or 0
+      y = y - math.max(14, h + 2)
+    end
+  end
+  -- the lure bar (lure timer and pole swap) sits inside it while both show (Kerry, Nov 22: "Include the
+  -- lure information on the popup")
+  local extra = ns.DockHUD and ns.DockHUD(sp, y - 2, SP_W - 8) or 0
+  sp:SetHeight(-y + 6 + extra)
 end
 
 ---------- frame
@@ -829,12 +988,40 @@ local function AttachSwap()
   sw.attached = true
 end
 
+-- the lure bar inside the popped-out skill window (0.9.52): put it there while both show, give it back
+-- its own spot when the window closes. Out of combat only (it holds the secure pole-swap button).
+-- Returns the height it takes in the window.
+function ns.DockHUD(win, y, w)
+  if not hud or (InCombatLockdown and InCombatLockdown()) then return hud and hud.docked and 34 or 0 end
+  local want = win and win:IsShown() and hud:IsShown()
+  if want then
+    hud:ClearAllPoints(); hud:SetPoint("TOPLEFT", win, "TOPLEFT", 4, y)
+    hud:SetWidth(w or 292)
+    if hud.bg then hud.bg:SetColorTexture(0, 0, 0, 0) end
+    hud.cap:Hide()
+    hud.docked = true
+    return 34
+  elseif hud.docked then
+    hud.docked = nil
+    hud:ClearAllPoints(); hud:SetWidth(180)
+    LoadPos(hud, "hudPos", "CENTER", 0, -180)
+    if hud.bg then hud.bg:SetColorTexture(0, 0, 0, 0.55) end
+    hud.cap:Show()
+  end
+  return 0
+end
+
 local function BuildHUD()
   hud = CreateFrame("Button", "ForeverArtisanFishingHUD", UIParent)
   hud:SetSize(180, 30)
   Draggable(hud, "hudPos")
   LoadPos(hud, "hudPos", "CENTER", 0, -180)
+  -- docked in the skill window: it moves with the window, not on its own
+  local ds, de = hud:GetScript("OnDragStart"), hud:GetScript("OnDragStop")
+  hud:SetScript("OnDragStart", function(self, ...) if self.docked then return end if ds then ds(self, ...) end end)
+  hud:SetScript("OnDragStop", function(self, ...) if self.docked then return end if de then de(self, ...) end end)
   local bg = hud:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(); bg:SetColorTexture(0, 0, 0, 0.55)
+  hud.bg = bg
   hud.icon = hud:CreateTexture(nil, "ARTWORK"); hud.icon:SetSize(24, 24); hud.icon:SetPoint("LEFT", 3, 0)
   hud.text = Text(hud, "GameFontHighlight", "LEFT", 32, 0, hud, "LEFT")
   hud.cap = Text(hud, "GameFontNormalSmall", "BOTTOMLEFT", 0, 2, hud, "TOPLEFT")
@@ -868,9 +1055,7 @@ local function BuildHUD()
     self.n = (self.n or 0) + 1
     if self.n % 10 == 1 then
       local i = ns.SkillInfo()
-      local dst, dsec = ns.DerbyStatus and ns.DerbyStatus()
-      if dst == "live" then self.cap:SetText(GREEN .. "Derby live: " .. ns.DerbyClock(dsec) .. " left|r")
-      elseif i.capped then self.cap:SetText(RED .. "Fishing capped at " .. i.max .. ": train|r")
+      if i.capped then self.cap:SetText(RED .. "Fishing capped at " .. i.max .. ": train|r")
       elseif i.rank and i.max then self.cap:SetText(GRAY .. "Fishing " .. i.rank .. " / " .. i.max .. "|r")
       else self.cap:SetText("") end
     end
@@ -904,6 +1089,9 @@ ns.ToggleMinimapButton = function() ns.MinimapCommand("") end
 ---------------------------------------------------------------- hooks
 function ns.OnChange()
   UpdateHUD()
+  -- popped-out windows follow a catch right away
+  if ns.RefreshSkillPop then pcall(ns.RefreshSkillPop) end
+  if ns.RefreshCastPop then pcall(ns.RefreshCastPop) end
   if not (f and f:IsShown()) then return end
   if view.tab == "fish" then RefreshFishingPage(pages.fish)
   elseif view.tab == "progress" then RefreshProgressPage(pages.progress)
@@ -922,7 +1110,7 @@ local ev = CreateFrame("Frame")
 for _, e in ipairs({ "PLAYER_LOGIN", "PLAYER_EQUIPMENT_CHANGED", "BAG_UPDATE_DELAYED", "ZONE_CHANGED",
   "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "PLAYER_REGEN_ENABLED", "CHAT_MSG_SKILL", "LOOT_CLOSED" }) do pcall(ev.RegisterEvent, ev, e) end
 ev:SetScript("OnEvent", function(_, e)
-  if e == "PLAYER_LOGIN" then BuildHUD() end
+  if e == "PLAYER_LOGIN" then BuildHUD(); if ns.RefreshCastPop then pcall(ns.RefreshCastPop) end; if ns.RefreshSkillPop then pcall(ns.RefreshSkillPop) end end
   if e == "BAG_UPDATE_DELAYED" and ns.InvalidateLure then ns.InvalidateLure() end
   if e == "ZONE_CHANGED" or e == "ZONE_CHANGED_INDOORS" or e == "ZONE_CHANGED_NEW_AREA" then
     if view.mode == "spot" then view.key = nil end

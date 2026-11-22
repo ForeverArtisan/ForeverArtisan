@@ -147,8 +147,12 @@ local function scan()
     m.isProf = isProf[m.title:lower()] or false
     m.learned = m.isProf and known[m.title:lower()] or nil
   end
+  -- professions this character doesn't have but another of yours does get their own group, with who
+  -- and their skill on the row (Kerry, Nov 22: "Learned on your other characters")
+  local alts = FA.AltTrades and FA.AltTrades() or {}
   for _, m in ipairs(modules) do
-    m.group = (m.learned or m.key == "camping") and 1 or (m.isProf and 2 or 3)
+    m.alts = (m.isProf and not m.learned) and alts[m.title:lower()] or nil
+    m.group = (m.learned or m.key == "camping") and 1 or (m.alts and 2) or (m.isProf and 3 or 4)
   end
   table.sort(modules, function(a, b)
     local ga, gb = a.group, b.group
@@ -218,6 +222,7 @@ end
 ---------------------------------------------------------------- panel
 
 local NEWS -- release headlines, filled in under "what's new"; the Info tab shows the newest three
+local PAGE_TOP = 86 -- the tabs' pages start here, under the search box and the tab buttons (0.9.52)
 local ROW_H = 30 -- compact: every profession has a module now, so notes live in the hover tooltip
 local panel
 
@@ -267,6 +272,12 @@ local function refreshPanel()
       local L = m.learned
       local name = (m.isProf and not L) and (GREY .. m.title .. "|r") or m.title
       local skill = (L and L.rank) and (GOLD .. "  " .. L.rank .. (L.max and ("/" .. L.max) or "") .. "|r") or ""
+      -- known by another of your characters: the best one and their skill ("Boom 111", "+1 more")
+      if m.alts then
+        local a1 = m.alts[1]
+        name = m.title
+        skill = GOLD .. "  " .. a1.who .. " " .. a1.rank .. "|r" .. (#m.alts > 1 and (GREY .. " +" .. (#m.alts - 1) .. "|r") or "")
+      end
       row.title:SetText(name .. skill .. (m.alias ~= "" and (GREY .. "   /fa " .. m.alias .. "|r") or ""))
       row.notes:SetText(m.notes)
       row.status:SetText(statusText(m))
@@ -338,6 +349,28 @@ local function refreshPanel()
   -- "Coming soon" grid under the installed modules
   local shown = math.min(#modules, #panel.rows)
   local top = (shown > 0) and (y - 10) or -60
+  -- your other characters and their professions (0.9.52)
+  -- (0.9.52: the per-character lines gave way to the "Learned on your other characters" group)
+  local altRows = {}
+  if panel.altHead then
+    panel.altHead:SetShown(#altRows > 0)
+    if #altRows > 0 then
+      panel.altHead:ClearAllPoints(); panel.altHead:SetPoint("TOPLEFT", 18, top + 2)
+      top = top - 20
+    end
+    for i, f in ipairs(panel.alts) do
+      local r = altRows[i]
+      if r then
+        f:ClearAllPoints(); f:SetPoint("TOPLEFT", 22, top)
+        f.key, f.who, f.tip, f.armed = r.key, r.who, r.tip, nil
+        f.text:SetText(r.title .. "   " .. r.line); f:Show()
+        top = top - 18
+      else
+        f:Hide(); f.key = nil
+      end
+    end
+    if #altRows > 0 then top = top - 10 end
+  end
   -- your account: legacy points and crafting cooldowns
   local acctFns = { FA.LegacyLines, FA.CooldownLines }
   for i, f in ipairs(panel.acct or {}) do
@@ -372,7 +405,12 @@ local function refreshPanel()
   -- the Modules tab sets the height (the longest); the other tabs fit in it
   local gridRows = #soon > 0 and math.ceil(#soon / SOON_COLS) or 0
   local listEnd = #soon > 0 and (-top + 20 + gridRows * SOON_H) or -top
-  panel:SetHeight(math.max(600, 58 + listEnd + 112)) -- room for the works-with line and Reload UI
+  -- the pages start under the search box now (0.9.52: 86 down, was 56), so count that too (Kerry,
+  -- Nov 22: legacy points, cooldowns and "Works best with" ran into each other)
+  local need = PAGE_TOP + 2 + listEnd + 112 -- room for the works-with line and Reload UI
+  panel.needH = need
+  -- never shorter than you dragged it
+  panel:SetHeight(math.max(628, need, tonumber(ForeverArtisanSettings and ForeverArtisanSettings.panelHeight) or 0))
 end
 
 -- Trade Contacts calls this when its contacts change (a new NPC, Questie's trainers read), so the open
@@ -460,6 +498,7 @@ local function buildModulesTab(p)
         local L = self.m.learned
         GameTooltip:AddLine(L and ("You know " .. self.m.title .. (L.rank and (" (" .. L.rank .. (L.max and ("/" .. L.max) or "") .. ")") or "") .. ".")
           or "Not learned on this character. Turn it on to plan ahead, or leave it off.", 0.83, 0.66, 0.31, true)
+        for _, a in ipairs(self.m.alts or {}) do GameTooltip:AddLine(a.full .. ": " .. a.rank, 1, 1, 1) end
       end
       GameTooltip:Show()
     end)
@@ -469,7 +508,7 @@ local function buildModulesTab(p)
 
   -- one heading per group: what this character has, the professions it doesn't, and tools
   panel.headings = {}
-  for i, text in ipairs({ "Your trades", "Not learned on this character", "Tools" }) do
+  for i, text in ipairs({ "Your trades", "Learned on your other characters", "Not learned on any character", "Tools" }) do
     local h = p:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     h:SetText(GOLD .. text .. "|r")
     h:Hide()
@@ -481,6 +520,42 @@ local function buildModulesTab(p)
   panel.empty:SetText("No modules installed yet.")
 
   -- your account: legacy points and crafting cooldowns (Account.lua), one line each, details on hover
+  -- your other characters, one line each (0.9.52): the same list on every character
+  panel.altHead = p:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  panel.altHead:SetText(GOLD .. "Your other characters|r"); panel.altHead:Hide()
+  panel.alts = {}
+  for i = 1, 10 do
+    local f = CreateFrame("Button", nil, p)
+    f:SetSize(428, 18)
+    f:RegisterForClicks("RightButtonUp")
+    f.text = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.text:SetPoint("LEFT", 0, 0); f.text:SetWidth(424); f.text:SetJustifyH("LEFT"); f.text:SetWordWrap(false); f.text:SetText("")
+    f:SetScript("OnClick", function(self)
+      if not (self.key and FA.ForgetCharacter) then return end
+      if self.armed then
+        FA.ForgetCharacter(self.key); self.armed = nil; refreshPanel()
+      else
+        -- a second right-click removes it (no accidents)
+        self.armed = true
+        self.text:SetText(RED .. "Right-click again to remove " .. (self.who or "it") .. " from this list|r")
+      end
+    end)
+    f:SetScript("OnEnter", function(self)
+      if not self.tip then return end
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      for j, l in ipairs(self.tip) do
+        if j == 1 then GameTooltip:AddLine(l) else GameTooltip:AddLine(l, 1, 1, 1, true) end
+      end
+      GameTooltip:Show()
+    end)
+    f:SetScript("OnLeave", function(self)
+      GameTooltip:Hide()
+      if self.armed then self.armed = nil; refreshPanel() end
+    end)
+    f:Hide()
+    panel.alts[i] = f
+  end
+
   panel.acct = {}
   for i = 1, 2 do
     local f = CreateFrame("Frame", nil, p)
@@ -571,34 +646,8 @@ local function buildModulesTab(p)
   panel.reload:SetScript("OnClick", ReloadUI)
 end
 
-local TC_ROWS = 13
--- the Contacts tab's search: empty shows the Trade Contacts buttons, typing shows results in their place
-refreshContactsSearch = function()
-  if not (panel and panel.tcRows) then return end
-  local q = panel.tcQuery or ""
-  local on = FA.Vendors ~= nil
-  panel.tcSearch:SetShown(on)
-  local searching = on and q ~= ""
-  if panel.tcHead then panel.tcHead:SetShown(not searching) end
-  for _, b in ipairs(panel.tcButtons or {}) do b:SetShown(not searching); b.desc:SetShown(not searching) end
-  local data = searching and FA.Vendors.rows(q) or {}
-  panel.tcData = data
-  panel.tcOff = math.min(panel.tcOff or 0, math.max(0, #data - TC_ROWS))
-  for i, r in ipairs(panel.tcRows) do
-    local d = data[i + panel.tcOff]
-    r.d = d
-    if d then
-      r.icon:SetTexture(d.icon or 134400); r.left:SetText(d.left or ""); r.right:SetText(d.right or ""); r:Show()
-    else r:Hide() end
-  end
-  if not searching then panel.tcStatus:SetText("")
-  elseif #data == 0 then panel.tcStatus:SetText(GREY .. 'Nothing matches "' .. q .. '" among the NPCs you\'ve met or passed. For a recipe, try the Recipe book search in that profession.|r')
-  else
-    local more = #data - panel.tcOff - TC_ROWS
-    panel.tcStatus:SetText(("%d result%s. Click one for a waypoint.%s"):format(#data, #data == 1 and "" or "s",
-      more > 0 and (GREY .. "  Scroll for " .. more .. " more.|r") or ""))
-  end
-end
+-- (0.9.52: the Contacts tab's own search box is gone: the box at the top of the panel searches all of it)
+refreshContactsSearch = function() end
 
 local function buildContactsTab(p)
   -- what's in it, by where it came from, so the buttons below are clear about what they search
@@ -606,59 +655,17 @@ local function buildContactsTab(p)
   panel.known = Txt(p, "GameFontHighlightSmall", 16, -30, 428)
   panel.known:SetSpacing(3)
 
-  -- search right here: type and the results replace the buttons below (no second window)
-  panel.tcSearch = FA.UI.SearchBox(p, 428, function(text)
-    panel.tcQuery, panel.tcOff = text, 0
-    refreshContactsSearch()
-  end, "Search items, recipes, vendors, towns or a profession")
-  panel.tcSearch:SetPoint("TOPLEFT", 22, -100)
-  panel.tcStatus = Txt(p, "GameFontHighlightSmall", 16, -128, 428)
-  panel.tcRows = {}
-  for i = 1, TC_ROWS do
-    local r = CreateFrame("Button", nil, p)
-    r:SetSize(428, 22); r:SetPoint("TOPLEFT", 16, -148 - (i - 1) * 24)
-    r:SetHighlightTexture(FA.UI.HIGHLIGHT, "ADD")
-    r.icon = r:CreateTexture(nil, "ARTWORK"); r.icon:SetSize(18, 18); r.icon:SetPoint("LEFT", 2, 0)
-    r.left = r:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    r.left:SetPoint("LEFT", 26, 0); r.left:SetWidth(190); r.left:SetJustifyH("LEFT"); r.left:SetWordWrap(false)
-    r.right = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    r.right:SetPoint("RIGHT", -4, 0); r.right:SetWidth(206); r.right:SetJustifyH("RIGHT"); r.right:SetWordWrap(false)
-    r:SetScript("OnClick", function(self)
-      if self.d and self.d.npc and FA.Vendors then FA.Vendors.waypoint(self.d.npc) end
-    end)
-    r:SetScript("OnEnter", function(self)
-      local d = self.d
-      if not d then return end
-      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      if d.id then GameTooltip:SetItemByID(d.id) else GameTooltip:AddLine(d.tipTitle or "") end
-      local tip = d.tip or (d.tipFn and d.tipFn())
-      if tip then GameTooltip:AddLine(tip, 1, 1, 1, true) end
-      -- (contact details already end with it)
-      if d.npc and not (tip and tip:find("Click for a waypoint", 1, true)) then GameTooltip:AddLine("Click for a waypoint", 0.5, 0.75, 1) end
-      GameTooltip:Show()
-    end)
-    r:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    r:Hide()
-    panel.tcRows[i] = r
-  end
-  p:EnableMouseWheel(true)
-  p:SetScript("OnMouseWheel", function(_, delta)
-    if (panel.tcQuery or "") == "" then return end
-    panel.tcOff = math.max(0, math.min((panel.tcOff or 0) - delta * 3, math.max(0, #(panel.tcData or {}) - TC_ROWS)))
-    refreshContactsSearch()
-  end)
-
-  panel.tcHead = Head(p, -140, "Open Trade Contacts")
+  panel.tcHead = Head(p, -116, "Open Trade Contacts")
   -- each button opens the Trade Contacts window on that tab; Nearest trainer opens with its menu up
   local TC = {
-    { "Search", function() FA.Vendors.open() end, "Find any of them by item, NPC, town or profession." },
+    { "Open search", function() FA.Vendors.open() end, "Trade Contacts' own search window, with filters. The box at the top of this panel searches them too." },
     { "Contacts", function() FA.Vendors.openTab("contacts") end, "Your contact book: the vendors and trainers you've met, by zone and trade." },
     { "Limited stock", function() FA.Vendors.openTab("stock") end, "Limited-stock items at vendors you've met, and when they come back." },
     { "Nearest trainer", function() FA.Vendors.openNearest() end, "The closest trainer for your class or a profession, from everything above." },
   }
   panel.tcButtons = {}
   for i, t in ipairs(TC) do
-    local y = -162 - (i - 1) * 34
+    local y = -138 - (i - 1) * 34
     local b = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
     b:SetSize(130, 24); b:SetPoint("TOPLEFT", 16, y); b:SetText(t[1])
     b:SetScript("OnClick", function() if FA.Vendors then panel:Hide(); t[2]() end end)
@@ -1504,7 +1511,7 @@ local function buildInfoTab(p)
 
   -- a quiet way to back it: no popups, never unlocks anything
   Head(p, y0 - 96, "Support")
-  Txt(p, "GameFontHighlightSmall", 16, y0 - 118, 428, "ForeverArtisan is free and always will be. To help keep it going:")
+  Txt(p, "GameFontHighlightSmall", 16, y0 - 118, 428, "If ForeverArtisan made your grind easier, your support is appreciated:")
   panel.support = CopyBox(p, FA.SUPPORT, 300, "Support ForeverArtisan",
     "Tip any amount or join monthly. Backers get an Artisan role in Discord and their name on the site. Support never unlocks features.")
   panel.support:SetPoint("TOPLEFT", 22, y0 - 134)
@@ -1532,13 +1539,179 @@ local function buildInfoTab(p)
   enjoy:SetPoint("BOTTOMLEFT", 16, 16); enjoy:SetText("Enjoy the journey!")
 end
 
+---------------------------------------------------------------- one search for everything (0.9.52)
+-- The box above the tabs. While it has 2+ letters the results replace the tab you're on; clearing it
+-- (Esc, or clicking a tab) brings the tab back. Groups and clicks: Core/Search.lua.
+local SEARCH_ROW_H = 20
+local search = { q = "", expanded = {}, off = 0, rows = {} }
+
+local function searchRowClick(d, button)
+  if not d then return end
+  if d.more then search.expanded[d.more] = true; FA.RefreshSearch() return end
+  if d.craft then
+    search.box:Reset(); search.q = ""; FA.RefreshSearch()
+    selectTab("market"); showTrend(d.craft)
+  elseif d.recipe then
+    if d.recipe.prof and d.recipe.prof.open then pcall(d.recipe.prof.open, d.recipe.r) end
+  elseif d.npc and FA.Vendors and FA.Vendors.waypoint then
+    if d.item and FA.SearchAH and FA.SearchAH(d.item.name) then return end
+    FA.Vendors.waypoint(d.npc)
+  elseif d.item then
+    if not (FA.SearchAH and FA.SearchAH(d.item.name)) then
+      print(PREFIX .. d.item.name .. ": open the Auction House and click it again to search for it.")
+    end
+  end
+end
+
+local function buildSearch(p)
+  search.page = p
+  for i = 1, 40 do
+    local r = CreateFrame("Button", nil, p)
+    r:SetSize(428, SEARCH_ROW_H)
+    r:SetPoint("TOPLEFT", 16, -6 - (i - 1) * SEARCH_ROW_H)
+    r:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    r.icon = r:CreateTexture(nil, "ARTWORK"); r.icon:SetSize(16, 16); r.icon:SetPoint("LEFT", 0, 0)
+    r.left = Txt(r, "GameFontHighlightSmall", 22, -4, 250)
+    r.left:SetWordWrap(false); r.left:SetText("")
+    r.right = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    r.right:SetPoint("RIGHT", -2, 0); r.right:SetJustifyH("RIGHT"); r.right:SetText("")
+    r:Hide()
+    local hl = r:CreateTexture(nil, "HIGHLIGHT"); hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.08)
+    r:SetScript("OnClick", function(self, button) searchRowClick(self.data, button) end)
+    FA.UI.Tip(r, function(self)
+      local d = self.data
+      if not d then return end
+      if d.id and GameTooltip.SetItemByID then GameTooltip:SetItemByID(d.id)
+      else GameTooltip:AddLine((d.left or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
+      local extra = d.tipFn and d.tipFn() or d.tip
+      if extra then GameTooltip:AddLine(extra, 1, 1, 1, true) end
+      if d.hint then GameTooltip:AddLine(d.hint, 0.5, 0.75, 1) end
+    end)
+    r:EnableMouseWheel(true)
+    r:SetScript("OnMouseWheel", function(_, delta)
+      search.off = math.max(0, math.min(search.off - delta * 3, (search.count or 0) - (search.fit or 0)))
+      FA.RefreshSearch()
+    end)
+    search.rows[i] = r
+  end
+  search.empty = Txt(p, "GameFontHighlight", 20, -10, 420)
+  search.empty:SetWordWrap(true)
+  search.foot = Txt(p, "GameFontDisableSmall", 20, 0, 420)
+end
+
+function FA.RefreshSearch()
+  if not (panel and search.page) then return end
+  local active = #(search.q or "") >= (FA.SEARCH_MIN or 2)
+  if not active then
+    search.page:Hide()
+    if panel.pages[panel.tab or "modules"] then panel.pages[panel.tab or "modules"]:Show() end
+    return
+  end
+  for _, pg in pairs(panel.pages) do pg:Hide() end
+  search.page:Show()
+  -- the flat list: a heading per group, its rows, then "N more" to show the rest
+  local list = {}
+  if not (InCombatLockdown and InCombatLockdown()) then
+    for _, g in ipairs(FA.SearchAll(search.q, search.expanded)) do
+      list[#list + 1] = { head = true, left = GOLD .. g.title .. "|r", right = GREY .. g.total .. (g.total == 1 and " match" or " matches") .. "|r" }
+      for _, d in ipairs(g.rows) do list[#list + 1] = d end
+      if g.more > 0 then list[#list + 1] = { more = g.key, left = "|cff80c0ff" .. g.more .. " more: click to show them|r", right = "" } end
+    end
+  end
+  local h = search.page:GetHeight() or 500
+  search.fit = math.max(5, math.min(#search.rows, math.floor((h - 40) / SEARCH_ROW_H)))
+  search.count = #list
+  search.off = math.max(0, math.min(search.off, #list - search.fit))
+  for i, r in ipairs(search.rows) do
+    local d = (i <= search.fit) and list[i + search.off] or nil
+    r.data = (d and not d.head) and d or nil
+    if d then
+      -- headings and "N more" rows have no icon (Kerry, Nov 22: a "?" sat on every heading;
+      -- `d.head and nil or ...` always took the "or")
+      if d.head or d.more then r.icon:SetTexture(nil); r.icon:Hide()
+      else r.icon:SetTexture(d.icon or 134400); r.icon:Show() end
+      r.left:SetFontObject(d.head and "GameFontNormal" or "GameFontHighlightSmall")
+      r.left:SetText(d.left or ""); r.right:SetText(d.right or "")
+      r.left:ClearAllPoints(); r.left:SetPoint("TOPLEFT", d.head and 0 or 22, d.head and -2 or -4)
+      -- name and detail share the row and never overlap (Kerry, Nov 22: long vendor rows ran into
+      -- the item name): the detail gets up to 60%, the name the rest, cut off with "..." (hover for all)
+      local x0 = d.head and 0 or 22
+      local avail = 428 - x0 - 10
+      r.right:SetWidth(0); r.left:SetWidth(0)
+      local rw = tonumber(r.right.GetStringWidth and r.right:GetStringWidth()) or 0
+      local lw = tonumber(r.left.GetStringWidth and r.left:GetStringWidth()) or 0
+      if lw + rw > avail then
+        -- a long detail is cut to 60%, or to what a short name leaves
+        if rw > avail * 0.6 then
+          rw = math.min(math.max(math.floor(avail * 0.6), avail - lw), avail - 60)
+          r.right:SetWidth(rw); r.right:SetWordWrap(false)
+        end
+      end
+      r.left:SetWidth(math.max(60, math.min(lw > 0 and lw or avail, avail - rw)))
+      r:Show()
+    else
+      r:Hide()
+    end
+  end
+  if InCombatLockdown and InCombatLockdown() then
+    search.empty:SetText("Search waits until you're out of combat.")
+  else
+    search.empty:SetText(#list == 0 and ("Nothing found for \"" .. search.q .. "\". Scan the Auction House to add prices, and talk to vendors and trainers to add them.") or "")
+  end
+  search.foot:ClearAllPoints(); search.foot:SetPoint("BOTTOMLEFT", 20, 14)
+  search.foot:SetText(#list > search.fit and "Scroll for more  ·  Esc or a tab clears the search" or "Esc or a tab clears the search")
+end
+
+-- /fa find <words>: open the panel with the search filled in
+function FA.FindInPanel(text)
+  if FA.ShowPanel then FA.ShowPanel() end
+  if not (panel and search.box) then return end
+  search.box:SetText(text or ""); search.q = text or ""; search.off = 0; search.expanded = {}
+  FA.RefreshSearch()
+end
+
 local function buildPanel()
-  panel = FA.UI.Frame({ name = "ForeverArtisanPanel", width = 460, height = 600,
+  panel = FA.UI.Frame({ name = "ForeverArtisanPanel", width = 460, height = 628,
     getPos = function() return ForeverArtisanSettings and ForeverArtisanSettings.panelPos end,
     setPos = function(pos) ForeverArtisanSettings = ForeverArtisanSettings or {}; ForeverArtisanSettings.panelPos = pos end,
     defaultPos = { "CENTER", 0, 0 } })
   panel.pages, panel.tabs = {}, {}
-  FA.UI.Tabs(panel, TABS, panel.pages, panel.tabs, selectTab)
+  -- clicking a tab clears the search box and shows that tab (0.9.52)
+  FA.UI.Tabs(panel, TABS, panel.pages, panel.tabs, function(name)
+    if search.box and (search.q or "") ~= "" then search.box:Reset(); search.q = "" end
+    if search.page then search.page:Hide() end
+    selectTab(name)
+  end, PAGE_TOP - 30)
+  search.box = FA.UI.SearchBox(panel, 300, function(text)
+    search.q, search.off, search.expanded = text, 0, {}
+    -- a short pause after typing: no rebuild on every letter
+    local mine = text
+    if C_Timer and C_Timer.After then
+      C_Timer.After(0.25, function() if search.q == mine then FA.RefreshSearch() end end)
+    else
+      FA.RefreshSearch()
+    end
+  end, "Search everything: items, crafts, recipes, vendors, trainers")
+  -- easy to spot (Kerry, Nov 22: "make the Search more prominent"): the full width, a magnifying
+  -- glass and a brighter hint
+  search.box:SetSize(420, 26)
+  search.box:SetPoint("TOPLEFT", 22, -28)
+  search.box:SetMaxLetters(60)
+  if search.box.SetTextInsets then search.box:SetTextInsets(20, 6, 0, 0) end
+  search.box:SetFontObject("ChatFontNormal")
+  local glass = search.box:CreateTexture(nil, "OVERLAY")
+  glass:SetTexture("Interface\\Common\\UI-Searchbox-Icon"); glass:SetSize(14, 14)
+  glass:SetPoint("LEFT", 2, -1); glass:SetVertexColor(1, 0.82, 0)
+  search.box.hint:ClearAllPoints(); search.box.hint:SetPoint("LEFT", search.box, "LEFT", 22, 0)
+  search.box.hint:SetFontObject("GameFontHighlight"); search.box.hint:SetTextColor(0.75, 0.75, 0.75)
+  FA.UI.Tip(search.box, function()
+    GameTooltip:AddLine("Search everything")
+    GameTooltip:AddLine("Type 2 letters or more: your crafts (with profit), Auction House prices, recipes, vendors and trainers, in one list. With Questie: the nearest innkeeper, flight master or bank too. Esc clears it. /fa find <words> works too.", 1, 1, 1, true)
+  end)
+  local sp = CreateFrame("Frame", nil, panel)
+  sp:SetPoint("TOPLEFT", 0, -PAGE_TOP); sp:SetPoint("BOTTOMRIGHT", 0, 0)
+  sp:Hide()
+  buildSearch(sp)
   buildModulesTab(panel.pages.modules)
   buildMarketTab(panel.pages.market)
   buildContactsTab(panel.pages.contacts)
@@ -1863,8 +2036,10 @@ local function help()
   print("  /fa bug  - where to report an error (" .. FA.BUG_URL .. ")")
   print("  /fa discord  - the ForeverArtisan Discord (" .. FA.DISCORD .. ")")
   print("  /fa support  - help keep ForeverArtisan going (" .. FA.SUPPORT .. ")")
+  print("  /fa find <words>  - search everything: your crafts, Auction House prices, recipes, vendors and trainers")
   print("  /fa market  - your most profitable crafts, every profession in one list")
   print("  /fa goals  - show or hide the on-screen goals list (lock | unlock | reset | clear)")
+  print("  /fa plan  - show or hide the popped-out plan (lock | unlock | reset)")
   print("  /fa new  - what's new in recent releases")
   if FA.RECIPE_WATCH_READY then print("  /fa recipewatch on | quiet | off  - recipes you or your alts don't know, noted when you see them on the Auction House (quiet: no chat)") end
   print("  /fa disenchant on | off | log  - what greens, blues and purples disenchant into and what that's worth, on item tooltips")
@@ -1916,10 +2091,12 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     print(PREFIX .. "Discord: " .. FA.DISCORD .. "  " .. GREY .. "(copy it from the box on the Info tab)|r")
     showPanel("info")
   elseif lower == "support" or lower == "donate" or lower == "tip" then
-    print(PREFIX .. "ForeverArtisan is free and always will be. To help keep it going: " .. FA.SUPPORT .. "  " .. GREY .. "(copy it from the box on the Info tab)|r")
+    print(PREFIX .. "If ForeverArtisan made your grind easier, your support is appreciated: " .. FA.SUPPORT .. "  " .. GREY .. "(copy it from the box on the Info tab)|r")
     showPanel("info")
   elseif lower == "goals" or lower == "goal" or lower == "track" then
     if FA.Track then FA.Track.Slash(rest) end
+  elseif lower == "plan" or lower == "plans" then
+    if FA.PlanPop then FA.PlanPop.Slash(rest) end
   elseif lower == "market" then
     showPanel("market")
   elseif lower == "beta" or lower == "welcome" or lower == "about" then
@@ -1973,6 +2150,8 @@ SlashCmdList.FOREVERARTISAN = function(msg)
       if not FA.FriendlyPlatesOn() then print(PREFIX .. FA.PLATES_OFF_LINE) end
     end
     if panel and panel:IsShown() then refreshPanel() end
+  elseif lower == "find" or lower == "search" then
+    FA.FindInPanel(rest or "")
   elseif lower == "prices" or lower == "price" then
     local r = (rest or ""):lower()
     ForeverArtisanSettings = ForeverArtisanSettings or {}

@@ -26,8 +26,10 @@ GatherSpots.lua
 AddonCheck.lua
 RecipeBandsData.lua
 RecipeFinds.lua
+Search.lua
 Disenchant.lua
 VersionCheck.lua
 Tracker.lua
+PlanWindow.lua
 NameplateTitles.lua
 Minimap.lua

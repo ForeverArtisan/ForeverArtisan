@@ -797,13 +797,13 @@ local RANK_AT = { [75] = { "Journeyman", 50, 10 }, [150] = { "Expert", 125, 20 }
 local ADVICE = {
   Horde = {
     [75]  = "Journeyman: any Engineering trainer (needs 50, level 10).",
-    [150] = "Expert: a Engineering trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
+    [150] = "Expert: an Engineering trainer in a capital city (needs 125, level 20).",
     [225] = "Artisan: ask a capital-city guard for an Artisan Engineering trainer (needs 200, level 35).",
     [300] = "Top rank. Nothing left to train.",
   },
   Alliance = {
     [75]  = "Journeyman: any Engineering trainer (needs 50, level 10).",
-    [150] = "Expert: a Engineering trainer in a capital city (needs 125, level 20). Classic answer, not confirmed in Forever.",
+    [150] = "Expert: an Engineering trainer in a capital city (needs 125, level 20).",
     [225] = "Artisan: ask a capital-city guard for an Artisan Engineering trainer (needs 200, level 35).",
     [300] = "Top rank. Nothing left to train.",
   },
@@ -814,15 +814,8 @@ local function Faction()
 end
 
 local function TrainerFor(rankName)
-  local V = ForeverArtisan and ForeverArtisan.Vendors
-  if not (V and V.hitsForLink) then return end
-  for _, key in ipairs({ PROF .. " (" .. rankName .. ")", rankName .. " " .. PROF }) do
-    local hits = V.hitsForLink(nil, key)
-    -- nearest first (0.9.50): the trainer the Waypoint button sends you to
-    if hits and V.sortHits then hits = V.sortHits(hits) or hits end
-    local h = hits and hits[1]
-    if h then return h.npc.n .. ", " .. (h.npc.s or h.npc.z or "?"), h.npc.seed, h.npc end
-  end
+  -- the nearest trainer under either spelling of the rank (Core Prices.lua, 0.9.52)
+  if ForeverArtisan.RankTrainer then return ForeverArtisan.RankTrainer(PROF, rankName) end
 end
 ns.TrainerFor = TrainerFor
 

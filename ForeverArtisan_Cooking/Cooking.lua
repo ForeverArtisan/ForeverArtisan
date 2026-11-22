@@ -539,14 +539,14 @@ end
 local ADVICE = {
   Horde = {
     [75]  = "Journeyman: any Cooking trainer (needs 50).",
-    [150] = "Expert: Expert Cookbook (needs 125). Wulan, Shadowprey Village, Desolace, 1g. Confirmed in Forever.",
-    [225] = "Artisan: quest from Dirge Quikcleave, Gadgetzan, Tanaris (needs 225 and level 35). Classic answer, not confirmed in Forever.",
+    [150] = "Expert: Expert Cookbook (needs 125). Wulan, Shadowprey Village, Desolace, 1g.",
+    [225] = "Artisan: quest from Dirge Quikcleave, Gadgetzan, Tanaris (needs 225 and level 35).",
     [300] = "Top rank. Nothing left to train.",
   },
   Alliance = {
     [75]  = "Journeyman: any Cooking trainer (needs 50).",
     [150] = "Expert: Expert Cookbook (needs 125). Alliance seller not logged in Forever yet.",
-    [225] = "Artisan: quest from Dirge Quikcleave, Gadgetzan, Tanaris (needs 225 and level 35). Classic answer, not confirmed in Forever.",
+    [225] = "Artisan: quest from Dirge Quikcleave, Gadgetzan, Tanaris (needs 225 and level 35).",
     [300] = "Top rank. Nothing left to train.",
   },
 }
@@ -555,6 +555,11 @@ local function Faction()
   return (f == "Alliance" or f == "Horde") and f or "Horde"
 end
 
+-- the next rank's trainer, book seller or quest giver, for the Waypoint button (0.9.52)
+local NEXT_RANK = { prof = "Cooking", book = { id = 16072, name = "Expert Cookbook" },
+  quest = { Horde = { id = 8125, n = "Dirge Quikcleave", z = "Tanaris", s = "Gadgetzan", m = 1446, x = 52.6, y = 29.0 },
+            Alliance = { id = 8125, n = "Dirge Quikcleave", z = "Tanaris", s = "Gadgetzan", m = 1446, x = 52.6, y = 29.0 } } }
+ns.NEXT_RANK = NEXT_RANK
 function ns.SkillInfo()
   local rank, mod, max = Skill()
   local info = { rank = rank, mod = mod, max = max }
@@ -563,6 +568,7 @@ function ns.SkillInfo()
   info.capped = max and rank >= max and max < 300
   info.faction = Faction()
   info.advice = max and ADVICE[info.faction][max]
+  if info.capped and ForeverArtisan.NextRankNPC then info.trainer, info.nextLabel, info.nextRank = ForeverArtisan.NextRankNPC(NEXT_RANK, max) end
   info.sinceUp = c.sinceUp or 0
   local log = c.skillLog or {}
   local n, sum = 0, 0

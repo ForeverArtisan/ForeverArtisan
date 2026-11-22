@@ -545,15 +545,15 @@ end
 -- Classic answers until Forever data is logged. Forever reworked First Aid, so each line says so.
 local ADVICE = {
   Horde = {
-    [75]  = "Journeyman: any First Aid trainer (needs 50). Classic: Arnok (Undercity), Rawrk (Orgrimmar), Pand Stonebinder (Thunder Bluff). Not confirmed in Forever.",
-    [150] = "Expert: book 'Expert First Aid - Under Wraps' (needs 125). Classic: Balai Lok'Wein, Brackenwall Village, Dustwallow Marsh. Not confirmed in Forever.",
-    [225] = "Artisan: quest 'Triage' (needs 225, level 35). Classic: Doctor Gregory Victor, Hammerfall, Arathi Highlands. Not confirmed in Forever.",
+    [75]  = "Journeyman: any First Aid trainer (needs 50). Arnok (Undercity), Rawrk (Orgrimmar), Pand Stonebinder (Thunder Bluff).",
+    [150] = "Expert: book 'Expert First Aid - Under Wraps' (needs 125). Balai Lok'Wein, Brackenwall Village, Dustwallow Marsh.",
+    [225] = "Artisan: quest 'Triage' (needs 225, level 35). Doctor Gregory Victor, Hammerfall, Arathi Highlands.",
     [300] = "Top rank. Nothing left to train.",
   },
   Alliance = {
-    [75]  = "Journeyman: any First Aid trainer (needs 50). Classic: Shaina Fuller (Stormwind), Nissa Firestone (Ironforge), Byancie (Darnassus). Not confirmed in Forever.",
-    [150] = "Expert: book 'Expert First Aid - Under Wraps' (needs 125). Classic: Deneb Walker, Stromgarde Keep, Arathi Highlands. Not confirmed in Forever.",
-    [225] = "Artisan: quest 'Triage' (needs 225, level 35). Classic: Doctor Gustaf VanHowzen, Theramore Isle, Dustwallow Marsh. Not confirmed in Forever.",
+    [75]  = "Journeyman: any First Aid trainer (needs 50). Shaina Fuller (Stormwind), Nissa Firestone (Ironforge), Byancie (Darnassus).",
+    [150] = "Expert: book 'Expert First Aid - Under Wraps' (needs 125). Deneb Walker, Stromgarde Keep, Arathi Highlands.",
+    [225] = "Artisan: quest 'Triage' (needs 225, level 35). Doctor Gustaf VanHowzen, Theramore Isle, Dustwallow Marsh.",
     [300] = "Top rank. Nothing left to train.",
   },
 }
@@ -562,6 +562,11 @@ local function Faction()
   return (f == "Alliance" or f == "Horde") and f or "Horde"
 end
 
+-- the next rank's trainer, book seller or quest giver, for the Waypoint button (0.9.52)
+local NEXT_RANK = { prof = "First Aid", book = { id = 16084, name = "Expert First Aid - Under Wraps" },
+  quest = { Horde = { id = 12920, n = "Doctor Gregory Victor", z = "Arathi Highlands", s = "Hammerfall", m = 1417, x = 73.4, y = 36.8 },
+            Alliance = { id = 12939, n = "Doctor Gustaf VanHowzen", z = "Dustwallow Marsh", s = "Theramore Isle", m = 1445, x = 67.8, y = 48.8 } } }
+ns.NEXT_RANK = NEXT_RANK
 function ns.SkillInfo()
   local rank, mod, max = Skill()
   local info = { rank = rank, mod = mod, max = max }
@@ -570,6 +575,7 @@ function ns.SkillInfo()
   info.capped = max and rank >= max and max < 300
   info.faction = Faction()
   info.advice = max and ADVICE[info.faction][max]
+  if info.capped and ForeverArtisan.NextRankNPC then info.trainer, info.nextLabel, info.nextRank = ForeverArtisan.NextRankNPC(NEXT_RANK, max) end
   info.sinceUp = c.sinceUp or 0
   local log = c.skillLog or {}
   local n, sum = 0, 0

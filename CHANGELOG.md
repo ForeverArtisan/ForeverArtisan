@@ -1,5 +1,17 @@
 # ForeverArtisan changelog
 
+## 0.9.52 (unreleased)
+- Added: one search box at the top of the /fa panel. Type a word and see your crafts (with profit), Auction House prices you've seen, recipes in your profession windows, recipes you can learn from a trainer, and vendors from Trade Contacts, all in one list. Click a craft for its price chart, a recipe to open its profession, an item at the Auction House to search it, a vendor or trainer for a waypoint. With Questie installed it also finds the nearest innkeeper, flight master, bank, auctioneer or stable master. In Trade Contacts, a recipe a trainer teaches reads "learn at Cooking 125". /fa find <words> opens it with your search filled in. The Contacts tab's own search box is gone, since the box at the top covers it.
+- Added: Pop out on a crafting Progress tab shows its Plan to skill in a small see-through window on screen, like the goals list: same steps, colors and hover text, and it keeps up as you skill with the profession window closed. Click its heading to open that profession, right-click it to put the plan back. /fa plan lock | unlock | reset.
+- Added: Pop out on the Fishing window's Cast marker tab: the marker controls in a small see-through window you can drag anywhere.
+- Changed: the fishing derby section, chat alerts and clock are gone from the Fishing window. The game announces the derby itself. /fa fish derby still says when the next one is.
+- Added: Pop out on the Fishing, Herbalism, Mining and Skinning Progress tabs: your skill, its bar, this session and your pace in a small see-through window. For Fishing, the lure timer and pole swap move into it too.
+- Fixed: when the game hadn't given your realm name yet, a character could end up with two sets of saved data, and each session used whichever it found. Plans and the goals list then changed between sessions (a recipe you'd learned could be missing from the plan, and the goals list kept old amounts). The two are merged into one, keeping the newer data.
+- Fixed: the nearest trainer for your next rank could be one in another city (Rhiannon Davis in Undercity while you stood on The Drag next to Magar). Trainers from your lists and the built-in list now count together, and the nearest wins.
+- Added: every profession shows who to see for the next rank when you're capped, with a Waypoint button. Cooking and First Aid point to the book seller at 150 and the quest giver at 225; Herbalism, Mining and Skinning point to the nearest trainer.
+- Added: the Modules tab groups professions your other characters know under "Learned on your other characters", with who has it and their skill (hover for all of them). The rest are under "Not learned on any character".
+- Fixed: the Modules tab's bottom lines ran together after the search box moved the tabs down.
+
 ## 0.9.51 (2026-11-22)
 - Fixed: opening a profession someone linked in chat no longer saves it as yours or puts it in your Market list. If your own recipes look off, open your own profession window once and they correct themselves. Thanks to the player who reported it.
 - Added: a Tooltips tab in /fa with an on/off switch for each kind of line ForeverArtisan adds to tooltips: Auction House price, where to sell, Dropped by, Sold by, recipe colors, used in, herbs/ore/leather and disenchant value. Thanks to the player who asked.

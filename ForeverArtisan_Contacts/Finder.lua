@@ -151,7 +151,10 @@ local function Rebuild()
           local ok, info = pcall(C_Map.GetMapInfo, q.m)
           mapName[q.m] = ok and info and info.name or false
         end
-        npcs[#npcs + 1] = { id = q.id, n = q.n, t = q.t, k = "trainer", z = mapName[q.m] or nil, m = q.m, x = q.x, y = q.y,
+        -- an innkeeper, flight master or bank is a "place" (search only), not a trainer
+        local place = type(q.prof) == "string" and q.prof:match("^service:(.+)$")
+        npcs[#npcs + 1] = { id = q.id, n = q.n, t = q.t, k = place and "place" or "trainer", place = place or nil,
+                            z = mapName[q.m] or nil, m = q.m, x = q.x, y = q.y,
                             age = 0, key = "questie:" .. q.id, questie = true, items = {} }
       end
     end
@@ -410,7 +413,9 @@ function ns.DetailText(npc, it)
     end
   end
   local note = ns.AgeNote(npc)
-  if npc.questie then
+  if npc.questie and npc.k == "place" then
+    lines[#lines + 1] = GREY .. "From Questie's database.|r"
+  elseif npc.questie then
     lines[#lines + 1] = GREY .. "From Questie's database. Open their training window once to save what they teach.|r"
   elseif npc.seed then
     lines[#lines + 1] = GREY .. "From the built-in trainer list" .. (npc.seen and (", seen " .. date("%b %Y", npc.seen)) or "")

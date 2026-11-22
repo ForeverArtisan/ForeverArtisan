@@ -10,18 +10,18 @@ local session = { catches = 0, ups = 0, firstCatch = nil, startSkill = nil, capp
 ns.session = session
 
 -- Where to train next. Forever finds noted; Classic defaults otherwise.
--- verified = seen in the Forever beta; otherwise it's the Classic answer and says so.
+-- the next rank for each faction, from the Forever beta and the Classic game (shown without a source note, Kerry, Nov 22)
 local ADVICE = {
   Horde = {
-    [75]  = "Journeyman: any Horde Fishing trainer, needs 50. Classic: Lumak (Orgrimmar), Kah Mistrunner (Thunder Bluff), Armand Cromwell (Undercity). Not logged in Forever yet.",
-    [150] = "Expert: Expert Fishing book from Old Man Heming, Booty Bay (1g, needs 125 and level 20). Neutral, both factions. Confirmed in Forever.",
-    [225] = "Artisan: Classic has Nat Pagle's quest in Dustwallow Marsh (needs 225 and level 35). Neutral, both factions. Not confirmed in Forever yet.",
+    [75]  = "Journeyman: any Horde Fishing trainer, needs 50. Lumak (Orgrimmar), Kah Mistrunner (Thunder Bluff), Armand Cromwell (Undercity). Not logged in Forever yet.",
+    [150] = "Expert: Expert Fishing book from Old Man Heming, Booty Bay (1g, needs 125 and level 20). Neutral, both factions.",
+    [225] = "Artisan: Nat Pagle's quest in Dustwallow Marsh (needs 225 and level 35). Neutral, both factions.",
     [300] = "Top rank. Nothing left to train.",
   },
   Alliance = {
-    [75]  = "Journeyman: any Alliance Fishing trainer, needs 50. Classic: Arnold Leland (Stormwind), Grimnur Stonebrand (Ironforge), Androl Oakhand (Rut'theran Village). No Alliance data in Forever yet.",
-    [150] = "Expert: Expert Fishing book from Old Man Heming, Booty Bay (1g, needs 125 and level 20). Neutral, both factions. Confirmed in Forever.",
-    [225] = "Artisan: Classic has Nat Pagle's quest in Dustwallow Marsh (needs 225 and level 35). Neutral, both factions. Not confirmed in Forever yet.",
+    [75]  = "Journeyman: any Alliance Fishing trainer, needs 50. Arnold Leland (Stormwind), Grimnur Stonebrand (Ironforge), Androl Oakhand (Rut'theran Village). No Alliance data in Forever yet.",
+    [150] = "Expert: Expert Fishing book from Old Man Heming, Booty Bay (1g, needs 125 and level 20). Neutral, both factions.",
+    [225] = "Artisan: Nat Pagle's quest in Dustwallow Marsh (needs 225 and level 35). Neutral, both factions.",
     [300] = "Top rank. Nothing left to train.",
   },
 }

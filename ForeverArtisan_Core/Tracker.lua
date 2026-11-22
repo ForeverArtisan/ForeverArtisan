@@ -309,6 +309,7 @@ local function Build()
   end)
   f.bg = f:CreateTexture(nil, "BACKGROUND"); f.bg:SetAllPoints(); f.bg:SetColorTexture(0, 0, 0, 0.35)
   f.title = FA.UI.Text(f, "GameFontNormal", "TOPLEFT", 6, -4)
+  if FA.UI.Badge then FA.UI.Badge(f, f.title) end
   f.title:SetText(GOLD .. "Goals|r")
   -- hide (fold to the title) and close
   f.fold = CreateFrame("Button", nil, f); f.fold:SetSize(16, 16); f.fold:SetPoint("TOPRIGHT", -22, -2)

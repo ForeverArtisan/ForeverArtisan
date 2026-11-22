@@ -79,6 +79,57 @@ end
 -- this character's key in the account list (the same key the profession modules use)
 function FA.MyCharKey() local _, key = Me(); return key end
 
+---------------------------------------------------------------- your other characters
+-- One line each for the Modules tab, the same on every character (Kerry, Nov 22: "This is confusing
+-- when switching between alts"). From what each character saved the last time it logged in.
+--   FA.AltRows() -> { { key, title, line, tip = { lines } }, ... } highest level first, not this one
+--   FA.ForgetCharacter(key)  drop a character you deleted from the list
+local function Title(p) return (p:gsub("(%a)(%w*)", function(a, b) return a:upper() .. b end)) end
+function FA.AltRows()
+  local a, out = Store(), {}
+  local _, mine = Me()
+  for key, c in pairs(a.chars) do
+    if key ~= mine and c.name then
+      local list = {}
+      for p, rank in pairs(c.trades or {}) do list[#list + 1] = { p = Title(p), r = rank } end
+      table.sort(list, function(x, y) if x.r ~= y.r then return x.r > y.r end return x.p < y.p end)
+      local parts = {}
+      for _, t in ipairs(list) do parts[#parts + 1] = t.p .. " " .. t.r end
+      local who = c.fullName or c.name
+      local tip = { who .. (c.className and ("  (" .. c.className .. (c.level and (" " .. c.level) or "") .. ")") or "") }
+      for _, t in ipairs(list) do tip[#tip + 1] = t.p .. ": " .. t.r end
+      if #list == 0 then tip[#tip + 1] = "No professions yet." end
+      if c.seen and c.seen > 0 and date then tip[#tip + 1] = GRAY .. "As of " .. date("%b %d", c.seen) .. ", the last time it logged in.|r" end
+      tip[#tip + 1] = "|cff80c0ffRight-click to remove it from this list (a character you deleted).|r"
+      out[#out + 1] = { key = key, level = c.level or 0, who = who, tip = tip,
+        title = GOLD .. who .. "|r" .. GRAY .. "  " .. (c.className or "") .. (c.level and (" " .. c.level) or "") .. "|r",
+        line = #parts > 0 and table.concat(parts, GRAY .. "  ·  |r") or (GRAY .. "no professions yet|r") }
+    end
+  end
+  table.sort(out, function(x, y) if x.level ~= y.level then return x.level > y.level end return x.who < y.who end)
+  return out
+end
+-- which of your other characters know each profession: { ["herbalism"] = { { who, rank, key }, ... } },
+-- best skill first (the Modules tab's "Learned on your other characters" group)
+function FA.AltTrades()
+  local out = {}
+  for _, r in ipairs(FA.AltRows()) do
+    local c = Store().chars[r.key]
+    for p, rank in pairs(c and c.trades or {}) do
+      local k = p:lower()
+      out[k] = out[k] or {}
+      table.insert(out[k], { who = c.name or r.who, full = r.who, rank = rank, key = r.key })
+    end
+  end
+  for _, l in pairs(out) do table.sort(l, function(x, y) if x.rank ~= y.rank then return x.rank > y.rank end return x.who < y.who end) end
+  return out
+end
+function FA.ForgetCharacter(key)
+  local a = Store()
+  local _, mine = Me()
+  if key and key ~= mine then a.chars[key] = nil end
+end
+
 ---------------------------------------------------------------- legacy points
 local function Reached(value, steps)
   local n, nextStep = 0, nil

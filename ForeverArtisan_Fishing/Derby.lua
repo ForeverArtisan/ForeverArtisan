@@ -86,6 +86,7 @@ function ns.RefreshDerby()
   return derby
 end
 
+local DerbyKey
 -- state: "live", "soon" (within 1h), "later"; seconds until start or until end
 function ns.DerbyStatus()
   if not derby.start or (derby.stop and derby.stop <= NowEpoch()) then ns.RefreshDerby() end
@@ -113,7 +114,7 @@ function ns.DerbyWhen()
 end
 
 ---------------------------------------------------------------- derby catches
-local function DerbyKey() return derby.start and date("%Y-%m-%d", derby.start) end
+DerbyKey = function() return derby.start and date("%Y-%m-%d", derby.start) end
 
 function ns.OnDerbyCatch(entry)
   if ns.DerbyStatus() ~= "live" then return end
@@ -139,23 +140,6 @@ function ns.DerbyCatches()
     table.sort(list, function(a, b) return a.n > b.n end)
   end
   return list, d and d.catches or 0
-end
-
----------------------------------------------------------------- alerts
-local warned = {}
-local function Tick()
-  if not ns.DB() then return end
-  local state, sec = ns.DerbyStatus()
-  local key = DerbyKey() or "?"
-  if state == "soon" and sec <= 600 and not warned[key .. "soon"] then
-    warned[key .. "soon"] = true
-    ns.say(("|cffd4a94e%s starts in %s.|r"):format(derby.title or "The derby", ns.DerbyClock(sec)))
-    pcall(PlaySound, (SOUNDKIT and SOUNDKIT.RAID_WARNING) or 8959)
-  elseif state == "live" and not warned[key .. "live"] then
-    warned[key .. "live"] = true
-    ns.say(("|cff40ff40%s is live. Ends in %s.|r"):format(derby.title or "The derby", ns.DerbyClock(sec)))
-    pcall(PlaySound, (SOUNDKIT and SOUNDKIT.RAID_WARNING) or 8959)
-  end
 end
 
 ---------------------------------------------------------------- cast marker
@@ -351,7 +335,7 @@ ev:SetScript("OnEvent", function(_, e)
     BuildMarker()
     if C_Calendar and C_Calendar.OpenCalendar then pcall(C_Calendar.OpenCalendar) end
     ns.RefreshDerby()
-    if C_Timer and C_Timer.NewTicker then C_Timer.NewTicker(15, Tick) end
+    -- (0.9.52: no derby chat alerts; the game announces it well, Kerry, Nov 22)
   elseif e == "CALENDAR_UPDATE_EVENT_LIST" then
     -- the calendar sends this in bursts; look once, a moment later
     if not ev.pending and C_Timer then

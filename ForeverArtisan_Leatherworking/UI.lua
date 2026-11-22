@@ -236,6 +236,8 @@ local function BuildProgressPage(p)
   p.rate = Text(p, "GameFontHighlightSmall", "TOPLEFT", 18, -36); p.rate:SetWidth(430)
 
   Header(p, -54, "Plan to skill")
+  -- pop the plan out into a see-through window on screen, like the goals list (Core PlanWindow.lua)
+  if FA.PlanPop then p.pop = FA.PlanPop.Button(p, "Leatherworking") end
   p.target = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
   p.target:SetSize(46, 20); p.target:SetPoint("TOPLEFT", 120, -50)
   p.target:SetAutoFocus(false); p.target:SetNumeric(true); p.target:SetMaxLetters(3)
@@ -307,6 +309,7 @@ local function RefreshProgressPage(p)
   if ns.Knows() and not ns.HasRecipes() then
     Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); if p.trackAll then p.trackAll:Hide() end; p.note:SetText(""); p.cost:SetText(""); p.target:SetTextColor(1, 1, 1)
     p.empty:SetText(ns.Knows() and "Open your Leatherworking window once so I can read your recipes." or "")
+    if FA.PlanPop then FA.PlanPop.Set("Leatherworking", { empty = p.empty:GetText() }) end
     return
   end
   p.empty:SetText("")
@@ -317,6 +320,7 @@ local function RefreshProgressPage(p)
   if aheadInfo and aheadInfo.none then
     Fill(p.planRows, {}, 0); Fill(p.shopRows, {}, 0); if p.trackAll then p.trackAll:Hide() end; p.note:SetText(""); p.cost:SetText(""); p.target:SetTextColor(1, 1, 1)
     p.empty:SetText("No Leatherworking recipes on file yet. Learn it at a trainer on any character, open the Leatherworking window once (you can drop it again), and this tab plans ahead for it.")
+    if FA.PlanPop then FA.PlanPop.Set("Leatherworking", { empty = p.empty:GetText() }) end
     return
   end
   if aheadInfo then
@@ -371,6 +375,7 @@ local function RefreshProgressPage(p)
     unreachable = true
   end
   p.note:SetText(table.concat(notes, "\n"))
+  if FA.PlanPop then FA.PlanPop.Set("Leatherworking", { rows = plan, target = target, rank = i.rank, max = i.max, note = p.note:GetText() }) end
   if unreachable then p.target:SetTextColor(1, .4, .4) else p.target:SetTextColor(1, 1, 1) end
 
   -- training first: what you can learn now in one line, then the rest by the skill you need
@@ -886,6 +891,16 @@ if FA.Track and FA.Track.Planner then
     local _, shopping, _, _, _, _, aheadInfo = ns.Plan(view.target or default)
     if aheadInfo and aheadInfo.none then return nil end
     return shopping
+  end)
+end
+-- the popped-out plan (Core PlanWindow.lua) plans again with the window closed
+if FA.PlanPop then
+  FA.PlanPop.Register("Leatherworking", function()
+    if not f then Build() end
+    RefreshProgressPage(pages.progress)
+  end, function()
+    if not f then Build() end
+    f:Show(); ShowTab("progress")
   end)
 end
 -- new Auction House prices refresh the shopping list while it's open

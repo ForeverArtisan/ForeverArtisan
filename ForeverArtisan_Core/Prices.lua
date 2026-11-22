@@ -467,6 +467,54 @@ function FA.VendorNPC(id, name)
   return best
 end
 
+-- The nearest trainer for a profession rank: "Mac's Tailoring (Journeyman)" in a list you opened and
+-- "Journeyman Tailoring" in the built-in list are the same thing, so both spellings count together,
+-- then the nearest wins. (Kerry, Nov 22, standing on The Drag: it sent him to Rhiannon Davis in
+-- Undercity, because the first spelling found only her and the second was never looked at.)
+-- Returns "Name, Place", from the built-in list?, npc
+function FA.RankTrainer(prof, rankName)
+  local V = FA.Vendors
+  if not (V and V.hitsForLink and prof and rankName) then return end
+  local all, seen = {}, {}
+  for _, key in ipairs({ prof .. " (" .. rankName .. ")", rankName .. " " .. prof }) do
+    local ok, hits = pcall(V.hitsForLink, nil, key)
+    for _, h in ipairs(ok and type(hits) == "table" and hits or {}) do
+      local k = h.npc and (h.npc.key or h.npc.id or h.npc.n)
+      if k and not seen[k] then seen[k] = true; all[#all + 1] = h end
+    end
+  end
+  if V.sortHits then all = V.sortHits(all) or all end
+  local h = all[1]
+  if h then return h.npc.n .. ", " .. (h.npc.s or h.npc.z or "?"), h.npc.seed, h.npc end
+end
+
+-- Who to see for the next rank when it isn't a trainer's (Cooking and First Aid: a book at 150, a
+-- quest at 225), for the Waypoint button every profession has (Kerry, Nov 22: "Every skill should
+-- show this to be consistent"). spec = { prof, book = { id, name }, quest = { Horde = npc, Alliance = npc } }
+-- (quest npc: { id, n, z, s, m, x, y }, Questie's spot wins when installed).
+-- Returns npc, label ("Train Journeyman", "Buy Expert Cookbook", "Quest for Artisan"), rank name
+local RANKS = { [75] = "Journeyman", [150] = "Expert", [225] = "Artisan" }
+function FA.NextRankNPC(spec, max)
+  local rank = RANKS[max]
+  if not (spec and rank) then return end
+  if max == 75 or (max == 150 and not spec.book) or (max == 225 and not spec.quest) then
+    local _, _, npc = FA.RankTrainer(spec.prof, rank)
+    if not npc and FA.Vendors and FA.Vendors.nearestTrainer then
+      local ok, n = pcall(FA.Vendors.nearestTrainer, spec.prof); if ok then npc = n end
+    end
+    return npc, "Train " .. rank, rank
+  end
+  if max == 150 then
+    return FA.VendorNPC(spec.book.id, spec.book.name), "Buy " .. spec.book.name, rank
+  end
+  local fac = UnitFactionGroup and UnitFactionGroup("player")
+  local base = spec.quest[fac == "Alliance" and "Alliance" or "Horde"]
+  if not base then return nil, "Quest for " .. rank, rank end
+  local q = FA.QDB and FA.QDB.Npc and FA.QDB.Npc(base.id)
+  if q and q.m and q.x then return { n = q.n or base.n, m = q.m, x = q.x, y = q.y, z = q.z or base.z, s = base.s }, "Quest for " .. rank, rank end
+  return base, "Quest for " .. rank, rank
+end
+
 -- price per unit in copper, where it came from, how many days old (nil for vendors), vendor name
 -- Auction House price only (Auctionator or your own visits), no vendors: what it sells for there.
 -- price per unit, where it came from, how many days old
@@ -888,6 +936,14 @@ end
 local market = {}
 function FA.RegisterMarket(p)
   if type(p) == "table" and p.name and p.recipes then market[#market + 1] = p end
+end
+-- every registered profession (the /fa search reads their recipes)
+function FA.MarketProviders() return market end
+-- every item with a price at your Auction House (the /fa search's item index)
+function FA.PricedItemIds()
+  local out = {}
+  for id in pairs(Store()) do if type(id) == "number" then out[#out + 1] = id end end
+  return out
 end
 
 -- Does this character know a recipe? true / false, or nil when that profession's window hasn't been read

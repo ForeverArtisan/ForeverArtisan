@@ -37,7 +37,8 @@ end
 local function Counts()
   local v, t, b, q = 0, 0, 0, 0
   for _, npc in ipairs(ns.Contacts()) do
-    if npc.questie then q = q + 1
+    if npc.k == "place" then -- innkeepers, flight masters, banks: not counted as contacts
+    elseif npc.questie then q = q + 1
     elseif npc.seed then b = b + 1 elseif npc.k == "vendor" then v = v + 1 elseif npc.k == "trainer" then t = t + 1 end
   end
   return v, t, b, q
@@ -85,8 +86,9 @@ local function SearchData(results)
           return table.concat(lines, "\n")
         end }
     elseif it then
-      data[#data + 1] = { id = it.id, icon = it.id and Icon(it.id) or (it.train and 136235 or 134400), npc = npc,
-        left = it.n .. (it.sk and (GRAY .. "  " .. it.sk .. "|r") or ""),
+      -- a recipe a trainer teaches says so: "learn at Cooking 125" (Kerry, Nov 22)
+      data[#data + 1] = { id = it.id, icon = it.id and Icon(it.id) or (it.train and 136235 or 134400), npc = npc, train = it.train,
+        left = it.n .. (it.sk and (GRAY .. (it.train and "  learn at " or "  ") .. it.sk .. "|r") or ""),
         right = GRAY .. npc.n .. ", " .. ns.Where(npc) .. ns.AgeTag(npc, true) .. BetaTag(npc) .. "|r",
         tail = ns.Money(it),
         tipFn = function() return npc.n .. (npc.t and (" <" .. npc.t .. ">") or "") .. "\n" .. ns.DetailText(npc, it) end }
@@ -97,7 +99,7 @@ local function SearchData(results)
         tip = ns.Where(npc) .. (npc.x and ("  (%.1f, %.1f)"):format(npc.x, npc.y) or "")
           .. "\nYou've passed this NPC but haven't talked to them yet.\n|cff80c0ffClick for a waypoint|r" }
     else
-      data[#data + 1] = { icon = npc.k == "trainer" and 136235 or 133784, npc = npc, tipTitle = npc.n,
+      data[#data + 1] = { icon = npc.k == "trainer" and 136235 or (npc.k == "place" and 136458) or 133784, npc = npc, tipTitle = npc.n, trainer = npc.k == "trainer", place = npc.place,
         left = GOLD .. npc.n .. "|r" .. (npc.t and (GRAY .. " <" .. npc.t .. ">|r") or ""),
         right = GRAY .. DistText(h) .. ns.Where(npc) .. ns.AgeTag(npc)
           .. (h.trains and ("  ·  trains " .. h.trains) or "")
@@ -330,7 +332,7 @@ local function ListData()
       local status = (npc.age >= ns.HIDE_AFTER) and "  ·  |cffff4040hidden|r" or ""
       local dim = npc.age > 0 or npc.seed
       local name = (dim and GRAY or "") .. npc.n .. (dim and "|r" or "")
-      data[#data + 1] = { icon = npc.k == "trainer" and 136235 or 133784, npc = npc, tipTitle = npc.n,
+      data[#data + 1] = { icon = npc.k == "trainer" and 136235 or 133784, npc = npc, tipTitle = npc.n, trainer = npc.k == "trainer",
         left = name .. (npc.t and (GRAY .. " <" .. npc.t .. ">|r") or ""),
         right = GRAY .. what .. BetaTag(npc) .. "|r" .. status,
         tipFn = function() return ns.DetailText(npc) .. (npc.age > 0 and "\n|cffff9020Not seen since a game update.|r" or "")
@@ -446,7 +448,7 @@ local TRAINER_WORDS = { Alchemy = { "alchem" } } -- herbalism trainers aren't al
 
 local function LooksLikeTrainer(npc)
   if npc.k == "trainer" then return true end
-  if npc.k == "vendor" then return false end
+  if npc.k == "vendor" or npc.k == "place" then return false end
   local t = (npc.t or ""):lower()
   if t == "" then return false end
   for _, w in ipairs(NOT_TRAINER) do if t:find(w, 1, true) then return false end end
@@ -689,6 +691,8 @@ function ns.SearchRows(q)
   if not ns.DB() then return {} end
   return SearchData(ns.Search(q or ""))
 end
+-- the /fa panel's search box asks Trade Contacts too (0.9.52)
+ForeverArtisan.ContactsSearch = ns.SearchRows
 
 ns.ShowTab = function(name) if f then ShowTab(name) end end -- for the test suite
 function ns.OnChange()

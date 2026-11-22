@@ -21,8 +21,22 @@ local PROF_WORDS = {
 -- titles that sell for a trade rather than teach it
 local NOT_TRAINER = { "suppl", "vendor", "merchant", "goods", "wares", "reagent", "quartermaster", "import", "fabric", "tackle" }
 
+-- town services, so search finds the nearest innkeeper, flight master or bank (Kerry, Nov 22: "want
+-- search to find nearest innkeeper?"). Saved as prof = "service:<kind>"; they never count as trainers.
+local SERVICE_WORDS = {
+  { "innkeeper", "innkeeper" }, { "flight master", "flight" }, { "wind rider master", "flight" },
+  { "gryphon master", "flight" }, { "hippogryph master", "flight" }, { "bat handler", "flight" },
+  { "banker", "bank" }, { "auctioneer", "auction" }, { "stable master", "stable" },
+}
+local function ServiceFor(title)
+  if type(title) ~= "string" then return nil end
+  local t = title:lower()
+  for _, w in ipairs(SERVICE_WORDS) do if t == w[1] or t:find("^" .. w[1]) then return w[2] end end
+end
+ns.ServiceFor = ServiceFor
+
 local state = { list = nil, status = "none", building = false }
-local SCHEMA = 2 -- 2: class trainers too (0.9.37); an older saved list is read again once
+local SCHEMA = 3 -- 2: class trainers too (0.9.37); 3: innkeepers, flight masters, banks (0.9.52); an older saved list is read again once
 
 local function Lib() return FA.QDB and FA.QDB.Lib() end
 
@@ -58,8 +72,10 @@ local function Read(L, id)
     local cls = ns.ClassTrainer and ns.ClassTrainer(title)
     if cls then prof = "class:" .. cls end
   end
-  if not prof then return nil end
-  if okF and flags and not hasTrainerFlag(flags) then return nil end
+  local service = not prof and ServiceFor(title)
+  if service then prof = "service:" .. service
+  elseif not prof then return nil
+  elseif okF and flags and not hasTrainerFlag(flags) then return nil end
   local _, name = pcall(L.Npc.name, id)
   local _, fr = pcall(L.Npc.friendlyToFaction, id)
   local _, spawns = pcall(L.Npc.spawns, id)
@@ -79,7 +95,8 @@ end
 local function Fitting(list)
   local n = 0
   for _, q in ipairs(list or {}) do
-    if (not ns.SeedFits or ns.SeedFits(q)) and (not ns.MyClassFits or ns.MyClassFits(q)) then n = n + 1 end
+    if not (type(q.prof) == "string" and q.prof:find("^service:"))
+       and (not ns.SeedFits or ns.SeedFits(q)) and (not ns.MyClassFits or ns.MyClassFits(q)) then n = n + 1 end
   end
   return n
 end

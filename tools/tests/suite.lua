@@ -1823,8 +1823,9 @@ do
   local campAt
   for i,x in ipairs(titles) do if x:find("^Camping") then campAt=i end end
   assert(campAt and campAt<firstOther, "Camping with what you have: "..all)
-  assert(panel.headings[1]._shown and panel.headings[2]._shown and panel.headings[3]._shown, "a heading per group")
-  assert(panel.headings[1]._text:find("Your trades") and panel.headings[2]._text:find("Not learned"), "heading text")
+  -- (no other characters yet: no "Learned on your other characters" group)
+  assert(panel.headings[1]._shown and not panel.headings[2]._shown and panel.headings[3]._shown and panel.headings[4]._shown, "a heading per group")
+  assert(panel.headings[1]._text:find("Your trades") and panel.headings[3]._text:find("Not learned on any"), "heading text")
   assert(not panel.contacts, "no keep-it-on note: turning it off asks first")
   assert(panel.site and panel.site._text=="foreverartisan.app", "site address to copy")
   -- turning Trade Contacts off asks first
@@ -2433,7 +2434,7 @@ do
   local reads=0
   local oldIds=LibQuestieDB.Npc.GetAllIds
   LibQuestieDB.Npc.GetAllIds=function() reads=reads+1 return oldIds() end
-  cns.QuestieReset(); db.questieCache={version="?",contract=3,schema=2,list={{id=9001,n="Grumbo",t="Journeyman Tailor",prof="Tailoring",f="Horde",m=1454,x=60,y=50}}}
+  cns.QuestieReset(); db.questieCache={version="?",contract=3,schema=3,list={{id=9001,n="Grumbo",t="Journeyman Tailor",prof="Tailoring",f="Horde",m=1454,x=60,y=50}}}
   cns.BuildQuestieTrainers()
   assert(reads==0, "cached list used")
   cns.QuestieReset(); db.questieCache=nil; cns.BuildQuestieTrainers()
@@ -2609,9 +2610,27 @@ do
   -- 0.9.37: class trainers from Questie, your class only; an older saved list is read again once
   npcs[9010]={name="Orgy Druid",sub="Druid Trainer",flags=19,fr="H",sp={[1637]={{40,40}}}}
   npcs[9011]={name="Orgy Warrior",sub="Warrior Trainer",flags=19,fr="H",sp={[1637]={{41,41}}}}
+  -- 0.9.52: innkeepers, flight masters and banks too (search: "nearest innkeeper"), never as trainers
+  npcs[9020]={name="Innkeeper Gryshka",sub="Innkeeper",flags=65667,fr="H",sp={[1637]={{54,68}}}}
+  npcs[9021]={name="Innkeeper Allison",sub="Innkeeper",flags=65667,fr="A",sp={[1519]={{52,65}}}}
+  npcs[9022]={name="Doras",sub="Wind Rider Master",flags=8195,fr="H",sp={[1637]={{45,63}}}}
   db.questieCache={version="?",contract=3,list={}} -- no schema: saved before class trainers
   cns.QuestieReset(); db.questieCache={version="?",contract=3,list={}}; cns.BuildQuestieTrainers(); cns.OnContactsChanged()
-  assert(db.questieCache.schema==2, "old saved list read again")
+  assert(db.questieCache.schema==3, "old saved list read again")
+  do
+    local FA=ForeverArtisan
+    local pg
+    for _,g in ipairs(FA.SearchAll("innkeeper")) do if g.key=="places" then pg=g end end
+    assert(pg and pg.rows[1] and pg.rows[1].left:find("Innkeeper Gryshka",1,true), "search finds your faction's innkeeper")
+    for _,r in ipairs(pg.rows) do assert(not r.left:find("Allison",1,true), "not the other faction's") end
+    for _,g in ipairs(FA.SearchAll("innkeeper")) do assert(g.key~="trainers", "an innkeeper isn't a trainer") end
+    local fg
+    for _,g in ipairs(FA.SearchAll("wind rider")) do if g.key=="places" then fg=g end end
+    assert(fg and fg.rows[1].left:find("Doras",1,true), "flight master")
+    for _, h in ipairs(cns.NearestTrainerHits("class")) do assert(h.npc.k~="place", "not a class trainer") end
+    assert(cns.DetailText(fg.rows[1].npc):find("From Questie's database.",1,true) and not cns.DetailText(fg.rows[1].npc):find("training window",1,true), "detail: no training note")
+    print("0.9.52 innkeepers and flights ok")
+  end
   local cl={}
   for _, h in ipairs(cns.NearestTrainerHits("class")) do cl[h.npc.n]=h.npc end
   assert(cl["Orgy Druid"] and cl["Orgy Druid"].questie, "Questie class trainer for your class")
@@ -2981,7 +3000,7 @@ do
   end
   local cf=click("Contacts"); assert(cf and cf._shown and not pnl._shown, "Contacts opens the window")
   cf:Hide(); click("Limited stock"); assert(cf._shown, "Limited stock opens the window")
-  cf:Hide(); click("Search"); assert(cf._shown, "Search opens the window")
+  cf:Hide(); click("Open search"); assert(cf._shown, "Open search opens the window")
   cf:Hide()
   local menuUp
   local O=cns.OpenNearest; cns.OpenNearest=function() menuUp=O() end
@@ -2989,25 +3008,11 @@ do
   assert(cf._shown and menuUp, "Nearest trainer opens the window with its menu up")
   cf:Hide()
   print("0.9.21 panel contacts buttons ok")
-  -- 0.9.23: search right on the Contacts tab, results replace the buttons, no second window
+  -- 0.9.52: no second search box on the Contacts tab (the panel's own box searches Trade Contacts)
   run("FOREVERARTISAN","")
-  local box=pnl.tcSearch
-  assert(box and box.scripts.OnTextChanged, "Contacts tab has a search box")
-  box._text="a"; box.scripts.OnTextChanged(box,true)
-  local shown=0 for _,r in ipairs(pnl.tcRows) do if r._shown then shown=shown+1 end end
-  assert(shown>=1 and not pnl.tcButtons[1]._shown, "typing shows results in place of the buttons")
-  assert(not (_G.ForeverArtisanContactsFrame and _G.ForeverArtisanContactsFrame._shown), "no second window")
-  local wp
-  local OW=ForeverArtisan.Vendors.waypoint; ForeverArtisan.Vendors.waypoint=function(n) wp=n end
-  for _,r in ipairs(pnl.tcRows) do if r._shown and r.d and r.d.npc then r.scripts.OnClick(r) break end end
-  ForeverArtisan.Vendors.waypoint=OW
-  assert(wp, "clicking a result sets a waypoint")
-  box._text="zzqqxx"; box.scripts.OnTextChanged(box,true)
-  for _,r in ipairs(pnl.tcRows) do assert(not r._shown, "nonsense search shows nothing") end
-  assert((pnl.tcStatus._text or ""):find("Nothing matches"), "says nothing matches")
-  box.scripts.OnEscapePressed(box)
-  assert(pnl.tcButtons[1]._shown, "Escape brings the buttons back")
-  print("0.9.23 panel contacts search ok", shown)
+  assert(not pnl.tcSearch and not pnl.tcRows, "no search box on the Contacts tab")
+  assert(pnl.tcButtons[1]._text=="Open search", "the button says what it does")
+  print("0.9.52 contacts tab without its own search ok")
 end
 -- the /fa panel's tabs: Modules, Trade Contacts, Info
 do
@@ -4041,7 +4046,7 @@ do
   local SP=StaticPopup_Show; StaticPopup_Show=function(n) shown=n end
   run("FOREVERARTISAN","support"); print=P0; StaticPopup_Show=SP
   local txt=table.concat(out,"\n")
-  assert(#out==1 and txt:find("foreverartisan.app/support",1,true) and txt:find("free and always will be",1,true), "/fa support line: "..txt)
+  assert(#out==1 and txt:find("foreverartisan.app/support",1,true) and txt:find("made your grind easier",1,true), "/fa support line: "..txt)
   assert(not txt:find("!",1,true), "no exclamation marks")
   assert(not shown, "no popup")
   assert(pnl._shown and pnl.tab=="info", "/fa support opens Info")
@@ -4567,5 +4572,393 @@ do -- 0.9.51: a steady plan: buying the materials for it doesn't reshuffle it (K
   for _,id in ipairs({3372,2453,2692}) do COUNTS[id]=oc[id] end
   c.recipes, c.planPicks = saved, savedPicks
   print("0.9.51 steady plan ok")
+end
+do -- 0.9.52: one search box above the /fa panel's tabs (crafts, Auction House prices, recipes, vendors)
+  local FA=ForeverArtisan
+  local oName=C_Item and C_Item.GetItemNameByID
+  local NAMES={[2589]="Linen Cloth",[2996]="Bolt of Linen Cloth",[765]="Silverleaf",[4306]="Silk Cloth"}
+  local oCI=C_Item
+  C_Item=setmetatable({GetItemNameByID=function(id) return NAMES[id] end},{__index=oCI or {}})
+  FA.NotePrice(2589, 22); FA.NotePrice(2996, 52); FA.NotePrice(4306, 159)
+  local groups=FA.SearchAll("linen")
+  local by={} for _,g in ipairs(groups) do by[g.key]=g end
+  assert(by.items, "Auction House prices group")
+  local names={} for _,r in ipairs(by.items.rows) do names[#names+1]=r.item.name end
+  assert(names[1]=="Linen Cloth" and names[2]=="Bolt of Linen Cloth", "closest names first: "..table.concat(names,", "))
+  for _,n in ipairs(names) do assert(n:lower():find("linen"), "only matches: "..n) end
+  assert(by.items.rows[1].right:find("22c"), "price on the row: "..by.items.rows[1].right)
+  assert(#FA.SearchAll("l")==0, "one letter: nothing yet")
+  -- recipes from your profession windows
+  local rg for _,g in ipairs(FA.SearchAll("heavy linen")) do if g.key=="recipes" then rg=g end end
+  assert(rg and rg.rows[1].recipe and rg.rows[1].recipe.prof.name, "recipes group: "..tostring(rg and rg.total))
+  -- vendors and trainers from Trade Contacts: click for a waypoint
+  local cg for _,g in ipairs(FA.SearchAll("banker bob")) do if g.key=="contacts" then cg=g end end
+  if not cg then for _,g in ipairs(FA.SearchAll("magar")) do if g.key=="contacts" or g.key=="trainers" then cg=g end end end
+  assert(cg and cg.rows[1].npc, "vendors and trainers group")
+  -- a group caps at 6 rows with "N more", expanding shows them all
+  for i=1,9 do NAMES[990000+i]="Linen Test "..i; FA.NotePrice(990000+i, 10+i) end
+  local cap=FA.SearchAll("linen")[1]
+  for _,g in ipairs(FA.SearchAll("linen")) do if g.key=="items" then cap=g end end
+  assert(#cap.rows==6 and cap.more==cap.total-6, "six rows, then more")
+  local all for _,g in ipairs(FA.SearchAll("linen",{items=true})) do if g.key=="items" then all=g end end
+  assert(#all.rows==all.total and all.more==0, "expanded: all of them")
+  -- the panel: typing shows the results over the tab, a tab click clears them, /fa find fills the box
+  run("FOREVERARTISAN","find linen")
+  local pnl=_G.ForeverArtisanPanel
+  assert(pnl._shown, "/fa find opens the panel")
+  local hit
+  for _,f in ipairs(frames) do local d=rawget(f,"data") if type(d)=="table" and d.item and d.item.name=="Linen Cloth" and f._shown then hit=f end end
+  assert(hit, "Linen Cloth row on screen")
+  local searched
+  local oS=FA.SearchAH FA.SearchAH=function(n) searched=n return true end
+  hit.scripts.OnClick(hit,"LeftButton")
+  assert(searched=="Linen Cloth", "at the Auction House: click searches it")
+  FA.SearchAH=oS
+  for _,b in ipairs(frames) do if b._text=="Market" and b.scripts.OnClick then b.scripts.OnClick(b) end end
+  local visible=0 for _,f in ipairs(frames) do local d=rawget(f,"data") if type(d)=="table" and d.item and f._shown then visible=visible+1 end end
+  assert(pnl.pages.market._shown, "a tab click brings the tab back")
+  run("FOREVERARTISAN","find")
+  pnl:Hide()
+  for i=1,9 do NAMES[990000+i]=nil end
+  C_Item=oCI
+  print("0.9.52 search ok")
+end
+do -- 0.9.52: Pop out the plan into a see-through window (Kerry, Nov 22, First Aid Progress tab)
+  local fa=loadedFrames["ForeverArtisan_FirstAid"].ns
+  local FA=ForeverArtisan
+  local oPlan=fa.Plan
+  local to=40
+  local bandage={name="Linen Bandage",itemId=1251,learned=true,reagents={{id=2589,n=1}}}
+  fa.Plan=function() return {{r=bandage,from=1,to=to,crafts=45}}, {}, nil end
+  if not _G.ForeverArtisanFirstAidFrame then pcall(fa.ToggleWindow) end
+  local w=_G.ForeverArtisanFirstAidFrame
+  if w and not w:IsShown() then pcall(fa.ToggleWindow) end
+  fa.ShowTab("progress")
+  local b=FA.PlanPop._buttons["First Aid"]
+  assert(b and b._text=="Pop out", "Pop out button by Plan to skill")
+  b.scripts.OnClick(b)
+  assert(FA.PlanPop.IsOn("First Aid") and b._text=="Pop in", "popped out")
+  local pf=_G.ForeverArtisanPlanFrame
+  assert(pf and pf._shown, "the plan window shows")
+  local function rowFor(name)
+    for _,fr in ipairs(frames) do local d=rawget(fr,"d") if type(d)=="table" and fr._shown and (d.left or ""):find(name,1,true) then return fr end end
+  end
+  local r=rowFor("Linen Bandage")
+  assert(r and r.right._text:find("skill 1%-40"), "same row as the tab: "..tostring(r and r.right._text))
+  assert(r.d.tip and r.d.id==1251, "same hover text and item")
+  -- the tab's own row is the same data
+  local same
+  for _,fr in ipairs(frames) do local d=rawget(fr,"data") if d==r.d then same=true end end
+  assert(same, "the tab and the pop-out show the same row")
+  -- window closed: a skill-up plans again and the pop-out follows
+  pcall(fa.ToggleWindow); assert(not w:IsShown(), "First Aid window closed")
+  to=50
+  fire("SKILL_LINES_CHANGED")
+  FA.PlanPop.Replan()
+  r=rowFor("Linen Bandage")
+  assert(r and r.right._text:find("skill 1%-50"), "follows the plan with the window closed: "..tostring(r and r.right._text))
+  -- right-click the heading: back in the window
+  local head
+  for _,fr in ipairs(frames) do if rawget(fr,"head")=="First Aid" and fr._shown then head=fr end end
+  assert(head, "a First Aid heading")
+  head.scripts.OnClick(head,"RightButton")
+  assert(not FA.PlanPop.IsOn("First Aid") and not pf._shown and b._text=="Pop out", "popped back in")
+  fa.Plan=oPlan
+  print("0.9.52 plan pop-out ok")
+end
+do -- 0.9.52: one record per character, even when the realm name is empty all session (Kerry's Cooking plan, Nov 22)
+  local FA=ForeverArtisan
+  local oR, oN, oG = GetRealmName, UnitName, UnitGUID
+  UnitName=function() return "Abigail" end UnitGUID=function() return "Player-1-03D5EC40" end
+  -- his saves: the realm-less record is newer (skill 117, Smoked Sagefish learned), the other is old
+  local function saves() return {
+    ["Abigail--03D5EC40"]={ scanned=200, skill=117, recipes={ ["Smoked Sagefish"]={learned=true} }, planPicks={[117]="Smoked Sagefish"}, skillLog={{s=117}} },
+    ["Abigail-Realm 11-03D5EC40"]={ scanned=100, skill=100, recipes={ ["Smoked Sagefish"]={learned=false}, ["Old Only"]={learned=true} }, gear={pole=1}, skillLog={{s=99},{s=100}} },
+  } end
+  GetRealmName=function() return "" end
+  local t=saves()
+  local k=FA.CharKey(t)
+  assert(k=="Abigail-Realm 11-03D5EC40" and t["Abigail--03D5EC40"]==nil, "empty realm: merged into one record: "..k)
+  local c=t[k]
+  assert(c.skill==117 and c.recipes["Smoked Sagefish"].learned and c.planPicks[117]=="Smoked Sagefish", "the newer data wins")
+  assert(c.recipes["Old Only"] and c.gear.pole==1, "what only the old one had is kept")
+  assert(#c.skillLog==1 and c.skillLog[1].s==117, "logs aren't mixed")
+  assert(FA.CharKey(t)==k, "same key every time")
+  GetRealmName=function() return "Realm 11" end
+  assert(FA.CharKey(t)==k, "realm back: same record")
+  t=saves()
+  assert(FA.CharKey(t)==k and t["Abigail--03D5EC40"]==nil and t[k].skill==117, "realm known: merged too")
+  -- the goals list: no times saved; the full record keeps its items, the other fills in
+  GetRealmName=function() return "" end
+  t={ ["Abigail--03D5EC40"]={ items={}, pos={"LEFT"} }, ["Abigail-Realm 11-03D5EC40"]={ items={Cooking={[2692]={want=25}}}, all={Cooking=true} } }
+  k=FA.CharKey(t)
+  assert(t[k].items.Cooking[2692].want==25 and t[k].all.Cooking and t[k].pos[1]=="LEFT", "goals merged")
+  -- a brand new character with no realm yet: a record of its own, merged once the realm shows
+  t={}
+  assert(FA.CharKey(t)=="Abigail--03D5EC40", "nothing known yet")
+  t["Abigail--03D5EC40"]={ skill=5 }
+  GetRealmName=function() return "Realm 11" end
+  assert(FA.CharKey(t)==k and t[k].skill==5 and t["Abigail--03D5EC40"]==nil, "moved once the realm shows")
+  GetRealmName, UnitName, UnitGUID = oR, oN, oG
+  print("0.9.52 one record per character ok")
+end
+do -- 0.9.52: search headings and "N more" rows have no icon (Kerry, Nov 22: a "?" on every heading)
+  run("FOREVERARTISAN","find linen")
+  local head, item, more
+  for _,f in ipairs(frames) do
+    local l=rawget(f,"left")
+    local txt=type(l)=="table" and rawget(l,"_text")
+    if f._shown and txt and rawget(f,"icon") then
+      if txt:find("Auction House prices",1,true) then head=f end
+      if txt:find("more: click",1,true) then more=f end
+      local d=rawget(f,"data") if type(d)=="table" and d.item then item=f end
+    end
+  end
+  assert(head and head.icon._shown==false, "heading: no icon")
+  assert(item and item.icon._shown==true, "item row: icon")
+  if more then assert(more.icon._shown==false, "more row: no icon") end
+  run("FOREVERARTISAN","find")
+  _G.ForeverArtisanPanel:Hide()
+  print("0.9.52 search headings ok")
+end
+do -- 0.9.52: a search row's name and detail never overlap (Kerry, Nov 22: vendor rows ran into the name)
+  local rows={}
+  for _,f in ipairs(frames) do
+    local l,r=rawget(f,"left"),rawget(f,"right")
+    if type(l)=="table" and type(r)=="table" and rawget(f,"icon") and f._w==428 then
+      rows[#rows+1]=f
+      for _,fs in ipairs({l,r}) do
+        rawset(fs,"SetWidth",function(x,w) rawset(x,"_fw",w) end)
+        rawset(fs,"GetStringWidth",function(x) local n=#((x._text or ""):gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r",""))*6 local fw=rawget(x,"_fw") if fw and fw>0 and fw<n then return fw end return n end)
+      end
+    end
+  end
+  assert(#rows>0, "search rows found")
+  local oSA=ForeverArtisan.SearchAll
+  ForeverArtisan.SearchAll=function() return {{ key="contacts", title="Vendors and trainers", total=1, more=0, rows={
+    { id=5527, npc={n="x"}, left="Goblin Deviled Clams  Cooking 125", right="William Pickman, Gallows' End Tavern (met Nov 18)  3s" },
+    { id=5527, left="Short", right="Valley of Strength  ·  visited, no list yet" } } }} end
+  run("FOREVERARTISAN","find goblin deviled clams")
+  ForeverArtisan.SearchAll=oSA
+  local n=0
+  for _,f in ipairs(rows) do
+    if f._shown and rawget(f,"data") then
+      n=n+1
+      local lw=rawget(f.left,"_fw"); if not lw or lw==0 then lw=f.left:GetStringWidth() end
+      local rw=rawget(f.right,"_fw"); if not rw or rw==0 then rw=f.right:GetStringWidth() end
+      assert(lw+rw<=428-22-10, "fits: "..lw.."+"..rw.." "..tostring(f.left._text))
+    end
+  end
+  assert(n>0, "rows checked")
+  run("FOREVERARTISAN","find")
+  _G.ForeverArtisanPanel:Hide()
+  print("0.9.52 search rows fit ok")
+end
+do -- 0.9.52: recipes a trainer teaches get their own search group and say "learn at" (Kerry, Nov 22)
+  local FA=ForeverArtisan
+  local cns=loadedFrames["ForeverArtisan_Contacts"].ns
+  local oSeeds=ForeverArtisanContactsDB.settings.seedsOff
+  ForeverArtisanContactsDB.settings.seedsOff=nil; cns.OnContactsChanged()
+  local rows=cns.SearchRows("goblin deviled clams")
+  local tr for _,d in ipairs(rows) do if d.train then tr=d end end
+  assert(tr and tr.left:find("learn at",1,true), "Contacts row says learn at: "..tostring(tr and tr.left))
+  local groups={} for _,g in ipairs(FA.SearchAll("goblin deviled clams")) do groups[g.key]=g end
+  assert(groups.trainers and groups.trainers.title=="Learn from a trainer", "a trainer group")
+  for _,d in ipairs(groups.trainers.rows) do assert(d.teach and not d.item, "trainer rows don't search the AH") end
+  assert(not groups.contacts or not groups.contacts.rows[1] or not groups.contacts.rows[1].teach, "vendors group has no training")
+  -- a trainer found by name goes there too; a vendor stays under Vendors
+  local oCS=FA.ContactsSearch
+  FA.ContactsSearch=function() return { { npc={n="Zamja",k="trainer"}, trainer=true, left="Zamja" }, { npc={n="Shimra"}, id=6256, left="Fishing Pole" } } end
+  groups={} for _,g in ipairs(FA.SearchAll("zz")) do groups[g.key]=g end
+  assert(groups.trainers.rows[1].left=="Zamja" and groups.contacts.rows[1].left=="Fishing Pole", "trainer vs vendor")
+  FA.ContactsSearch=oCS
+  ForeverArtisanContactsDB.settings.seedsOff=oSeeds; cns.OnContactsChanged()
+  print("0.9.52 trainer group ok")
+end
+do -- 0.9.52: nearest trainer for a rank counts both spellings; Cooking and First Aid get a next-rank Waypoint
+  local FA=ForeverArtisan
+  local V=FA.Vendors
+  local oH, oS, oSel, oNT = V.hitsForLink, V.sortHits, V.sellers, V.nearestTrainer
+  local rhiannon={ n="Rhiannon Davis", s="Magic Quarter", z="Undercity", m=1458, x=70, y=30, key="trainer:11049" }
+  local magar={ n="Magar", s="The Drag", z="Orgrimmar", m=1454, x=63, y=50, key="trainer:3363", seed=true }
+  local dist={ ["Rhiannon Davis"]=9000, Magar=10 }
+  V.hitsForLink=function(_, key)
+    if key=="Tailoring (Journeyman)" then return {{ npc=rhiannon }} end
+    if key=="Journeyman Tailoring" then return {{ npc=magar }, { npc=rhiannon }} end
+    return {}
+  end
+  V.sortHits=function(h) table.sort(h, function(a,b) return dist[a.npc.n] < dist[b.npc.n] end) return h end
+  local tns=loadedFrames["ForeverArtisan_Tailoring"].ns
+  local where, _, npc = tns.TrainerFor("Journeyman")
+  assert(npc==magar and where=="Magar, The Drag", "standing on The Drag: Magar, not Rhiannon: "..tostring(where))
+  -- Cooking: a book at 150, a quest at 225, a trainer at 75
+  local wulan={ n="Wulan", s="Shadowprey Village", z="Desolace", m=1443, x=26, y=69 }
+  V.sellers=function(id) if id==16072 then return {{ npc=wulan }} end return {} end
+  local cns=loadedFrames["ForeverArtisan_Cooking"].ns
+  local n, label = FA.NextRankNPC(cns.NEXT_RANK, 150)
+  assert(n==wulan and label=="Buy Expert Cookbook", "Expert: the cookbook seller")
+  local oQ=FA.QDB.Npc FA.QDB.Npc=function() return nil end
+  n, label = FA.NextRankNPC(cns.NEXT_RANK, 225)
+  assert(n and n.n=="Dirge Quikcleave" and n.m and label=="Quest for Artisan", "Artisan: the quest giver")
+  FA.QDB.Npc=oQ
+  V.nearestTrainer=function(p) return p=="Cooking" and { n="Zamja", s="The Drag", m=1454, x=57, y=53 } or nil end
+  n, label = FA.NextRankNPC(cns.NEXT_RANK, 75)
+  assert(n and n.n=="Zamja" and label=="Train Journeyman", "Journeyman: the nearest trainer")
+  local fns=loadedFrames["ForeverArtisan_FirstAid"].ns
+  V.sellers=function(id) if id==16084 then return {{ npc={ n="Balai Lok'Wein", m=1445, x=36, y=30 } }} end return {} end
+  n, label = FA.NextRankNPC(fns.NEXT_RANK, 150)
+  assert(n and n.n=="Balai Lok'Wein" and label:find("Expert First Aid",1,true), "First Aid: the book seller")
+  -- gathering: the nearest trainer for the next rank
+  V.hitsForLink=function(_, key) if key=="Journeyman Herbalism" then return {{ npc=magar }} end return {} end
+  n, label = FA.NextRankNPC({ prof="Herbalism" }, 75)
+  assert(n==magar and label=="Train Journeyman", "gathering: trainer")
+  V.hitsForLink, V.sortHits, V.sellers, V.nearestTrainer = oH, oS, oSel, oNT
+  print("0.9.52 next rank everywhere ok")
+end
+do -- 0.9.52: the Modules tab is tall enough for everything under the search box (Kerry, Nov 22: text ran together at the bottom)
+  if not _G.ForeverArtisanPanel then run("FOREVERARTISAN","") end
+  local pnl=_G.ForeverArtisanPanel
+  rawset(pnl,"SetHeight",function(x,h) rawset(x,"_hh",h) end)
+  pnl.scripts.OnShow(pnl)
+  local need=pnl.needH
+  assert(need and need>=86+300 and rawget(pnl,"_hh")>=need, "panel fits its content: "..tostring(rawget(pnl,"_hh")).." / "..tostring(need))
+  rawset(pnl,"SetHeight",nil)
+  pnl:Hide()
+  print("0.9.52 modules tab height ok")
+end
+do -- 0.9.52: your other characters on the Modules tab (Kerry, Nov 22: "confusing when switching between alts")
+  local FA=ForeverArtisan
+  local chars=ForeverArtisanSettings.account.chars
+  local mine=FA.MyCharKey()
+  chars["Boom-Realm-003E018A"]={ name="Boom", fullName="Boom Dynamite", className="Mage", level=23, seen=1795000000,
+    trades={ cooking=114, skinning=145, ["first aid"]=62, fishing=161, alchemy=88 } }
+  chars["Medz-Realm-013E7C9B"]={ name="Medz", className="Priest", level=3, trades={} }
+  local rows=FA.AltRows()
+  local keys={} for _,r in ipairs(rows) do keys[r.key]=r end
+  assert(not keys[mine], "not this character")
+  assert(rows[1].key=="Boom-Realm-003E018A", "highest level first")
+  local plain=rows[1].line:gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r","")
+  assert(plain=="Fishing 161  ·  Skinning 145  ·  Cooking 114  ·  Alchemy 88  ·  First Aid 62", "best skill first, names: "..plain)
+  assert(keys["Medz-Realm-013E7C9B"].line:find("no professions yet",1,true), "none yet")
+  -- on the panel: a profession only an alt knows moves to "Learned on your other characters", with who
+  if not _G.ForeverArtisanPanel then run("FOREVERARTISAN","") end
+  local pnl=_G.ForeverArtisanPanel
+  pnl.scripts.OnShow(pnl)
+  local alchRow, skinRow, none
+  for _,f in ipairs(frames) do
+    local m=rawget(f,"m")
+    if type(m)=="table" and f._shown and m.title=="Alchemy" then alchRow=f end
+    if type(m)=="table" and f._shown and m.title=="Skinning" then skinRow=f end
+    if type(m)=="table" and f._shown and m.group==3 then none=f end
+  end
+  assert(alchRow and alchRow.m.group==2 and alchRow.title._text:find("Boom 88",1,true), "Alchemy: Boom 88: "..tostring(alchRow and alchRow.title._text))
+  assert(skinRow and skinRow.m.group==1, "a trade you know stays under Your trades")
+  assert(none, "the rest: not learned on any character")
+  assert(pnl.headings[2]._shown and pnl.headings[2]._text:find("other characters",1,true), "the group heading")
+  FA.ForgetCharacter("Medz-Realm-013E7C9B")
+  assert(chars["Medz-Realm-013E7C9B"]==nil, "forget removes it")
+  FA.ForgetCharacter(mine)
+  assert(chars[mine], "can't remove yourself")
+  chars["Boom-Realm-003E018A"]=nil
+  pnl:Hide()
+  print("0.9.52 other characters ok")
+end
+do -- 0.9.52: the Cast marker tab pops out into a see-through window (Kerry, Nov 22, at the Extravaganza)
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local S=fns.DB().settings
+  S.castPop=nil
+  fns.CastPopSet(true)
+  local w=_G.ForeverArtisanCastMarkerFrame
+  assert(w and w._shown and fns.CastPopOn(), "pops out")
+  assert(w.stat._text==fns.MarkerLine(), "same marker line as the tab")
+  -- the same controls: Set calibrates fresh, Add cast adds, Snap camera snaps, Show toggles the marker
+  local called={}
+  local oC, oS, oU = fns.CalibrateMarker, fns.SnapCamera, fns.UpdateMarker
+  fns.CalibrateMarker=function(add) called[#called+1]=add and "add" or "set" end
+  fns.SnapCamera=function() called[#called+1]="snap" end
+  fns.UpdateMarker=function() end
+  for _,b in ipairs(frames) do
+    if rawget(b,"_parent")==w and b.scripts.OnClick and ({Set=1,["Add cast"]=1,["Snap camera"]=1})[b._text or ""] then b.scripts.OnClick(b) end
+  end
+  table.sort(called)
+  assert(table.concat(called,",")=="add,set,snap", "buttons do the same thing: "..table.concat(called,","))
+  rawset(w.show,"GetChecked",function() return true end); w.show.scripts.OnClick(w.show)
+  assert(S.showMarker==true, "Show box")
+  fns.CalibrateMarker, fns.SnapCamera, fns.UpdateMarker = oC, oS, oU
+  assert(not rawget(w,"derby"), "no derby clock in the pop-out (the game announces it)")
+  w.close.scripts.OnClick(w.close)
+  assert(not w._shown and not fns.CastPopOn(), "x puts it back")
+  print("0.9.52 cast marker pop-out ok")
+end
+do -- 0.9.52: the Fishing skill bar pops out too (Kerry, Nov 22)
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local S=fns.DB().settings
+  S.skillPop=nil
+  fns.SkillPopSet(true)
+  local w=_G.ForeverArtisanFishingSkillFrame
+  assert(w and w._shown and fns.SkillPopOn(), "pops out")
+  local sb=fns.SkillBlock()
+  assert(w.title._text:find(sb.big,1,true) and w.lines[1]._text==sb.s1 and w.lines[2]._text==sb.s2 and w.lines[3]._text==sb.s3, "short forms of the tab's lines")
+  -- short enough for the small window (Kerry: "about 2.0 catches per..." was cut off)
+  for k=1,3 do
+    local plain=(w.lines[k]._text or ""):gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r","")
+    assert(#plain<=48, "line "..k.." fits: "..plain)
+  end
+  w.close.scripts.OnClick(w.close)
+  assert(not w._shown and not fns.SkillPopOn(), "x puts it back")
+  print("0.9.52 skill bar pop-out ok")
+end
+do -- 0.9.52: gathering skill bars pop out too (Kerry, Nov 22: "let's do gathering as well")
+  for _,m in ipairs({"Herbalism","Mining","Skinning"}) do
+    local ns_=loadedFrames["ForeverArtisan_"..m].ns
+    local pop=ns_.SkillPop
+    assert(pop, m..": has a pop-out")
+    ns_.DB().settings.skillPop=nil
+    pop.Set(true)
+    local w=_G["ForeverArtisan"..m.."SkillFrame"]
+    assert(w and w._shown and pop.On(), m..": pops out")
+    assert(w.title._text:find(m,1,true), m..": title")
+    assert((w.lines[1]._text or "")~="" and (w.lines[2]._text or "")~="", m..": session and pace lines")
+    w.close.scripts.OnClick(w.close)
+    assert(not w._shown and not pop.On(), m..": x puts it back")
+  end
+  print("0.9.52 gathering pop-outs ok")
+end
+do -- 0.9.52: no fishing derby section on the Cast marker tab (Kerry, Nov 22: the game announces it)
+  for _,fs in ipairs(fonts) do
+    local t=rawget(fs,"_text")
+    assert(not (type(t)=="string" and (t:find("Fishing derby",1,true) or t:find("This derby",1,true))), "no derby section: "..tostring(t))
+  end
+  print("0.9.52 no derby section ok")
+end
+do -- 0.9.52: the lure bar sits inside the popped-out Fishing skill window (Kerry, Nov 22)
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local hud=_G.ForeverArtisanFishingHUD
+  assert(hud, "lure bar built")
+  hud:Show()
+  fns.DB().settings.skillPop=nil
+  fns.SkillPopSet(true)
+  local w=_G.ForeverArtisanFishingSkillFrame
+  assert(hud.docked and w._shown, "docked in the window")
+  assert(not hud.cap._shown, "its skill line hides (the window has it)")
+  fns.SkillPopSet(false)
+  assert(not hud.docked and hud.cap._shown, "back on its own when the window closes")
+  -- not shown (no pole): the window doesn't make room for it
+  hud:Hide(); fns.SkillPopSet(true)
+  assert(not hud.docked, "hidden lure bar: not docked")
+  fns.SkillPopSet(false)
+  print("0.9.52 lure bar in the skill window ok")
+end
+do -- 0.9.52: a small FA badge on the on-screen windows (Kerry, Nov 22)
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  fns.SkillPopSet(true); fns.CastPopSet(true)
+  local hns=loadedFrames["ForeverArtisan_Herbalism"].ns
+  hns.SkillPop.Set(true)
+  for _,n in ipairs({"ForeverArtisanFishingSkillFrame","ForeverArtisanCastMarkerFrame","ForeverArtisanHerbalismSkillFrame"}) do
+    local w=_G[n]
+    assert(w and rawget(w,"badge") and w.badge.tex, n..": FA badge")
+  end
+  fns.SkillPopSet(false); fns.CastPopSet(false); hns.SkillPop.Set(false)
+  print("0.9.52 FA badge ok")
 end
 print("SUITE OK")

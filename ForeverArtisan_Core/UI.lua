@@ -49,16 +49,51 @@ function FA.CharKey(t)
   if type(guid) ~= "string" or FA.IsSecret(guid) or guid == "" then return old end
   local tail = guid:match("([^%-]+)$") or guid
   local key = old .. "-" .. tail
-  -- right at login the realm name can still be empty: find this character's record by name and
-  -- GUID instead of starting a second one ("Name--GUID") that has no pole, skill or gear
-  if realm == "" and type(t) == "table" and t[key] == nil then
+  if type(t) ~= "table" then return key end
+  -- The realm name can be empty, at login or for a whole session (Kerry's saves, Nov 22: Cooking and
+  -- the goals list each had an "Abigail--GUID" record next to "Abigail-<realm>-GUID", and which one
+  -- a session used decided which recipes the plan saw, so the plan and its shopping list changed
+  -- between sessions). One record per character: the one with the realm in its key. A record saved
+  -- under the empty realm is merged into it, and an empty realm finds it by name and GUID.
+  local bare = name .. "--" .. tail
+  local full
+  if realm ~= "" then full = key
+  else
     local pre, suf = name .. "-", "-" .. tail
     for k in pairs(t) do
-      if type(k) == "string" and k ~= key and k:sub(1, #pre) == pre and k:sub(-#suf) == suf then return k end
+      if type(k) == "string" and k ~= bare and k:sub(1, #pre) == pre and k:sub(-#suf) == suf then full = k break end
     end
   end
-  if type(t) == "table" and t[key] == nil and t[old] ~= nil then t[key] = t[old]; t[old] = nil end
-  return key
+  if not full then return bare end -- nothing known with a realm yet
+  if t[full] == nil and realm ~= "" and t[old] ~= nil then t[full] = t[old]; t[old] = nil end
+  if type(t[bare]) == "table" then
+    if type(t[full]) == "table" then FA.MergeCharRecords(t[full], t[bare]) else t[full] = t[bare] end
+    t[bare] = nil
+  end
+  return full
+end
+
+-- two records of the same character: keep the newer one's data (last scan or save time), and fill in
+-- what only the other has (recipes, items or settings it never saw)
+local function Stamp(r)
+  return tonumber(r.scanned) or tonumber(r.at) or tonumber(r.t) or 0
+end
+function FA.MergeCharRecords(into, from)
+  if type(into) ~= "table" or type(from) ~= "table" then return end
+  local newer = Stamp(from) > Stamp(into)
+  for k, v in pairs(from) do
+    local mine = into[k]
+    if mine == nil then into[k] = v
+    elseif newer then
+      -- lists (a log) aren't mixed: the newer one stands
+      if type(v) == "table" and type(mine) == "table" and #v == 0 and #mine == 0 then
+        for kk, vv in pairs(mine) do if v[kk] == nil then v[kk] = vv end end
+      end
+      into[k] = v
+    elseif type(v) == "table" and type(mine) == "table" and #v == 0 and #mine == 0 then
+      for kk, vv in pairs(v) do if mine[kk] == nil then mine[kk] = vv end end
+    end
+  end
 end
 -- The profession window is showing someone else's recipes: a profession linked in chat, a guild
 -- member's, or an NPC crafter. Never read it as yours (Discord bug report, Nov 2026: a linked
@@ -386,6 +421,114 @@ function UI.SkillBar(parent, y, name)
   return box
 end
 
+---------------------------------------------------------------- the FA badge (0.9.52)
+-- A small ForeverArtisan icon at the top left of the on-screen windows (goals, plan, the pop-outs), so
+-- it's clear whose they are (Kerry, Nov 22: "Put a small FA symbol or text on the popups"). The title
+-- moves to its right. Hover: "ForeverArtisan".
+UI.BADGE = "Interface\\AddOns\\ForeverArtisan_Core\\Media\\addon"
+function UI.Badge(f, title)
+  if not f or f.badge then return end
+  local b = CreateFrame("Frame", nil, f)
+  b:SetSize(14, 14); b:SetPoint("TOPLEFT", 5, -4)
+  b.tex = b:CreateTexture(nil, "ARTWORK"); b.tex:SetAllPoints(); b.tex:SetTexture(UI.BADGE)
+  b:EnableMouse(true)
+  UI.Tip(b, function() GameTooltip:AddLine("ForeverArtisan") end)
+  f.badge = b
+  if title then title:ClearAllPoints(); title:SetPoint("LEFT", b, "RIGHT", 4, 0) end
+end
+
+---------------------------------------------------------------- a small see-through window (0.9.52)
+-- The "Pop out" windows of the gathering Progress tabs (Kerry, Nov 22: "let's do gathering as well"),
+-- built like the goals list and the fishing ones: black at 35%, drag to move, x to close, redraws on
+-- change (and every 10 s for the pace), where it was and whether it's out saved in store().
+--   local pop = UI.MiniPop({ name, store = fn -> table, data = fn -> { title, pct, capped, lines } , closeTip })
+--   pop.On(), pop.Set(on), pop.Refresh(), pop.Button(parent, tipTitle, tipText) -> "Pop out" / "Pop in"
+function UI.MiniPop(spec)
+  local P, w, btn = {}, nil, nil
+  local W = spec.width or 300
+  local function St() local t = spec.store(); return t end
+  function P.On() local t = St(); return t and t.on and true or false end
+  local function Build()
+    w = CreateFrame("Frame", spec.name, UIParent)
+    w:SetSize(W, 60); w:SetFrameStrata("LOW"); w:SetClampedToScreen(true)
+    w:SetMovable(true); w:EnableMouse(true); w:RegisterForDrag("LeftButton")
+    w:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    w:SetScript("OnDragStop", function(self)
+      self:StopMovingOrSizing()
+      local point, _, rel, x, y = self:GetPoint()
+      St().pos = { point, rel, x, y }
+    end)
+    w.bg = w:CreateTexture(nil, "BACKGROUND"); w.bg:SetAllPoints(); w.bg:SetColorTexture(0, 0, 0, 0.35)
+    w.title = UI.Text(w, "GameFontNormal", "TOPLEFT", 6, -4); w.title:SetText("")
+    UI.Badge(w, w.title)
+    w.close = CreateFrame("Button", nil, w); w.close:SetSize(16, 16); w.close:SetPoint("TOPRIGHT", -4, -2)
+    w.close.t = UI.Text(w.close, "GameFontHighlight", "CENTER", 0, 0); w.close.t:SetText("x")
+    w.close:SetScript("OnClick", function() P.Set(false) end)
+    UI.Tip(w.close, function() GameTooltip:AddLine(spec.closeTip or "Put it back in its window") end)
+    w.bar = UI.Bar(w, W - 16, 8); w.bar:SetPoint("TOPLEFT", 8, -24)
+    w.lines = {}
+    for k = 1, 4 do
+      w.lines[k] = UI.Text(w, "GameFontHighlightSmall", "TOPLEFT", 8, -24 - k * 14)
+      w.lines[k]:SetWidth(W - 16); w.lines[k]:SetWordWrap(true); w.lines[k]:SetText("")
+    end
+    -- the module redraws it right away when something changes (a pick, a skill-up: ns.OnChange); this
+    -- slow tick only keeps the per-hour pace current (Kerry, Nov 22: "Should it update every second?")
+    local acc = 0
+    w:SetScript("OnUpdate", function(_, el)
+      acc = acc + (el or 0)
+      if acc >= (spec.every or 10) then acc = 0; P.Refresh() end
+    end)
+    local pos = St().pos
+    if pos then w:SetPoint(pos[1], UIParent, pos[2] or pos[1], pos[3] or 0, pos[4] or 0)
+    else w:SetPoint("CENTER", UIParent, "CENTER", 0, 240) end
+  end
+  function P.Refresh()
+    if btn then btn:SetText(P.On() and "Pop in" or "Pop out") end
+    if not P.On() then if w then w:Hide() end return end
+    if InCombatLockdown and InCombatLockdown() and not w then return end
+    if not w then Build() end
+    local ok, d = pcall(spec.data)
+    if not ok or type(d) ~= "table" then return end
+    w:Show()
+    w.title:SetText(d.title or "")
+    w.bar:Set(d.pct or 0, d.capped and "capped" or nil)
+    -- long lines wrap (never cut off); each line sits under the one before it
+    local lines = d.lines or {}
+    local y = -38
+    for k, fs in ipairs(w.lines) do
+      fs:SetText(lines[k] or "")
+      fs:ClearAllPoints(); fs:SetPoint("TOPLEFT", 8, y)
+      if lines[k] and lines[k] ~= "" then
+        local h = tonumber(fs.GetStringHeight and fs:GetStringHeight()) or 0
+        y = y - math.max(14, h + 2)
+      end
+    end
+    w:SetHeight(-y + 6)
+  end
+  function P.Set(on)
+    St().on = on or nil
+    P.Refresh()
+  end
+  function P.Button(parent, tipTitle, tipText)
+    btn = UI.Button(parent, "Pop out", 70, function() P.Set(not P.On()) end)
+    btn:SetHeight(20)
+    UI.Tip(btn, function()
+      GameTooltip:AddLine(tipTitle or "Pop it out")
+      if tipText then GameTooltip:AddLine(tipText, 1, 1, 1, true) end
+    end)
+    btn:SetText(P.On() and "Pop in" or "Pop out")
+    return btn
+  end
+  P.Frame = function() return w end
+  -- left out when you logged off: back on screen a moment after login
+  local ev = CreateFrame("Frame")
+  pcall(ev.RegisterEvent, ev, "PLAYER_ENTERING_WORLD")
+  ev:SetScript("OnEvent", function()
+    if C_Timer and C_Timer.After then C_Timer.After(2, function() pcall(P.Refresh) end) else pcall(P.Refresh) end
+  end)
+  return P
+end
+
 ---------------------------------------------------------------- window
 
 -- Base window: same frame, size, title, brand line, drag and Esc behavior everywhere.
@@ -434,16 +577,17 @@ end
 
 -- Tab row under the title. order = { { "main", "Herbalism" }, { "progress", "Progress" }, ... }
 -- Fills pages[key] (content frames) and buttons[key]; clicking calls onTab(key).
-function UI.Tabs(f, order, pages, buttons, onTab)
+function UI.Tabs(f, order, pages, buttons, onTab, top)
+  top = top or 28 -- the /fa panel puts its search box above the tabs (0.9.52)
   local n = #order
   local gap = 6
   local w = math.min(104, math.floor((f:GetWidth() - 28 - gap * (n - 1)) / math.max(n, 1)))
   for i, t in ipairs(order) do
     local b = UI.Button(f, t[2], w, function() onTab(t[1]) end)
-    b:SetPoint("TOPLEFT", 14 + (i - 1) * (w + gap), -28)
+    b:SetPoint("TOPLEFT", 14 + (i - 1) * (w + gap), -top)
     buttons[t[1]] = b
     local page = CreateFrame("Frame", nil, f)
-    page:SetPoint("TOPLEFT", 0, -58); page:SetPoint("BOTTOMRIGHT", 0, 0)
+    page:SetPoint("TOPLEFT", 0, -(top + 30)); page:SetPoint("BOTTOMRIGHT", 0, 0)
     pages[t[1]] = page
   end
 end

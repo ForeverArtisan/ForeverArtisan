@@ -72,6 +72,19 @@ function ns.RefreshSession(p)
 end
 
 local function RefreshMainPage(p)
+  p.rankNPC = nil
+  if not p.rankWay then
+    p.rankWay = FA.UI.Button(p, "Waypoint", 90, function()
+      local V = ForeverArtisan.Vendors
+      if p.rankNPC and V and V.waypoint then V.waypoint(p.rankNPC) end
+    end)
+    p.rankWay:SetPoint("TOPRIGHT", -20, -6)
+    FA.UI.Tip(p.rankWay, function()
+      local n = p.rankNPC
+      GameTooltip:AddLine("Waypoint")
+      if n then GameTooltip:AddLine(n.n .. ", " .. (n.s or n.z or "?"), 1, 1, 1) end
+    end)
+  end
   local gl = ForeverArtisan.GearLine and ForeverArtisan.GearLine("Skinning")
   p.gear:SetText(gl or ""); p.gearHover:SetShown(gl ~= nil)
   local i = ns.SkillInfo()
@@ -79,7 +92,15 @@ local function RefreshMainPage(p)
     p.skill:SetText(("Skinning %d%s%s"):format(i.rank, i.max and (" / " .. i.max) or "",
       (i.mod and i.mod > 0) and (GREEN .. "  (+" .. i.mod .. ")|r") or ""))
     if i.capped then
-      p.color:SetText(RED .. ("Capped at %d. Train the next rank at a Skinning trainer to keep gaining skill.|r"):format(i.max))
+      -- the nearest trainer for the next rank and a Waypoint button, like the crafting windows (0.9.52)
+      local npc, label = nil, nil
+      if ForeverArtisan.NextRankNPC then npc, label = ForeverArtisan.NextRankNPC({ prof = "Skinning" }, i.max) end
+      p.rankNPC = npc
+      if npc then
+        p.color:SetText(RED .. ("Capped at %d.|r "):format(i.max) .. label .. ": " .. npc.n .. ", " .. (npc.s or npc.z or "?") .. ".")
+      else
+        p.color:SetText(RED .. ("Capped at %d. Train the next rank at a Skinning trainer to keep gaining skill.|r"):format(i.max))
+      end
     else
       local bands = ns.LevelBands(ns.EffSkill())
       local o = bands.orange or bands.yellow
@@ -95,6 +116,7 @@ local function RefreshMainPage(p)
   if not ns.Knows() then knife = nil end
   p.find:SetText((knife == true and (GREEN .. "Skinning Knife: yes|r")) or (knife == false and (RED .. "Skinning Knife: missing|r")) or "")
 
+  p.rankWay:SetShown(p.rankNPC ~= nil)
   ns.RefreshSession(p)
 
   local z = ns.ZoneRec()
@@ -119,8 +141,34 @@ local function RefreshMainPage(p)
 end
 
 ---------------------------------------------------------------- page 2: Progress
+-- the Progress tab's skill bar, popped out (0.9.52): the same skill, bar and lines as the tab and the
+-- session line from the first tab, read from them after a refresh (the window is built if needed)
+local Build, RefreshProgressPage
+ns.SkillPop = FA.UI.MiniPop and FA.UI.MiniPop({
+  name = "ForeverArtisanSkinningSkillFrame",
+  closeTip = "Put it back on the Progress tab",
+  store = function() local st = S(); st.skillPop = st.skillPop or {}; return st.skillPop end,
+  data = function()
+    if not (pages.progress and pages.progress.rate and pages.main and pages.main.sess) then
+      if InCombatLockdown and InCombatLockdown() then return nil end -- build the window after combat
+      if Build then Build() end
+    end
+    if RefreshProgressPage then RefreshProgressPage(pages.progress) end
+    if ns.RefreshSession and pages.main then ns.RefreshSession(pages.main) end
+    local i = ns.SkillInfo()
+    return { title = GOLD .. "Skinning|r  " .. (i.rank and (i.rank .. (i.max and (" / " .. i.max) or "")) or ""),
+      pct = (i.rank and i.max and i.max > 0) and math.min(1, i.rank / i.max) or 0, capped = i.capped,
+      lines = { pages.main.sess:GetText() or "", pages.progress.rate:GetText() or "" } }
+  end,
+})
+
 local function BuildProgressPage(p)
   p.skillBar = K.SkillBar(p, -2, "Skinning")
+  -- pop the skill bar out into a see-through window on screen (0.9.52)
+  if ns.SkillPop then
+    p.pop = ns.SkillPop.Button(p, "Pop the skill bar out", "Your skill, its bar, this session and your pace in a small see-through window you can drag anywhere. The x puts it back.")
+    p.pop:SetPoint("TOPRIGHT", -24, -2)
+  end
   p.rate = Text(p, "GameFontHighlightSmall", "TOPLEFT", 18, -36); p.rate:SetWidth(430); p.rate:SetWordWrap(false)
 
   Header(p, -54, "Skin next")
@@ -144,7 +192,7 @@ local function Amount()
   return (p and p.amount and tonumber(p.amount:GetText())) or 20
 end
 
-local function RefreshProgressPage(p)
+RefreshProgressPage = function(p)
   local i = ns.SkillInfo()
   if i.rank then
     p.skillBar:Set(i.rank, i.max, i.capped)
@@ -332,7 +380,7 @@ local function ShowTab(name)
   if REFRESH[name] then REFRESH[name](pages[name]) end
 end
 
-local function Build()
+Build = function()
   local order = { { "main", "Skinning" }, { "progress", "Progress" }, { "log", "Skinning log" }, { "guide", "Level guide" } }
   f = K.Window({ name = "ForeverArtisanSkinningFrame", title = "Skinning", tabs = order, pages = pages, tabButtons = tabs, onTab = ShowTab })
   BuildMainPage(pages.main)
@@ -368,4 +416,6 @@ end
 
 function ns.OnChange()
   if f and f:IsShown() and REFRESH[view.tab] then REFRESH[view.tab](pages[view.tab]) end
+  -- the popped-out skill bar follows right away
+  if ns.SkillPop and ns.SkillPop.On() then ns.SkillPop.Refresh() end
 end
