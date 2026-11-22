@@ -381,7 +381,7 @@ function FA.RefreshPanel()
   if panel and panel:IsShown() then pcall(refreshPanel) end
 end
 
-local TABS = { { "modules", "Modules" }, { "market", "Market" }, { "contacts", "Contacts" }, { "settings", "Settings" }, { "info", "Info" } }
+local TABS = { { "modules", "Modules" }, { "market", "Market" }, { "contacts", "Contacts" }, { "settings", "Settings" }, { "tips", "Tooltips" }, { "info", "Info" } }
 
 local function selectTab(name)
   if not (panel and panel.pages[name]) then name = "modules" end
@@ -679,17 +679,9 @@ local SETTINGS = {
     set = function(on)
       if (not (ForeverArtisanSettings and ForeverArtisanSettings.minimapHide)) ~= on and FA.minimap then FA.minimap("") end
     end },
-  { key = "prices", label = "Auction House prices on item tooltips", desc = "What an item sells for, from Auction House pages you've seen.",
-    get = function() return FA.PriceTipsOn and FA.PriceTipsOn() end,
-    set = function(on) if on then ForeverArtisanSettings.priceTips = nil else ForeverArtisanSettings.priceTips = false end end,
-    note = function() return (type(_G.Auctionator) == "table" and _G.Auctionator.API) and "Auctionator shows its own, so ForeverArtisan stays quiet." or nil end },
   { key = "updates", label = "Remind me to check for updates", desc = "Once a version is more than 7 days old, one line at login (at most once a week).",
     get = function() return not FA.UpdateCheckOn or FA.UpdateCheckOn() end,
-    set = function(on) ForeverArtisanSettings.updateCheck = (not on) and false or nil end },
-  { key = "detips", label = "Disenchant values on item tooltips", desc = "What a green or blue item disenchants into, and what that's worth. Same as /fa disenchant on | off.",
-    get = function() return FA.DisenchantTipsOn and FA.DisenchantTipsOn() end,
-    need = function() return "Not loaded." end,
-    set = function(on) if on then ForeverArtisanSettings.deTips = nil else ForeverArtisanSettings.deTips = false end end },
+    set = function(on) if on then ForeverArtisanSettings.updateCheck = nil else ForeverArtisanSettings.updateCheck = false end end },
   { head = "Trade Contacts" },
   { key = "questie", label = "Trainers from Questie", desc = "Every profession trainer for your faction, in search and Nearest trainer.",
     get = function()
@@ -732,6 +724,15 @@ local SETTINGS = {
     end },
 }
 
+-- the Tooltips tab: one switch per kind of line ForeverArtisan adds to tooltips (0.9.51)
+local TIPS = { { head = "Lines on tooltips" } }
+for _, k in ipairs(FA.TIP_KINDS or {}) do
+  TIPS[#TIPS + 1] = { key = "tip_" .. k.key, label = k.label, desc = k.desc, note = k.note,
+    need = k.need,
+    get = function() if k.need and k.need() then return nil end; return FA.TipOn(k.key) end,
+    set = function(on) FA.SetTip(k.key, on) end }
+end
+
 function refreshSettings()
   for _, r in ipairs(panel.settingRows) do
     local d = r.def
@@ -745,10 +746,10 @@ function refreshSettings()
   end
 end
 
-local function buildSettingsTab(p)
-  panel.settingRows = {}
+local function settingRows(p, list)
+  panel.settingRows = panel.settingRows or {}
   local y = -8
-  for _, d in ipairs(SETTINGS) do
+  for _, d in ipairs(list) do
     if d.head then
       if y < -8 then y = y - 6 end
       Head(p, y, d.head)
@@ -769,6 +770,24 @@ local function buildSettingsTab(p)
       y = y - 44 -- tight enough that every row fits above the panel's bottom bar
     end
   end
+  return y
+end
+
+local function buildTipsTab(p)
+  local y = settingRows(p, TIPS)
+  local function all(on)
+    for _, k in ipairs(FA.TIP_KINDS or {}) do FA.SetTip(k.key, on) end
+    refreshPanel()
+  end
+  local on = FA.UI.Button(p, "All on", 90, function() all(true) end)
+  on:SetPoint("TOPLEFT", 42, y - 4)
+  local off = FA.UI.Button(p, "All off", 90, function() all(false) end)
+  off:SetPoint("LEFT", on, "RIGHT", 8, 0)
+  Txt(p, "GameFontDisableSmall", 42, y - 34, 400, "Each window's own tooltip checkbox still works for that window alone.")
+end
+
+local function buildSettingsTab(p)
+  local y = settingRows(p, SETTINGS)
   -- the game's friendly nameplates carry the titles: a status line, and a button when they're off
   local townHover = CreateFrame("Frame", nil, p)
   townHover:SetPoint("TOPLEFT", 42, y + 2); townHover:SetSize(400, 30)
@@ -1524,6 +1543,7 @@ local function buildPanel()
   buildMarketTab(panel.pages.market)
   buildContactsTab(panel.pages.contacts)
   buildSettingsTab(panel.pages.settings)
+  buildTipsTab(panel.pages.tips)
   buildInfoTab(panel.pages.info)
   -- drag the corner to make the panel taller: the Market list shows more rows (0.9.49)
   local PK = FA.UI.Kit({
@@ -1660,6 +1680,7 @@ NEWS = {
   { "0.9.48", "ForeverArtisan windows are no longer always on top. Click the Auction House, a profession window or an FA window to bring it to the front." },
   { "0.9.49", "Drag any profession window, Trade Contacts, Fishing or this panel taller from its corner and every list shows more rows. Fishing: a soft ping for pools, splash sound levels, and a reminder when you fish without a fishing buff." },
   { "0.9.50", "Shopping lists count what's in your bags (bank shown apart), and plans keep using materials you already bought. Capped? A Waypoint button takes you to the next rank's trainer." },
+  { "0.9.51", "New Tooltips tab: turn each kind of tooltip line on or off. Click a Goals line for the nearest vendor, and track training there too. Linked professions from chat no longer count as yours." },
 }
 
 local function verNum(v)
@@ -1955,8 +1976,8 @@ SlashCmdList.FOREVERARTISAN = function(msg)
   elseif lower == "prices" or lower == "price" then
     local r = (rest or ""):lower()
     ForeverArtisanSettings = ForeverArtisanSettings or {}
-    if r == "on" then ForeverArtisanSettings.priceTips = nil
-    elseif r == "off" then ForeverArtisanSettings.priceTips = false end
+    if r == "on" then FA.SetTip("price", true)
+    elseif r == "off" then FA.SetTip("price", false) end
     print(PREFIX .. "Auction House prices on item tooltips: " .. (FA.PriceTipsOn and FA.PriceTipsOn() and "on" or "off")
       .. ((type(_G.Auctionator) == "table" and _G.Auctionator.API) and " (Auctionator shows its own, so ForeverArtisan stays quiet)" or "")
       .. ". /fa prices on | off")

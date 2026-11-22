@@ -47,10 +47,35 @@ function FA.CharKey(t)
   local old = name .. "-" .. realm
   local guid = UnitGUID and UnitGUID("player")
   if type(guid) ~= "string" or FA.IsSecret(guid) or guid == "" then return old end
-  local key = old .. "-" .. (guid:match("([^%-]+)$") or guid)
+  local tail = guid:match("([^%-]+)$") or guid
+  local key = old .. "-" .. tail
+  -- right at login the realm name can still be empty: find this character's record by name and
+  -- GUID instead of starting a second one ("Name--GUID") that has no pole, skill or gear
+  if realm == "" and type(t) == "table" and t[key] == nil then
+    local pre, suf = name .. "-", "-" .. tail
+    for k in pairs(t) do
+      if type(k) == "string" and k ~= key and k:sub(1, #pre) == pre and k:sub(-#suf) == suf then return k end
+    end
+  end
   if type(t) == "table" and t[key] == nil and t[old] ~= nil then t[key] = t[old]; t[old] = nil end
   return key
 end
+-- The profession window is showing someone else's recipes: a profession linked in chat, a guild
+-- member's, or an NPC crafter. Never read it as yours (Discord bug report, Nov 2026: a linked
+-- profession was saved as the player's own and showed up in the Market).
+function FA.OthersTradeSkill()
+  local function yes(fn)
+    if type(fn) ~= "function" then return false end
+    local ok, v = pcall(fn)
+    return ok and v ~= nil and v ~= false and not FA.IsSecret(v)
+  end
+  local T = C_TradeSkillUI
+  if T and (yes(T.IsTradeSkillLinked) or yes(T.IsTradeSkillGuild) or yes(T.IsTradeSkillGuildMember) or yes(T.IsNPCCrafting)) then
+    return true
+  end
+  return yes(_G.IsTradeSkillLinked) or yes(_G.IsTradeSkillGuild)
+end
+
 function FA.AnySecret(...)
   if not issecretvalue then return false end
   for i = 1, select("#", ...) do

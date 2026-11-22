@@ -445,6 +445,7 @@ end
 local COLOR = { optimal = "orange", medium = "yellow", easy = "green", trivial = "gray", difficult = "red" }
 
 local function scanProfession(api)
+  if ForeverArtisan.OthersTradeSkill and ForeverArtisan.OthersTradeSkill() then return end -- someone else's (linked in chat): not yours
   local profName, rank, maxRank
   local num
   if api == "craft" then
@@ -1018,7 +1019,8 @@ SlashCmdList.FACONTACTS = function(msg)
     DEFAULT_CHAT_FRAME:AddMessage("  /fa contacts clear confirm  - forget everyone")
   elseif cmd == "tooltips" then
     local st = ForeverArtisanContactsDB.settings
-    st.tooltips = not st.tooltips
+    st.tooltips = not (st.tooltips ~= false and ForeverArtisan.TipOn("sold"))
+    if st.tooltips then ForeverArtisan.SetTip("sold", true, true) end
     say("'Sold by' tooltip lines " .. (st.tooltips and "on." or "off."))
   elseif cmd == "forget" then
     local q = rest:lower()

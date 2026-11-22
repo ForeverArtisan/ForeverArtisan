@@ -125,7 +125,8 @@ local function BuildMainPage(p)
 
   p.checks = {
     Check(p, "Show Blacksmithing info on material tooltips", 16, -412,
-      function() return S().tooltips end, function(v) S().tooltips = v end),
+      function() return S().tooltips and ForeverArtisan.TipOn("prof") end,
+      function(v) S().tooltips = v; if v then ForeverArtisan.SetTip("prof", true, true) end end),
   }
   -- mouse wheel over the list scrolls it
   K.ScrollRows(p.nowAll, "nowOff", function() return (p.nowCount or 0) - #p.rows end)

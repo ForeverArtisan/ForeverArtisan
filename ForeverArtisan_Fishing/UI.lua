@@ -380,8 +380,9 @@ local function RefreshFishingPage(p)
     sl.itemId = sid
     sl.auto = sid and sl.slot ~= "pole" and g[sl.slot] ~= sid
     sl.icon:SetTexture(sid and Icon(sid) or nil)
-    sl.icon:SetDesaturated(sl.auto and true or false)
-    sl.icon:SetAlpha(sl.auto and 0.6 or 1)
+    -- full color either way: gray read as "missing" (Kerry, Nov 20). The tooltip says which it is.
+    sl.icon:SetDesaturated(false)
+    sl.icon:SetAlpha(1)
   end
   local rid = GetInventoryItemID and GetInventoryItemID("player", 18)
   p.ranged.itemId = rid

@@ -47,7 +47,8 @@ local function BuildMainPage(p)
     Check(p, "Remind me about Find Minerals and my Mining Pick", 16, -360,
       function() return S().reminder end, function(v) S().reminder = v; if v then ns.CheckReminders(true) end end),
     Check(p, "Show ore info on tooltips", 16, -386,
-      function() return S().tooltips end, function(v) S().tooltips = v end),
+      function() return S().tooltips and ForeverArtisan.TipOn("gather") end,
+      function(v) S().tooltips = v; if v then ForeverArtisan.SetTip("gather", true, true) end end),
     Check(p, "Chat message for every node", 16, -412,
       function() return S().verbose end, function(v) S().verbose = v end),
   }

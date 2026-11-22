@@ -1,5 +1,17 @@
 # ForeverArtisan changelog
 
+## 0.9.51 (2026-11-22)
+- Fixed: opening a profession someone linked in chat no longer saves it as yours or puts it in your Market list. If your own recipes look off, open your own profession window once and they correct themselves. Thanks to the player who reported it.
+- Added: a Tooltips tab in /fa with an on/off switch for each kind of line ForeverArtisan adds to tooltips: Auction House price, where to sell, Dropped by, Sold by, recipe colors, used in, herbs/ore/leather and disenchant value. Thanks to the player who asked.
+- Fixed: the Fishing weapon swap left your off-hand item in your bags when you'd set a main hand on the Fishing tab. The swap slots also show what you wore in full color now, not gray.
+- Fixed: the "Remind me to check for updates" switch can be turned off again.
+- Fixed: buying the materials on a shopping list could reshuffle the plan, so a list you'd finished grew again (30 vials, then 44). Plans now stay put unless another recipe gets clearly cheaper (20% or more at Auction House prices).
+- Fixed: a trainer you'd only talked to (without opening their training list) was left out of "nearest trainer", so FA could send you to another city. Their training list from the built-in trainer list counts now.
+- Added: click a line on the Goals list for a waypoint to the nearest vendor who sells it (at the Auction House it searches for it instead). Right-click still removes it.
+- Added: right-click a Train line on a shopping list to put it on the Goals list too (Track all includes training). Click it there for a waypoint to the trainer.
+- Changed: an item on two Goals lists (like Hot Spices for Cooking and First Aid) counts what you hold once, and each line says how many to buy in all.
+- Fixed: right after login, a character could get a second, empty record (no fishing pole or swap weapons saved) if the game hadn't given the realm name yet.
+
 ## 0.9.50 (2026-11-20)
 - Fixed: shopping lists counted materials in your bank as already in hand ("5 / 5" with none in your bags). The count is what's in your bags now; "in bank" says what to pick up, in blue when the bank covers it.
 - Fixed: skill-up plans no longer switch recipes when prices move and leave the materials you bought unused. Materials you own count as free when the plan picks a recipe, so it keeps using them.

@@ -81,7 +81,9 @@ local function SkillLive()
       end
     end
   end
-  if C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID then
+  -- (not while the window shows someone else's profession: that would be their skill, 0.9.51)
+  if C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID
+    and not (ForeverArtisan.OthersTradeSkill and ForeverArtisan.OthersTradeSkill()) then
     local ok, info = pcall(C_TradeSkillUI.GetProfessionInfoBySkillLineID, SKINNING_SKILL_LINE)
     if ok and type(info) == "table" and (info.skillLevel or 0) > 0 then
       skillSource = "C_TradeSkillUI"; return info.skillLevel, info.skillModifier, info.maxSkillLevel
@@ -482,7 +484,7 @@ local function LeatherLines(tt, id)
 end
 
 local function ItemTip(tt)
-  if not db or db.settings.tooltips == false or not tt or tt.faSkinDone then return end
+  if not db or db.settings.tooltips == false or not ForeverArtisan.TipOn("gather") or not tt or tt.faSkinDone then return end
   local _, link = tt:GetItem()
   local id = link and tonumber(link:match("item:(%d+)"))
   if not id then return end
@@ -508,7 +510,7 @@ local function TipSaysSkinnable(tt)
 end
 
 local function UnitTip(tt)
-  if not db or db.settings.tooltips == false or not tt or tt.faSkinDone then return end
+  if not db or db.settings.tooltips == false or not ForeverArtisan.TipOn("gather") or not tt or tt.faSkinDone then return end
   local _, unit = tt:GetUnit()
   if not unit or UnitIsPlayer(unit) then return end
   if not (UnitIsDead and UnitIsDead(unit)) or not TipSaysSkinnable(tt) then return end
@@ -524,6 +526,9 @@ local function UnitTip(tt)
 end
 
 ns.UnitTip = function(tt) return UnitTip(tt) end
+
+-- the /fa Tooltips tab's switch turns this window's checkbox back on too (0.9.51)
+if ForeverArtisan.TipOwner then ForeverArtisan.TipOwner("gather", function(on) if db then db.settings.tooltips = on end end) end
 
 local function HookTooltips()
   local function clear(self) self.faSkinDone = nil end
@@ -703,7 +708,8 @@ SlashCmdList.FASKIN = function(msg)
     db.settings.reminder = not db.settings.reminder
     say("Skinning Knife reminder " .. (db.settings.reminder and "on." or "off."))
   elseif cmd == "tooltips" then
-    db.settings.tooltips = not db.settings.tooltips
+    db.settings.tooltips = not (db.settings.tooltips and ForeverArtisan.TipOn("gather"))
+    if db.settings.tooltips then ForeverArtisan.SetTip("gather", true, true) end
     say("Skinning tooltip lines " .. (db.settings.tooltips and "on." or "off."))
   elseif cmd == "verbose" then
     db.settings.verbose = not db.settings.verbose

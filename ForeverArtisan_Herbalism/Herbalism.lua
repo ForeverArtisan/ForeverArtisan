@@ -71,7 +71,9 @@ local function SkillLive()
       end
     end
   end
-  if C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID then
+  -- (not while the window shows someone else's profession: that would be their skill, 0.9.51)
+  if C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID
+    and not (ForeverArtisan.OthersTradeSkill and ForeverArtisan.OthersTradeSkill()) then
     local ok, info = pcall(C_TradeSkillUI.GetProfessionInfoBySkillLineID, HERB_SKILL_LINE)
     if ok and type(info) == "table" and (info.skillLevel or 0) > 0 then
       skillSource = "C_TradeSkillUI"; return info.skillLevel, info.skillModifier, info.maxSkillLevel
@@ -499,7 +501,7 @@ local function HerbLines(tt, id)
 end
 
 local function ItemTip(tt)
-  if not db or db.settings.tooltips == false or not tt or tt.faHerbDone then return end
+  if not db or db.settings.tooltips == false or not ForeverArtisan.TipOn("gather") or not tt or tt.faHerbDone then return end
   local _, link = tt:GetItem()
   local id = link and tonumber(link:match("item:(%d+)"))
   if not id then return end
@@ -510,7 +512,7 @@ end
 
 -- mouse over a herb out in the world: show your color for it
 local function ObjectTip(tt)
-  if not db or db.settings.tooltips == false or not tt or tt.faHerbDone then return end
+  if not db or db.settings.tooltips == false or not ForeverArtisan.TipOn("gather") or not tt or tt.faHerbDone then return end
   local first = _G[tt:GetName() .. "TextLeft1"]
   local name = first and first:GetText()
   local h = name and ns.HerbByNode(name)
@@ -522,6 +524,9 @@ local function ObjectTip(tt)
   if ns.CultivationTip then ns.CultivationTip(tt, h.name) end -- works without Herbalism
   tt:Show()
 end
+
+-- the /fa Tooltips tab's switch turns this window's checkbox back on too (0.9.51)
+if ForeverArtisan.TipOwner then ForeverArtisan.TipOwner("gather", function(on) if db then db.settings.tooltips = on end end) end
 
 local function HookTooltips()
   local function clear(self) self.faHerbDone = nil end
@@ -689,7 +694,8 @@ SlashCmdList.FAHERB = function(msg)
     db.settings.reminder = not db.settings.reminder
     say("Find Herbs reminder " .. (db.settings.reminder and "on." or "off."))
   elseif cmd == "tooltips" then
-    db.settings.tooltips = not db.settings.tooltips
+    db.settings.tooltips = not (db.settings.tooltips and ForeverArtisan.TipOn("gather"))
+    if db.settings.tooltips then ForeverArtisan.SetTip("gather", true, true) end
     say("Herb tooltip lines " .. (db.settings.tooltips and "on." or "off."))
   elseif cmd == "verbose" then
     db.settings.verbose = not db.settings.verbose

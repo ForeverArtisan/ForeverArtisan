@@ -511,7 +511,7 @@ end
 -- One line for item tooltips: the cheapest buyout you've seen at the Auction House.
 -- Nil when Auctionator is installed (it shows its own), when there's no price, or when turned off
 -- (/fa prices off). Vendors aren't repeated here: Trade Contacts already adds "Sold by" lines.
-function FA.PriceTipsOn() return not (ForeverArtisanSettings and ForeverArtisanSettings.priceTips == false) end
+function FA.PriceTipsOn() return FA.TipOn("price") end
 function FA.TooltipPrice(id)
   id = tonumber(id)
   if not id or not FA.PriceTipsOn() then return end

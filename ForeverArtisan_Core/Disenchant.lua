@@ -208,7 +208,8 @@ end
 -- on for everyone (greens usually go to an alt or a friend who enchants, so the one deciding often has no
 -- Enchanting); /fa disenchant off hides it
 function FA.DisenchantTipsOn()
-  return settings().deTips ~= false
+  settings()
+  return FA.TipOn("de")
 end
 
 ---------------------------------------------------------------- your log
@@ -625,8 +626,8 @@ function FA.DisenchantCommand(rest)
     print(PREFIX .. "disenchant debug " .. (s.deDebug and "on: each disenchant says in chat what was seen. /fa disenchant debug again turns it off." or "off."))
     return
   end
-  if r == "on" then s.deTips = nil
-  elseif r == "off" then s.deTips = false end
+  if r == "on" then FA.SetTip("de", true)
+  elseif r == "off" then FA.SetTip("de", false) end
   print(PREFIX .. "Disenchant values on item tooltips (beta): " .. (FA.DisenchantTipsOn() and "on" or "off")
     .. ". " .. GRAY .. "/fa disenchant on | off | log|r")
 end

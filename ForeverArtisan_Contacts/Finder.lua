@@ -64,6 +64,15 @@ local function Rebuild()
       if e.name then full[e.name] = true end
     end
   end
+  -- the built-in trainer list by id and name: a trainer you only talked to (no list yet) gets its
+  -- skills from there (0.9.51: talking to Magar hid his Journeyman Tailoring, so FA sent a player
+  -- standing in Orgrimmar to Undercity)
+  local seedOf = {}
+  if not Settings().seedsOff then
+    for _, sd in ipairs(ns.SEED_TRAINERS or {}) do
+      if ns.SeedFits and ns.SeedFits(sd) then seedOf[sd.id] = sd; seedOf[sd.n] = seedOf[sd.n] or sd end
+    end
+  end
   for key, e in pairs(entries) do
     if setAside(e) then e = {} end
     local chatOnly = e.kind == "service" and e.name and e.title and ns.IsRelevant and ns.IsRelevant(e.title)
@@ -79,6 +88,12 @@ local function Rebuild()
               sk = skillReq(it.requires), lim = it.limited, stack = it.stack }
           end
         end
+      elseif chatOnly and not (e.skills and #e.skills > 0) then
+        local sd = seedOf[e.npcId or false] or seedOf[e.name or false]
+        for _, sk in ipairs(sd and sd.skills or {}) do
+          npc.items[#npc.items + 1] = { n = sk.n, p = sk.p, sk = sk.sk, lv = sk.lv, train = true }
+        end
+        if sd then npc.seed = true end -- the skills are the built-in list's, not what you saw
       else
         for _, sk in ipairs(e.skills or {}) do
           if sk.name then
@@ -638,8 +653,11 @@ ns.RankWord = rankWord
 
 ---------------------------------------------------------------- tooltips
 
+-- the /fa Tooltips tab's "Sold by" switch turns this window's checkbox back on too (0.9.51)
+if FA.TipOwner then FA.TipOwner("sold", function(on) if DB() then DB().settings.tooltips = on end end) end
+
 local function addToTooltip(tt)
-  if not tt or tt.faContactsDone or Settings().tooltips == false then return end
+  if not tt or tt.faContactsDone or Settings().tooltips == false or not FA.TipOn("sold") then return end
   local name, link = tt:GetItem()
   local hits = hitsForLink(link, name)
   local list = {}

@@ -299,10 +299,11 @@ end
 
 local function DropTip(tt, id)
   if not id or tt.faDropTip then return end
-  local line = FA.MaterialWhere(id)
+  -- each kind of line has its own switch on the /fa Tooltips tab (0.9.51)
+  local line = FA.TipOn("drop") and FA.MaterialWhere(id) or nil
   local price = FA.TooltipPrice and FA.TooltipPrice(id)
-  local house = (FA.PriceTipsOn == nil or FA.PriceTipsOn()) and FA.HouseLines and FA.HouseLines(id, 1, "each") or {}
-  local bands = GetItemInfo and FA.RecipeItemBandLines((GetItemInfo(id)))
+  local house = FA.TipOn("sell") and FA.HouseLines and FA.HouseLines(id, 1, "each") or {}
+  local bands = FA.TipOn("recipe") and GetItemInfo and FA.RecipeItemBandLines((GetItemInfo(id))) or nil
   if not line and not price and #house == 0 and not bands then return end
   tt.faDropTip = true
   for i, l in ipairs(bands or {}) do tt:AddLine((i == 1 and (FA.GOLD .. "ForeverArtisan:|r ") or "") .. l, 1, 1, 1, true) end
@@ -639,7 +640,26 @@ end
 -- The best skill-up chance wins (score adds a bonus for things you can make from your bags).
 -- Recipes within 0.1 of the best are close enough to compare money: when all of them have
 -- prices, the cheapest per skill point wins. Otherwise fewer materials breaks an exact tie.
-function ForeverArtisan.PickRecipe(opts, money)
+-- prefer (0.9.51): the recipe the last plan used at this skill. It stays unless another is clearly
+-- better: a skill-up chance more than 0.1 higher, or at least 20% cheaper per skill point at market
+-- prices (market(r); what you own doesn't count here). Buying the materials for a plan, or a small
+-- price move, no longer reshuffles it (Kerry, Nov 22: "It said buy 30, I did, then it moved to 44.
+-- This looks really bad").
+local STEADY = 1.2
+function ForeverArtisan.PickRecipe(opts, money, prefer, market)
+  local best = ForeverArtisan.PickRecipeRaw(opts, money)
+  if not (best and prefer and best.r.name ~= prefer) then return best end
+  local p
+  for _, o in ipairs(opts) do if o.r.name == prefer then p = o end end
+  local price = market or money
+  if not p or p.ch < best.ch - 0.1 or not price then return best end
+  -- only when both have prices: without them the pick doesn't move with your purchases anyway
+  local mp, mb = price(p.r), price(best.r)
+  if not (mp and mb) or mp / p.ch > (mb / best.ch) * STEADY + 0.5 then return best end
+  return p
+end
+
+function ForeverArtisan.PickRecipeRaw(opts, money)
   local top
   for _, o in ipairs(opts) do if not top or o.score > top.score + 0.001 then top = o end end
   if not top then return nil end
@@ -684,6 +704,11 @@ function ForeverArtisan.TrainShopRows(shopping, skill)
   end)
   local rows = {}
   local CLICK = "\n|cff80c0ffClick for a waypoint to %s|r"
+  -- right-click puts a Train line on the on-screen goals list too (0.9.52)
+  local T = FA.Track
+  local MARK = "|TInterface\\RaidFrame\\ReadyCheck-Ready:12|t "
+  local function on(e) return T and T.TrainTracked and T.TrainTracked(e.name) end
+  local function trackTip(t) return "\n|cff80c0ff" .. (t and "Right-click to stop tracking it on screen" or "Right-click to track it on screen") .. "|r" end
   if #now > 0 then
     local names, lines, cost, npc = {}, {}, 0, nil
     for _, e in ipairs(now) do
@@ -694,19 +719,22 @@ function ForeverArtisan.TrainShopRows(shopping, skill)
       lines[#lines + 1] = n .. (e.price and ("  " .. FA.Money(e.price)) or "")
         .. (e.train.who and (FA.GRAY .. "  ·  " .. e.train.who .. "|r") or "")
     end
-    rows[#rows + 1] = { icon = 136235, tipTitle = "Train now",
-      left = FA.YELLOW .. "Train now: " .. table.concat(names, ", ") .. "|r",
+    local allOn = true
+    for _, e in ipairs(now) do if not on(e) then allOn = false end end
+    rows[#rows + 1] = { icon = 136235, tipTitle = "Train now", entry = { group = now },
+      left = (allOn and MARK or "") .. FA.YELLOW .. "Train now: " .. table.concat(names, ", ") .. "|r",
       right = FA.YELLOW .. #now .. " to learn|r" .. (cost > 0 and (FA.GRAY .. "  ·  " .. FA.Money(cost) .. "|r") or ""),
       waypoint = npc,
       tip = "Your skill is high enough to learn these now, in one trip:\n" .. table.concat(lines, "\n")
-        .. (npc and npc.n and CLICK:format(npc.n) or "") }
+        .. (npc and npc.n and CLICK:format(npc.n) or "") .. trackTip(allOn) }
   end
   for _, e in ipairs(later) do
-    rows[#rows + 1] = { icon = 136235, tipTitle = e.name,
-      left = FA.YELLOW .. e.name .. "|r",
+    local t = on(e)
+    rows[#rows + 1] = { icon = 136235, tipTitle = e.name, entry = e,
+      left = (t and MARK or "") .. FA.YELLOW .. e.name .. "|r",
       right = FA.YELLOW .. ("at %d"):format(e.train.at) .. "|r" .. (e.price and (FA.GRAY .. "  ·  " .. FA.Money(e.price) .. "|r") or ""),
       waypoint = e.train.npc,
-      tip = e.source .. (e.train.npc and e.train.npc.n and CLICK:format(e.train.npc.n) or "") }
+      tip = e.source .. (e.train.npc and e.train.npc.n and CLICK:format(e.train.npc.n) or "") .. trackTip(t) }
   end
   return rows
 end

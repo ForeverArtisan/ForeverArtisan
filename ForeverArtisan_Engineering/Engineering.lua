@@ -84,7 +84,9 @@ local function SkillLive()
       end
     end
   end
-  if C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID then
+  -- (not while the window shows someone else's profession: that would be their skill, 0.9.51)
+  if C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID
+    and not (ForeverArtisan.OthersTradeSkill and ForeverArtisan.OthersTradeSkill()) then
     local ok, info = pcall(C_TradeSkillUI.GetProfessionInfoBySkillLineID, SKILL_LINE)
     if ok and type(info) == "table" and (info.skillLevel or 0) > 0 then
       return info.skillLevel, info.skillModifier, info.maxSkillLevel
@@ -392,6 +394,8 @@ end
 
 local function Scan()
   if not db then return end
+  -- someone else's recipes (linked in chat, a guild member's): not yours (0.9.51)
+  if ForeverArtisan.OthersTradeSkill and ForeverArtisan.OthersTradeSkill() then return end
   local got = ScanModern() or ScanOld() or ScanCraft()
   if not got or next(got) == nil then return end
   local c, n, learned = CharRec(), 0, 0
@@ -654,7 +658,11 @@ function ns.Plan(target)
     if ForeverArtisan.OwnedMoney then return ForeverArtisan.OwnedMoney(r, Have, makes, moneyMemo) end
     return ForeverArtisan.CraftMoney(r, makes, moneyMemo)
   end
+  -- market price only (what you own doesn't count): whether a cheaper recipe is worth leaving the last plan's
+  local function Market(r) return ForeverArtisan.CraftMoney(r, makes, moneyMemo) end
 
+  -- the last plan's picks, so buying its materials doesn't reshuffle it (0.9.51)
+  local prevPicks, newPicks = (not ahead and CharRec().planPicks) or {}, {}
   local steps, stuck = {}, nil
   while math.floor(s) < target and total < PLAN_LIMIT do
     local at = math.floor(s)
@@ -668,7 +676,8 @@ function ns.Plan(target)
         opts[#opts + 1] = { r = r, ch = ch, bag = canMake[r], mats = Cost(r), score = ch + (canMake[r] and 0.15 or 0) }
       end
     end
-    local pick = ForeverArtisan.PickRecipe(opts, Money)
+    local pick = ForeverArtisan.PickRecipe(opts, Money, prevPicks[at], Market)
+    if pick then newPicks[at] = pick.r.name end
     if not pick then stuck = at; break end
     local best = pick.r
     if not cur or cur.r ~= best then
@@ -682,6 +691,10 @@ function ns.Plan(target)
     cur.to = math.floor(s)
   end
   if not stuck and math.floor(s) < target then stuck = math.floor(s) end
+  if not ahead then
+    local c = CharRec(); c.planPicks = c.planPicks or {}
+    for k, v in pairs(newPicks) do c.planPicks[k] = v end
+  end
 
   local shopping = {}
   -- tools the planned crafts need (not stations): one each, kept in your bags
@@ -890,7 +903,7 @@ local function RecipeNameFromItem(name)
 end
 
 local function ItemTip(tt)
-  if not db or db.settings.tooltips == false or not tt or tt.faEngDone then return end
+  if not db or db.settings.tooltips == false or not ForeverArtisan.TipOn("prof") or not tt or tt.faEngDone then return end
   local name, link = tt:GetItem()
   local id = link and tonumber(link:match("item:(%d+)"))
   if not id then return end
@@ -923,6 +936,9 @@ local function ItemTip(tt)
   if #uses > 3 then tt:AddLine(GRAY .. "  +" .. (#uses - 3) .. " more|r") end
   tt:Show()
 end
+
+-- the /fa Tooltips tab's switch turns this window's checkbox back on too (0.9.51)
+if ForeverArtisan.TipOwner then ForeverArtisan.TipOwner("prof", function(on) if db then db.settings.tooltips = on end end) end
 
 local function HookTooltips()
   local function clear(self) self.faEngDone = nil end
@@ -1100,7 +1116,8 @@ SlashCmdList.FAENG = function(msg)
     local costLine = ns.ShopCostText(shopping)
     if costLine then say(costLine) end
   elseif cmd == "tooltips" then
-    db.settings.tooltips = not db.settings.tooltips
+    db.settings.tooltips = not (db.settings.tooltips and ForeverArtisan.TipOn("prof"))
+    if db.settings.tooltips then ForeverArtisan.SetTip("prof", true, true) end
     say(PROF .. " tooltip lines " .. (db.settings.tooltips and "on." or "off."))
   elseif cmd == "reset" and rest:lower() == "confirm" then
     ns.ResetLog()

@@ -50,8 +50,22 @@ local function GatheredBy(id)
   if ok and classID == 7 then return GATHER_SUB[subID] end
 end
 
--- the shopping list entries we can track: real items, not "Train ..." lines
-local function Trackable(e) return e and type(e.id) == "number" and not e.train and (e.need or 0) > 0 end
+-- the shopping list entries we can track: real items, and "Train ..." lines (0.9.52, Kerry: "add
+-- training to this list"). A Train line is saved under "train:<name>" with its trainer.
+local function Trackable(e)
+  if not e then return false end
+  if e.train then return type(e.name) == "string" end
+  return type(e.id) == "number" and (e.need or 0) > 0
+end
+local function Key(e) return e.train and ("train:" .. e.name) or e.id end
+local function Mini(n)
+  if type(n) ~= "table" then return nil end
+  return { n = n.n, s = n.s, z = n.z, m = n.m, x = n.x, y = n.y, id = n.id }
+end
+local function Saved(e)
+  if e.train then return { name = e.name, want = 1, train = { at = e.train.at, who = e.train.who, npc = Mini(e.train.npc) } } end
+  return { name = e.name, want = e.need }
+end
 
 local Refresh -- below
 
@@ -62,19 +76,39 @@ end
 function T.AllOn(prof) return S().all[prof] and true or false end
 
 function T.Toggle(prof, e)
+  -- the "Train now" line: every recipe on it at once (on unless they're all on already)
+  if e and e.group then
+    local s = S()
+    s.items[prof] = s.items[prof] or {}
+    local p, allOn = s.items[prof], true
+    for _, x in ipairs(e.group) do if Trackable(x) and not p[Key(x)] then allOn = false end end
+    for _, x in ipairs(e.group) do
+      if Trackable(x) then if allOn then p[Key(x)] = nil else p[Key(x)] = Saved(x) end end
+    end
+    if allOn then s.all[prof] = nil else s.hidden = nil end
+    if not next(p) then s.items[prof] = nil end
+    Refresh()
+    return not allOn
+  end
   if not Trackable(e) then return end
   local s = S()
   s.items[prof] = s.items[prof] or {}
-  local p = s.items[prof]
-  if p[e.id] then
-    p[e.id] = nil
+  local p, k = s.items[prof], Key(e)
+  if p[k] then
+    p[k] = nil
     s.all[prof] = nil
   else
-    p[e.id] = { name = e.name, want = e.need }
+    p[k] = Saved(e)
     s.hidden = nil
   end
   Refresh()
-  return p[e.id] ~= nil
+  return p[k] ~= nil
+end
+
+-- a Train line is on screen (any profession): for the check mark on shopping lists
+function T.TrainTracked(name)
+  for _, p in pairs(S().items) do if p["train:" .. tostring(name)] then return true end end
+  return false
 end
 
 function T.TrackAll(prof, list)
@@ -82,7 +116,7 @@ function T.TrackAll(prof, list)
   s.items[prof] = s.items[prof] or {}
   local n = 0
   for _, e in ipairs(list or {}) do
-    if Trackable(e) and e.have < e.need then s.items[prof][e.id] = { name = e.name, want = e.need }; n = n + 1 end
+    if Trackable(e) and (e.have or 0) < (e.need or 1) then s.items[prof][Key(e)] = Saved(e); n = n + 1 end
   end
   s.all[prof] = true
   s.hidden = nil
@@ -106,9 +140,11 @@ function T.Sync(prof, list)
   local seen = {}
   for _, e in ipairs(list or {}) do
     if Trackable(e) then
-      seen[e.id] = true
-      if p[e.id] then p[e.id].want, p[e.id].name = e.need, e.name or p[e.id].name
-      elseif s.all[prof] and e.have < e.need then p[e.id] = { name = e.name, want = e.need } end
+      local k = Key(e)
+      seen[k] = true
+      if p[k] then
+        if e.train then p[k] = Saved(e) else p[k].want, p[k].name = e.need, e.name or p[k].name end
+      elseif s.all[prof] and (e.have or 0) < (e.need or 1) then p[k] = Saved(e) end
     end
   end
   for id in pairs(p) do if not seen[id] then p[id] = nil end end
@@ -133,7 +169,7 @@ end
 function T.RemoveLine(ln)
   if not ln then return end
   S().removedOnce = true -- they've found it: the hint under the list can go
-  if ln.shopProf then T.Untrack(ln.shopProf, ln.id)
+  if ln.shopProf then T.Untrack(ln.shopProf, ln.key or ln.id)
   elseif ln.goalProf and goalRemove[ln.goalProf] and ln.goalIndex then
     pcall(goalRemove[ln.goalProf], ln.goalIndex)
     Refresh()
@@ -160,7 +196,8 @@ function T.Lines()
     line.done = line.have >= line.want
     if line.done then
       doneAt[key] = doneAt[key] or now
-      line.gone = (now - doneAt[key]) >= DONE_HOLD
+      -- a done line whose item another list still needs stays (green), so the shared count adds up
+      line.gone = (now - doneAt[key]) >= DONE_HOLD and not line.hold
     else
       doneAt[key] = nil
     end
@@ -171,18 +208,50 @@ function T.Lines()
   local profs = {}
   for prof in pairs(s.items) do profs[#profs + 1] = prof end
   table.sort(profs)
+  -- the same item on more than one list (Hot Spices for Cooking and First Aid): what you hold counts
+  -- once, filling the lists in order, and each line says how many to buy in all (Kerry, Nov 22)
+  local total, lists, left = {}, {}, {}
+  for _, prof in ipairs(profs) do
+    for id, it in pairs(s.items[prof]) do
+      if type(id) == "number" then
+        total[id] = (total[id] or 0) + (it.want or 1)
+        lists[id] = lists[id] or {}
+        table.insert(lists[id], prof)
+      end
+    end
+  end
+  for id, l in pairs(lists) do if #l > 1 then left[id] = Own(id) end end
   for _, prof in ipairs(profs) do
     local ids = {}
     for id in pairs(s.items[prof]) do ids[#ids + 1] = id end
-    table.sort(ids, function(a, b) return (s.items[prof][a].name or "") < (s.items[prof][b].name or "") end)
+    -- training first, then the items by name
+    table.sort(ids, function(a, b)
+      local ta, tb = type(a) == "string", type(b) == "string"
+      if ta ~= tb then return ta end
+      return (s.items[prof][a].name or "") < (s.items[prof][b].name or "")
+    end)
     for _, id in ipairs(ids) do
       local it = s.items[prof][id]
+      if type(id) == "string" then
+        -- a Train line: it drops off once you've learned it (the plan stops listing it)
+        Add(prof .. " shopping", "s:" .. prof .. ":" .. id,
+          { key = id, name = it.name or id, have = 0, want = 1, train = it.train or {}, shopProf = prof })
+      else
       local by = GatheredBy(id)
+      local want, have, shared, hold = it.want or 1, Own(id), nil, nil
+      if left[id] then
+        local own = have
+        have = math.min(left[id], want)
+        left[id] = left[id] - have
+        shared = { total = total[id], own = own, lists = lists[id], buy = math.max(0, total[id] - own) }
+        if shared.buy > 0 then hold = true end
+      end
       local line = Add(by or (prof .. " shopping"), "s:" .. prof .. ":" .. id,
-        { id = id, name = it.name or ("item " .. id), have = Own(id), want = it.want or 1, note = by and prof or nil,
-          shopProf = prof })
+        { id = id, name = it.name or ("item " .. id), have = have, want = want, note = by and prof or nil,
+          shopProf = prof, shared = shared, hold = hold })
       -- finished and gone: no longer tracked
       if line.gone then s.items[prof][id] = nil end
+      end
     end
     if not next(s.items[prof]) then s.items[prof] = nil; s.all[prof] = nil end
   end
@@ -261,6 +330,29 @@ local function Build()
   else f:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -90, -330) end
 end
 
+-- the nearest vendor you've met (or Questie's) who sells a line's item, or nil
+function T.Nearest(ln)
+  if ln and ln.train then return ln.train.npc end -- a Train line: its trainer
+  if not (ln and type(ln.id) == "number" and FA.VendorNPC) then return nil end
+  local ok, npc = pcall(FA.VendorNPC, ln.id, ln.name)
+  return ok and npc or nil
+end
+
+-- left-click a line: search it at the Auction House when it's open, else a waypoint to the nearest vendor
+function T.GoTo(ln)
+  if ln and ln.train then
+    local npc = ln.train.npc
+    if npc and FA.Vendors and FA.Vendors.waypoint then FA.Vendors.waypoint(npc) return end
+    say(("No trainer known yet for %s. Trade Contacts finds trainers you meet (or Questie's)."):format(ln.name or "that"))
+    return
+  end
+  if not ln or type(ln.id) ~= "number" then return end
+  if FA.SearchAH and FA.SearchAH(ln.name) then return end
+  local npc = T.Nearest(ln)
+  if npc and FA.Vendors and FA.Vendors.waypoint then FA.Vendors.waypoint(npc) return end
+  say(("No vendor you've met sells %s. At the Auction House, click it here to search for it."):format(ln.name or "that"))
+end
+
 local function Line(i)
   local l = pool[i]
   if not l then
@@ -268,16 +360,36 @@ local function Line(i)
     l.text = FA.UI.Text(f, "GameFontHighlightSmall", "TOPLEFT", 0, 0)
     l.text:SetWidth(W - 16); l.text:SetWordWrap(false)
     l.bar = FA.UI.Bar(f, W - 26, 2)
-    -- the line is a button: hover for the item, right-click to stop tracking it
+    -- the line is a button: hover for the item, click for the nearest vendor (at the Auction House:
+    -- search it), right-click to stop tracking it (left-click: Discord ask, Nov 22)
     l.btn = CreateFrame("Button", nil, f)
     l.btn:SetPoint("TOPLEFT", l.text, "TOPLEFT", 0, 1); l.btn:SetSize(W - 20, ROW_H)
-    l.btn:RegisterForClicks("RightButtonUp")
-    l.btn:SetScript("OnClick", function(self) T.RemoveLine(self.ln) end)
+    l.btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    l.btn:SetScript("OnClick", function(self, button)
+      local ln = self.ln
+      if not ln then return end
+      if button == "RightButton" then T.RemoveLine(ln) return end
+      T.GoTo(ln)
+    end)
     l.btn:SetScript("OnEnter", function(self)
       local ln = self.ln
       if not ln then return end
       GameTooltip:SetOwner(self, "ANCHOR_LEFT")
       if ln.id and GameTooltip.SetItemByID then GameTooltip:SetItemByID(ln.id) else GameTooltip:AddLine(ln.name or "") end
+      if ln.shared then
+        local sh = ln.shared
+        GameTooltip:AddLine(("On %d lists: %d in all. You have %d, so buy %d."):format(#sh.lists, sh.total, sh.own, sh.buy), 1, 1, 1, true)
+      end
+      local npc = T.Nearest(ln)
+      if ln.train then
+        if ln.train.who then GameTooltip:AddLine("Learn it at " .. (ln.train.at or "?") .. " from " .. ln.train.who, 1, 1, 1, true) end
+        if npc and npc.n then GameTooltip:AddLine("Click for a waypoint to " .. npc.n .. ", " .. (npc.s or npc.z or "?"), 0.5, 0.75, 1, true) end
+      elseif npc then
+        GameTooltip:AddLine("Click for a waypoint to " .. npc.n .. ", " .. (npc.s or npc.z or "?")
+          .. " (at the Auction House: search it)", 0.5, 0.75, 1, true)
+      elseif type(ln.id) == "number" then
+        GameTooltip:AddLine("At the Auction House: click to search it", 0.5, 0.75, 1)
+      end
       GameTooltip:AddLine(ln.goalProf and "Right-click to remove this goal" or "Right-click to stop tracking it", 0.5, 0.75, 1)
       GameTooltip:Show()
     end)
@@ -314,12 +426,17 @@ function Refresh()
         l.text:ClearAllPoints(); l.text:SetPoint("TOPLEFT", 16, y)
         l.text:SetFontObject("GameFontHighlightSmall")
         local count = ("%d / %d"):format(math.min(ln.have, ln.want), ln.want)
+        if ln.train then count = ln.train.at and ("at " .. ln.train.at) or "" end
+        -- on more than one list: how many to buy for all of them together
+        if ln.shared and not ln.done and ln.shared.buy > 0 then
+          count = count .. GRAY .. "  (buy " .. ln.shared.buy .. " in all)|r"
+        end
         l.text:SetText(ln.done and (GREEN .. ln.name .. "  " .. count .. "  done|r")
           or (ln.name .. "  " .. count .. (ln.note and (GRAY .. "  (" .. ln.note .. ")|r") or "")))
         l.text:Show()
         l.btn.ln = ln; l.btn:EnableMouse(not s.locked); l.btn:Show()
         l.bar:ClearAllPoints(); l.bar:SetPoint("TOPLEFT", 16, y - ROW_H + 3)
-        l.bar:Set(ln.have / math.max(ln.want, 1), ln.done and "done" or nil); l.bar:SetShown(not ln.done)
+        l.bar:Set(ln.have / math.max(ln.want, 1), ln.done and "done" or nil); l.bar:SetShown(not ln.done and not ln.train)
         y = y - ROW_H - 2
       end
       y = y - 2
@@ -329,7 +446,7 @@ function Refresh()
   -- a small hint under the list (hidden while locked: lines don't take clicks then)
   if not f.hint then
     f.hint = FA.UI.Text(f, "GameFontDisableSmall", "TOPLEFT", 8, 0)
-    f.hint:SetText("Right-click a line to remove it")
+    f.hint:SetText("Click: nearest vendor  ·  Right-click: remove")
   end
   if not s.folded and not s.locked then
     f.hint:ClearAllPoints(); f.hint:SetPoint("TOPLEFT", 8, y - 2); f.hint:Show()

@@ -616,7 +616,12 @@ function ns.GearSet()
   -- swap back to what you wore right before the pole, unless you set the slots since then
   local mh, oh
   if last.mh and (not g.mh or (last.at or 0) >= (g.at or 0)) then mh, oh = last.mh, last.oh
-  else mh, oh = g.mh, g.oh end
+  else
+    mh, oh = g.mh, g.oh
+    -- an empty Off hand slot (never filled, or right-click cleared) means "what I wear", not
+    -- "nothing": a held-in-off-hand item like Runic Stave was left out of the swap back
+    if not oh and last.oh and last.oh ~= mh then oh = last.oh end
+  end
   if not mh then mh, oh = last.mh, (g.oh or last.oh) end
   if EquipLoc(mh) == "INVTYPE_2HWEAPON" then oh = nil end
   return mh, oh, c.pole
@@ -852,7 +857,9 @@ FishingSkillLive = function()
     end
   end
   -- 2) modern: C_TradeSkillUI by skill line id
-  if C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID then
+  -- (not while the window shows someone else's profession: that would be their skill, 0.9.51)
+  if C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID
+    and not (ForeverArtisan.OthersTradeSkill and ForeverArtisan.OthersTradeSkill()) then
     local ok, info = pcall(C_TradeSkillUI.GetProfessionInfoBySkillLineID, FISHING_SKILL_LINE)
     if ok and type(info) == "table" and (info.skillLevel or 0) > 0 then
       skillSource = "C_TradeSkillUI"; return info.skillLevel, info.skillModifier, info.maxSkillLevel

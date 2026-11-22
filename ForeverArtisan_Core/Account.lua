@@ -194,6 +194,7 @@ end
 -- the open profession window: every recipe it says is on cooldown
 local function ReadTradeSkill()
   if not (GetNumTradeSkills and GetTradeSkillInfo and GetTradeSkillCooldown) then return end
+  if FA.OthersTradeSkill and FA.OthersTradeSkill() then return end -- someone else's cooldowns
   local ok, n = pcall(GetNumTradeSkills)
   for i = 1, (ok and tonumber(n) or 0) do
     local ok2, name, kind = pcall(GetTradeSkillInfo, i)

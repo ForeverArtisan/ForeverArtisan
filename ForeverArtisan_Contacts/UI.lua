@@ -561,7 +561,8 @@ local function BuildListPage(p)
   p.header = Text(p, "GameFontDisableSmall", "TOPLEFT", 20, -32 - LIST_ROWS * 24 - 4); p.header:SetWidth(430)
   p.checks = {
     Check(p, "Show 'Sold by' on item tooltips", 16, -420,
-      function() return S().tooltips ~= false end, function(v) S().tooltips = v end),
+      function() return S().tooltips ~= false and ForeverArtisan.TipOn("sold") end,
+      function(v) S().tooltips = v; if v then ForeverArtisan.SetTip("sold", true, true) end end),
   }
   p.under = { { p.header, 20, -32 - LIST_ROWS * 24 - 4 }, { p.checks[1], 16, -420 } }
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 18, p, "BOTTOMLEFT"); help:SetWidth(430)

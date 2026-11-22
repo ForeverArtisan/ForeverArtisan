@@ -27,6 +27,7 @@ local function obj()
     if k=="SetSize" then return function(s,w,h) s._w, s._h = w, h end end
     if k=="SetFrameStrata" then return function(s,v) s._strata=v end end
     if k=="SetToplevel" then return function(s,v) s._top=v end end
+    if k=="SetDesaturated" then return function(s,v) s._desat=v end end
     if k=="Raise" then return function(s) s._raised=(rawget(s,"_raised") or 0)+1 end end
     if k=="SetWidth" then return function(s,w) s._w=w end end
     if k=="GetWidth" then return function(s) return s._w end end
@@ -3035,13 +3036,17 @@ do
   FA.QuestieStatus, FA.Vendors.counts = oQS, oC
   -- Settings: the slash-command switches as boxes
   local R=pnl.settingRows
-  for _,k in ipairs({"minimap","prices","updates","questie","seeds","alts","gather","titles"}) do assert(R[k], "setting "..k) end
+  -- 0.9.51: the tooltip switches moved to the Tooltips tab (tip_<kind>)
+  for _,k in ipairs({"minimap","tip_price","updates","questie","seeds","alts","gather","titles"}) do assert(R[k], "setting "..k) end
   local function click(k, on) R[k].check._checked=on; R[k].check.GetChecked=function() return on end; R[k].check.scripts.OnClick(R[k].check) end
-  click("prices", false); assert(ForeverArtisanSettings.priceTips==false and not FA.PriceTipsOn(), "prices off")
-  click("prices", true); assert(FA.PriceTipsOn(), "prices back on")
-  assert(R.detips, "setting detips")
-  click("detips", false); assert(ForeverArtisanSettings.deTips==false and not FA.DisenchantTipsOn(), "disenchant tooltips off")
-  click("detips", true); assert(FA.DisenchantTipsOn() and ForeverArtisanSettings.deTips==nil, "disenchant tooltips back on")
+  click("tip_price", false); assert(ForeverArtisanSettings.priceTips==false and not FA.PriceTipsOn(), "prices off")
+  click("tip_price", true); assert(FA.PriceTipsOn(), "prices back on")
+  assert(R.tip_de, "setting tip_de")
+  click("tip_de", false); assert(ForeverArtisanSettings.deTips==false and not FA.DisenchantTipsOn(), "disenchant tooltips off")
+  click("tip_de", true); assert(FA.DisenchantTipsOn() and ForeverArtisanSettings.deTips==nil, "disenchant tooltips back on")
+  -- the update reminder could never be turned off ("(not on) and false or nil" is always nil)
+  click("updates", false); assert(ForeverArtisanSettings.updateCheck==false and not FA.UpdateCheckOn(), "update reminder off")
+  click("updates", true); assert(FA.UpdateCheckOn() and ForeverArtisanSettings.updateCheck==nil, "update reminder back on")
   local hidden0=ForeverArtisanSettings.minimapHide
   click("minimap", false); assert(ForeverArtisanSettings.minimapHide, "minimap hidden")
   click("minimap", true); assert(not ForeverArtisanSettings.minimapHide, "minimap shown")
@@ -3764,15 +3769,15 @@ do
   T.TrackAll("Tailoring", shopping)
   local before=0 for _,id in ipairs(items) do if T.IsTracked("Tailoring", id.id) then before=before+1 end end
   local line
-  for _,g in ipairs(T.Lines()) do for _,l in ipairs(g.lines) do if l.shopProf=="Tailoring" and not line then line=l end end end
+  for _,g in ipairs(T.Lines()) do for _,l in ipairs(g.lines) do if l.shopProf=="Tailoring" and not l.train and not line then line=l end end end
   assert(line, "a shopping line on screen")
   T.Refresh()
   local hit
   for _,f in ipairs(frames) do local ln=rawget(f,"ln") if type(ln)=="table" and ln.id==line.id and f.scripts.OnClick then hit=f end end
-  local hintShown for _,x in ipairs(fonts) do if rawget(x,"_text")=="Right-click a line to remove it" and rawget(x,"_shown") then hintShown=true end end
+  local hintShown for _,x in ipairs(fonts) do if rawget(x,"_text")=="Click: nearest vendor  ·  Right-click: remove" and rawget(x,"_shown") then hintShown=true end end
   assert(hintShown, "hint under the list")
   assert(hit, "line button")
-  hit.scripts.OnClick(hit)
+  hit.scripts.OnClick(hit, "RightButton")
   assert(not T.IsTracked("Tailoring", line.id) and not T.AllOn("Tailoring"), "right-click removes it")
   T.Refresh()
   local after=0 for _,id in ipairs(items) do if T.IsTracked("Tailoring", id.id) then after=after+1 end end
@@ -4287,5 +4292,280 @@ do
   assert(pick.r==potion, "(market price alone would switch to potions)")
   FA.ItemPrice=oIP
   print("0.9.50 plans use what you own ok")
+end
+do -- 0.9.51: an empty Off hand slot swaps back to the off hand you wear (Runic Stave, held in off hand)
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local realT, realInv = time, GetInventoryItemID
+  GetInventoryItemID=function(_,slot) if slot==16 then return 3269 elseif slot==17 then return 15945 end end
+  time=function() return realT()+1000 end
+  fns.SetGear("mh",3269)
+  fns.TrackGear()
+  time=function() return realT()+2000 end
+  fns.SetGear("oh",nil) -- right-click clear, newer than what you wore
+  local m,o=fns.GearSet()
+  assert(m==3269 and o==15945, "cleared Off hand slot keeps the stave: "..tostring(m).." "..tostring(o))
+  -- the Fishing tab shows it in full color (gray read as "missing"): same as a slot you filled
+  local function grays()
+    for _,x in ipairs(fonts) do x._desat=nil end
+    ForeverArtisanFishingToggle()
+    for _,b in ipairs(frames) do if b._text=="Fishing" and b.scripts.OnClick then pcall(b.scripts.OnClick,b) end end
+    local n=0
+    for _,x in ipairs(fonts) do if rawget(x,"_desat") then n=n+1 end end
+    ForeverArtisanFishingToggle()
+    return n
+  end
+  local auto=grays()
+  fns.SetGear("oh",15945)
+  local filled=grays()
+  assert(auto==filled, "weapon swap slots in full color: "..auto.." gray vs "..filled)
+  fns.SetGear("oh",nil)
+  -- a filled Off hand slot still wins
+  fns.SetGear("oh",2222)
+  assert(select(2,fns.GearSet())==2222, "filled Off hand slot wins")
+  fns.SetGear("mh",nil); fns.SetGear("oh",nil)
+  time, GetInventoryItemID = realT, realInv
+  print("0.9.51 off hand kept ok")
+end
+do -- 0.9.51: an empty realm name at login finds the character's record instead of making "Name--GUID"
+  local FA=ForeverArtisan
+  local oR, oN, oG = GetRealmName, UnitName, UnitGUID
+  GetRealmName=function() return "" end UnitName=function() return "Abigail" end UnitGUID=function() return "Player-1-03D5EC40" end
+  local t={ ["Abigail-Realm 11-03D5EC40"]={ pole=6256 }, ["Abigail-Realm 11-0000AAAA"]={} }
+  assert(FA.CharKey(t)=="Abigail-Realm 11-03D5EC40", "empty realm: same record: "..tostring(FA.CharKey(t)))
+  assert(FA.CharKey({})=="Abigail--03D5EC40", "nothing known yet: the old key")
+  GetRealmName=function() return "Realm 11" end
+  assert(FA.CharKey(t)=="Abigail-Realm 11-03D5EC40", "realm known: unchanged")
+  GetRealmName, UnitName, UnitGUID = oR, oN, oG
+  print("0.9.51 empty realm key ok")
+end
+do -- 0.9.51: one switch per kind of tooltip line (/fa Tooltips tab); "Dropped by" can be turned off (Discord)
+  local FA=ForeverArtisan
+  -- earlier tests click every button on the panel (All off among them): start from defaults
+  ForeverArtisanSettings.tips=nil; ForeverArtisanSettings.priceTips=nil; ForeverArtisanSettings.deTips=nil
+  local cbs={}
+  rawset(_G,"TooltipDataProcessor",{AddTooltipPostCall=function(kind,fn) if kind==0 then cbs[#cbs+1]=fn end end})
+  rawset(_G,"Enum",{TooltipDataType={Item=0,Object=1,Unit=2}})
+  fire("PLAYER_LOGIN")
+  rawset(_G,"TooltipDataProcessor",nil); rawset(_G,"Enum",nil)
+  local lines={}
+  local tt=GameTooltip
+  local function show(id, name)
+    lines={}
+    for _,k in ipairs({"faDropTip","faTailorDone","faHerbDone","faAidDone","faCookDone","faContactsDone","__faDE"}) do rawset(tt,k,nil) end
+    rawset(tt,"AddLine",function(_,l) lines[#lines+1]=tostring(l) end)
+    rawset(tt,"AddDoubleLine",function(_,l,r) lines[#lines+1]=tostring(l).." "..tostring(r) end)
+    rawset(tt,"GetItem",function() return name, "|Hitem:"..id..":::|h["..name.."]|h" end)
+    for _,fn in ipairs(cbs) do pcall(fn, tt, {id=id}) end
+    return table.concat(lines,"\n")
+  end
+  assert(#cbs>=5, "tooltip hooks: "..#cbs)
+  local before=show(12223,"Bat Wing")
+  assert(before:find("Dropped by Mangy Duskbat"), "dropped by line shows: "..before)
+  FA.SetTip("drop", false)
+  local after=show(12223,"Bat Wing")
+  assert(not after:find("Dropped by"), "dropped by off: "..after)
+  assert(FA.TipOn("price") and FA.TipOn("sold"), "only that line is off")
+  FA.SetTip("drop", true)
+  assert(show(12223,"Bat Wing"):find("Dropped by"), "dropped by back on")
+  -- the Tooltips tab: one row per kind, clicking one sets that switch
+  FA.ShowPanel("tips")
+  local pnl=_G.ForeverArtisanPanel
+  local R=pnl.settingRows
+  for _,k in ipairs(FA.TIP_KINDS) do assert(R["tip_"..k.key], "tooltips tab row "..k.key) end
+  local c=R.tip_drop.check
+  c.GetChecked=function() return false end; c.scripts.OnClick(c)
+  assert(not FA.TipOn("drop") and ForeverArtisanSettings.tips.drop==false, "tab turns Dropped by off")
+  c.GetChecked=function() return true end; c.scripts.OnClick(c)
+  assert(FA.TipOn("drop") and not (ForeverArtisanSettings.tips and ForeverArtisanSettings.tips.drop==false), "tab turns it back on")
+  -- profession lines: the tab's switch covers every profession; turning it on again also turns
+  -- a window that was off back on; a window's own checkbox still works for that window alone
+  local herb=loadedFrames["ForeverArtisan_Herbalism"].ns
+  local hs=herb.DB().settings
+  hs.tooltips=false
+  FA.SetTip("gather", false)
+  assert(not FA.TipOn("gather"), "gather off")
+  FA.SetTip("gather", true)
+  assert(hs.tooltips==true, "the tab's switch turns the herb window's checkbox back on")
+  hs.tooltips=false
+  FA.SetTip("gather", true, true)
+  assert(hs.tooltips==false, "a single window turning on doesn't touch the others")
+  hs.tooltips=true
+  pnl:Hide()
+  print("0.9.51 tooltip switches ok")
+end
+do -- 0.9.51: a profession linked in chat is someone else's: not read as yours (Discord bug report)
+  local lw=loadedFrames["ForeverArtisan_Leatherworking"].ns
+  local R={[3753]={name="Handstitched Leather Vest",out=5957,reag={{2318,3},{2320,1}}},
+   [9195]={name="Dusky Leather Leggings",out=7373,reag={{4234,10},{2321,2}}}}
+  local linked=true
+  C_TradeSkillUI={GetAllRecipeIDs=function() local t={} for k in pairs(R) do t[#t+1]=k end return t end,
+   GetRecipeInfo=function(id) local r=R[id] return {name=r.name,learned=true,maxTrivialLevel=200,relativeDifficulty=1} end,
+   GetTradeSkillLineForRecipe=function() return 165,"Leatherworking",165 end,
+   IsTradeSkillLinked=function() return linked end,
+   GetProfessionInfoBySkillLineID=function() return {skillLevel=300,maxSkillLevel=300} end,
+   GetRecipeSchematic=function(id) local r=R[id] local sl={} for _,g in ipairs(r.reag) do sl[#sl+1]={reagents={{itemID=g[1]}},quantityRequired=g[2]} end return {outputItemID=r.out,reagentSlotSchematics=sl,quantityMin=1} end}
+  wipe(lw.CharRec().recipes)
+  fire("TRADE_SKILL_SHOW")
+  assert(next(lw.CharRec().recipes)==nil, "a linked window isn't read as yours")
+  assert(ForeverArtisan.OthersTradeSkill(), "linked window seen")
+  linked=false
+  fire("TRADE_SKILL_SHOW")
+  assert(lw.CharRec().recipes["Dusky Leather Leggings"], "your own window is read")
+  wipe(lw.CharRec().recipes)
+  C_TradeSkillUI=nil
+  print("0.9.51 linked professions ok")
+end
+do -- 0.9.52: click a goals line for the nearest vendor (at the Auction House: search it), right-click removes it
+  local FA=ForeverArtisan
+  local T=FA.Track
+  local oV, oS, oW = FA.VendorNPC, FA.SearchAH, FA.Vendors and FA.Vendors.waypoint
+  local went, searched
+  local npc={n="Kor'geld",s="The Drag",z="Orgrimmar",m=1454,x=55,y=50}
+  FA.VendorNPC=function(id) if id==3713 then return npc end end
+  FA.Vendors.waypoint=function(n) went=n end
+  FA.SearchAH=function(name) if searched~=nil then searched=name return true end end
+  local ln={id=3713,name="Soothing Spices",have=0,want=30}
+  assert(T.Nearest(ln)==npc, "nearest vendor for a line")
+  T.GoTo(ln)
+  assert(went==npc, "click: waypoint to the nearest vendor")
+  went=nil; searched=false
+  T.GoTo(ln)
+  assert(searched=="Soothing Spices" and went==nil, "at the Auction House: search it instead")
+  searched=nil
+  assert(T.Nearest({id=2447,name="Peacebloom"})==nil, "nobody sells it: no vendor")
+  FA.VendorNPC, FA.SearchAH, FA.Vendors.waypoint = oV, oS, oW
+  print("0.9.52 goals click for vendor ok")
+end
+do -- 0.9.52: Train lines on the goals list (Kerry: "add training to this list")
+  local FA=ForeverArtisan
+  local T=FA.Track
+  T.UntrackAll("First Aid")
+  local npc={n="Arnok",s="Valley of Spirits",z="Orgrimmar",m=1454,x=34,y=84,items={1,2,3}}
+  local wool={name="Train Wool Bandage",need=1,have=0,train={at=80,who="Arnok",npc=npc,cost=250},price=250,source="Learn it at 80 from Arnok."}
+  local heavy={name="Train Heavy Wool Bandage",need=1,have=0,train={at=115,who="Arnok",npc=npc},source="Learn it at 115."}
+  local vial={id=3371,name="Empty Vial",need=5,have=0,source="x"}
+  -- right-click a Train line: on screen, first in its group, "at 80", no bar count
+  assert(T.Toggle("First Aid", wool)==true and T.TrainTracked("Train Wool Bandage"), "train line tracked")
+  T.Toggle("First Aid", vial)
+  local g
+  for _,x in ipairs(T.Lines()) do if x.title=="First Aid shopping" then g=x end end
+  assert(g and g.lines[1].train and g.lines[1].name=="Train Wool Bandage", "training comes first")
+  local saved=ForeverArtisanSettings.track[FA.CharKey(ForeverArtisanSettings.track)].items["First Aid"]["train:Train Wool Bandage"]
+  assert(saved.train.npc.n=="Arnok" and saved.train.npc.items==nil, "the trainer is saved, small")
+  -- click: waypoint to the trainer
+  local went local oW=FA.Vendors.waypoint
+  FA.Vendors.waypoint=function(n) went=n end
+  T.GoTo(g.lines[1])
+  assert(went and went.n=="Arnok", "click a Train line: waypoint to the trainer")
+  FA.Vendors.waypoint=oW
+  -- learned: the plan stops listing it, so it drops off; Track all takes Train lines too
+  T.Sync("First Aid", {heavy, vial})
+  assert(not T.TrainTracked("Train Wool Bandage"), "learned: off the list")
+  T.UntrackAll("First Aid")
+  T.TrackAll("First Aid", {wool, heavy, vial})
+  assert(T.TrainTracked("Train Wool Bandage") and T.TrainTracked("Train Heavy Wool Bandage") and T.IsTracked("First Aid", 3371), "track all includes training")
+  -- the "Train now" line tracks every recipe on it, and again takes them off
+  T.UntrackAll("First Aid")
+  local rows=FA.TrainShopRows({wool, heavy}, 120)
+  assert(rows[1].entry and rows[1].entry.group, "Train now line is trackable")
+  T.Toggle("First Aid", rows[1].entry)
+  assert(T.TrainTracked("Train Wool Bandage") and T.TrainTracked("Train Heavy Wool Bandage"), "Train now: both on")
+  rows=FA.TrainShopRows({wool, heavy}, 120)
+  assert(rows[1].left:find("ReadyCheck"), "check mark on a tracked Train line")
+  T.Toggle("First Aid", rows[1].entry)
+  assert(not T.TrainTracked("Train Wool Bandage"), "Train now again: off")
+  -- right-click on screen removes a Train line
+  T.Toggle("First Aid", wool)
+  for _,x in ipairs(T.Lines()) do for _,l in ipairs(x.lines) do if l.train then T.RemoveLine(l) end end end
+  assert(not T.TrainTracked("Train Wool Bandage"), "right-click removes a Train line")
+  T.UntrackAll("First Aid")
+  print("0.9.52 train lines on goals ok")
+end
+do -- 0.9.51: a trainer you only talked to (no list yet) keeps the built-in list's skills (Kerry, in
+  -- Orgrimmar: FA sent him to Rhiannon Davis in Undercity because talking to Magar hid Magar's skills)
+  local db=ForeverArtisanContactsDB
+  local cns=loadedFrames["ForeverArtisan_Contacts"].ns
+  local saved, sOff, oFac = db.entries, db.settings.seedsOff, UnitFactionGroup
+  UnitFactionGroup=function() return "Horde" end
+  db.entries={["service:3363"]={npcId=3363,name="Magar",title="Expert Tailor",kind="service",service="expert tailor",
+    zone="Orgrimmar",subzone="The Drag",mapID=1454,x=63.5,y=50.3,lastSeen=time(),seenAt=time(),faction="Horde"}}
+  db.settings.seedsOff=nil
+  cns.OnContactsChanged()
+  local magar
+  for _,h in ipairs(ForeverArtisan.Vendors.hitsForLink(nil,"Journeyman Tailoring") or {}) do if h.npc.n=="Magar" then magar=h end end
+  assert(magar, "talked-to Magar still teaches Journeyman Tailoring")
+  local n=0 for _,c in ipairs(cns.Contacts()) do if c.n=="Magar" then n=n+1 end end
+  assert(n==1, "one Magar, not two: "..n)
+  db.entries, db.settings.seedsOff, UnitFactionGroup = saved, sOff, oFac
+  cns.OnContactsChanged()
+  print("0.9.51 talked-to trainer keeps skills ok")
+end
+do -- 0.9.51: the same item on two lists (Hot Spices for Cooking 25 and First Aid 30, 22 held): counted
+  -- once, and each line says how many to buy in all (Kerry: "make it clear how many TOTAL I should buy")
+  local T=ForeverArtisan.Track
+  T.UntrackAll("Cooking"); T.UntrackAll("First Aid")
+  local oc=COUNTS[2692]; COUNTS[2692]=22
+  T.Toggle("Cooking", {id=2692,name="Hot Spices",need=25,have=22})
+  T.Toggle("First Aid", {id=2692,name="Hot Spices",need=30,have=22})
+  local got={}
+  for _,g in ipairs(T.Lines()) do for _,l in ipairs(g.lines) do if l.id==2692 then got[l.shopProf]=l end end end
+  local c,a=got["Cooking"],got["First Aid"]
+  assert(c and a, "both lines show")
+  assert(c.have==22 and a.have==0, "held once: Cooking 22 / 25, First Aid 0 / 30: "..c.have.." "..a.have)
+  assert(c.shared.buy==33 and a.shared.buy==33 and c.shared.total==55, "buy 33 in all")
+  T.Refresh()
+  local shown for _,x in ipairs(fonts) do local tx=rawget(x,"_text") if type(tx)=="string" and tx:find("buy 33 in all",1,true) then shown=true end end
+  assert(shown, "the line says buy 33 in all")
+  -- Cooking's share is covered (26 held): its line stays, green, while First Aid still needs some,
+  -- so the lines add up (Kerry: "1 / 30 (buy 29 in all)" with the Cooking line gone)
+  COUNTS[2692]=26
+  local realT=GetTime
+  T.Lines()
+  GetTime=function() return realT()+60 end
+  got={}
+  for _,g in ipairs(T.Lines()) do for _,l in ipairs(g.lines) do if l.id==2692 then got[l.shopProf]=l end end end
+  GetTime=realT
+  assert(got["Cooking"] and got["Cooking"].done and T.IsTracked("Cooking",2692), "done Cooking line stays while First Aid needs more")
+  assert(got["First Aid"].have==1 and got["First Aid"].shared.buy==29, "First Aid 1 / 30, buy 29")
+  T.UntrackAll("Cooking"); T.UntrackAll("First Aid"); COUNTS[2692]=oc
+  print("0.9.51 shared items ok")
+end
+do -- 0.9.51: a steady plan: buying the materials for it doesn't reshuffle it (Kerry: "It said buy 30,
+  -- I did, then it moved to 44. This looks really bad"). Only a clearly cheaper recipe (20%+ at market) moves it.
+  local FA=ForeverArtisan
+  local fa=loadedFrames["ForeverArtisan_FirstAid"].ns
+  local c=fa.CharRec()
+  local saved, savedPicks = c.recipes, c.planPicks
+  c.recipes={
+    ["Wool Bandage"]={name="Wool Bandage",learned=true,grayAt=400,itemId=3530,reagents={{id=2592,name="Wool Cloth",n=1}}},
+    ["Healing Potion"]={name="Healing Potion",learned=true,grayAt=400,itemId=929,reagents={{id=3372,name="Leaded Vial",n=1},{id=2453,name="Bruiseweed",n=1},{id=2692,name="Hot Spices",n=1}}}}
+  c.planPicks=nil
+  local oIP=FA.ItemPrice
+  local price={[2592]=100,[3372]=40,[2453]=40,[2692]=30} -- bandage 100c, potion 110c a craft
+  FA.ItemPrice=function(id) return price[id] end
+  local oc={} for _,id in ipairs({2592,3372,2453,2692}) do oc[id]=COUNTS[id]; COUNTS[id]=nil end
+  local function count(target)
+    local st,sh=fa.Plan(target)
+    local n={} for _,x in ipairs(st) do n[x.r.name]=(n[x.r.name] or 0)+x.crafts end
+    local need={} for _,e in ipairs(sh) do if e.id then need[e.id]=e.need end end
+    return n, need
+  end
+  local skill=fa.Skill()
+  assert(skill, "First Aid skill for the test")
+  local n1,need1=count(skill+20)
+  assert((n1["Wool Bandage"] or 0)>0 and not n1["Healing Potion"], "bandages are cheaper: all bandages")
+  -- you buy 10 of each potion material (for something else): owning them made potions "free"
+  for _,id in ipairs({3372,2453,2692}) do COUNTS[id]=10 end
+  local n2,need2=count(skill+20)
+  assert(not n2["Healing Potion"] and need2[2592]==need1[2592], "the plan didn't move: "..tostring(n2["Healing Potion"]))
+  -- a real price drop (potion 50c, over 20% cheaper) still moves it
+  price[3372],price[2453],price[2692]=20,15,15
+  local n3=count(skill+20)
+  assert((n3["Healing Potion"] or 0)>0, "clearly cheaper: the plan switches")
+  FA.ItemPrice=oIP
+  for id,v in pairs(oc) do COUNTS[id]=v end
+  for _,id in ipairs({3372,2453,2692}) do COUNTS[id]=oc[id] end
+  c.recipes, c.planPicks = saved, savedPicks
+  print("0.9.51 steady plan ok")
 end
 print("SUITE OK")

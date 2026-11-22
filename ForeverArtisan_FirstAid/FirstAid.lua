@@ -70,7 +70,9 @@ local function SkillLive()
       end
     end
   end
-  if C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID then
+  -- (not while the window shows someone else's profession: that would be their skill, 0.9.51)
+  if C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID
+    and not (ForeverArtisan.OthersTradeSkill and ForeverArtisan.OthersTradeSkill()) then
     local ok, info = pcall(C_TradeSkillUI.GetProfessionInfoBySkillLineID, AID_SKILL_LINE)
     if ok and type(info) == "table" and (info.skillLevel or 0) > 0 then
       return info.skillLevel, info.skillModifier, info.maxSkillLevel
@@ -269,6 +271,8 @@ end
 
 local function Scan()
   if not db then return end
+  -- someone else's recipes (linked in chat, a guild member's): not yours (0.9.51)
+  if ForeverArtisan.OthersTradeSkill and ForeverArtisan.OthersTradeSkill() then return end
   local got = ScanModern() or ScanOld()
   if not got then return end
   local c, n, learned = CharRec(), 0, 0
@@ -422,7 +426,11 @@ function ns.Plan(target)
     if ForeverArtisan.OwnedMoney then return ForeverArtisan.OwnedMoney(r, Left, nil, memo) end
     return ForeverArtisan.CraftMoney(r, nil, memo)
   end
+  -- market price only (what you own doesn't count): whether a cheaper recipe is worth leaving the last plan's
+  local function Market(r) return ForeverArtisan.CraftMoney(r, nil, memo) end
   local steps, byName, s, stuck = {}, {}, skill, nil
+  -- the last plan's picks, so buying its materials doesn't reshuffle it (0.9.51)
+  local prevPicks, newPicks = (not ahead and CharRec().planPicks) or {}, {}
   local guard = 0
   while s < target and guard < 400 do
     guard = guard + 1
@@ -433,7 +441,8 @@ function ns.Plan(target)
       local ch = (not r.train or s >= r.train.at) and ns.Chance(r, s) or 0
       if ch > 0 then opts[#opts + 1] = { r = r, ch = ch, bag = canMake[r], score = ch + (canMake[r] and 0.15 or 0) } end
     end
-    local pick = ForeverArtisan.PickRecipe(opts, Money)
+    local pick = ForeverArtisan.PickRecipe(opts, Money, prevPicks[s], Market)
+    if pick then newPicks[s] = pick.r.name end
     if not pick then stuck = s; break end
     local best, bestChance = pick.r, pick.ch
     local st = byName[best.name]
@@ -449,6 +458,10 @@ function ns.Plan(target)
     if bestChance < 1 then st.est = true end
     s = s + (best.ups or 1)
     st.to = s
+  end
+  if not ahead then
+    local c = CharRec(); c.planPicks = c.planPicks or {}
+    for k, v in pairs(newPicks) do c.planPicks[k] = v end
   end
   local need = {}
   for _, st in ipairs(steps) do
@@ -610,7 +623,7 @@ local function IndexUses()
 end
 
 local function ItemTip(tt)
-  if not db or db.settings.tooltips == false or not tt or tt.faAidDone then return end
+  if not db or db.settings.tooltips == false or not ForeverArtisan.TipOn("prof") or not tt or tt.faAidDone then return end
   local name, link = tt:GetItem()
   local id = link and tonumber(link:match("item:(%d+)"))
   if not id then return end
@@ -644,6 +657,9 @@ local function ItemTip(tt)
   if #uses > 3 then tt:AddLine(GRAY .. "  +" .. (#uses - 3) .. " more|r") end
   tt:Show()
 end
+
+-- the /fa Tooltips tab's switch turns this window's checkbox back on too (0.9.51)
+if ForeverArtisan.TipOwner then ForeverArtisan.TipOwner("prof", function(on) if db then db.settings.tooltips = on end end) end
 
 local function HookTooltips()
   local function clear(self) self.faAidDone = nil end
@@ -783,7 +799,8 @@ SlashCmdList.FAAID = function(msg)
       say(("  %s%s|r  %d/%d  %s%s|r"):format(short > 0 and YELLOW or GREEN, e.name, math.min(e.have, e.need), e.need, GRAY, e.source))
     end
   elseif cmd == "tooltips" then
-    db.settings.tooltips = not db.settings.tooltips
+    db.settings.tooltips = not (db.settings.tooltips and ForeverArtisan.TipOn("prof"))
+    if db.settings.tooltips then ForeverArtisan.SetTip("prof", true, true) end
     say("First Aid tooltip lines " .. (db.settings.tooltips and "on." or "off."))
   elseif cmd == "reset" and rest:lower() == "confirm" then
     ns.ResetLog()
