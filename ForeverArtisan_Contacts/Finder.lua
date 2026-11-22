@@ -562,6 +562,22 @@ local function knownSet()
   return known
 end
 
+-- town services by what people type: "flight" finds a Wind Rider Master too, "inn" an Innkeeper
+-- (Kerry, Nov 22, in Booty Bay: "flight" missed the wind rider master standing there)
+local PLACE_WORDS = {
+  flight = { "flight", "fly", "flying", "flightmaster", "taxi", "wind rider", "gryphon", "hippogryph", "bat handler" },
+  innkeeper = { "innkeeper", "inn", "hearth", "hearthstone" },
+  bank = { "bank", "banker" },
+  auction = { "auction", "auctioneer", "auction house", "ah" },
+  stable = { "stable", "stable master", "stables" },
+}
+local function PlaceWanted(kind, q)
+  for _, w in ipairs(PLACE_WORDS[kind] or {}) do
+    if w == q or (#q >= 3 and w:sub(1, #q) == q) or (#w >= 3 and q:find(w, 1, true)) then return true end
+  end
+  return false
+end
+
 -- search item names, vendor names/titles/towns, and required professions ("tailoring").
 -- A trainer's recipes that only match by profession collapse into one row ("trains 33").
 -- NPCs you've passed but never talked to (scout mode) show too, marked as seen only.
@@ -581,7 +597,7 @@ local function search(q)
     if npc.age >= ns.HIDE_AFTER then -- hidden: not seen through two updates
     else
     local npcHit
-    if has(npc.n) or has(npc.t) or has(npc.s) or has(npc.z) then
+    if has(npc.n) or has(npc.t) or has(npc.s) or has(npc.z) or (npc.place and PlaceWanted(npc.place, q)) then
       npcHit = { npc = npc, seen = (npc.seed or npc.questie) or nil }
       table.insert(hits, npcHit)
     end

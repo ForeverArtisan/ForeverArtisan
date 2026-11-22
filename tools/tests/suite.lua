@@ -2627,6 +2627,15 @@ do
     local fg
     for _,g in ipairs(FA.SearchAll("wind rider")) do if g.key=="places" then fg=g end end
     assert(fg and fg.rows[1].left:find("Doras",1,true), "flight master")
+    -- "flight" finds a Wind Rider Master too (Kerry, Booty Bay); "inn" an Innkeeper; "bank" doesn't
+    local fl
+    for _,g in ipairs(FA.SearchAll("flight")) do if g.key=="places" then fl=g end end
+    local hasDoras=false for _,r in ipairs(fl and fl.rows or {}) do if r.left:find("Doras",1,true) then hasDoras=true end end
+    assert(hasDoras, "flight finds the wind rider master")
+    local ig
+    for _,g in ipairs(FA.SearchAll("inn")) do if g.key=="places" then ig=g end end
+    assert(ig and ig.rows[1].left:find("Gryshka",1,true), "inn finds the innkeeper")
+    for _,g in ipairs(FA.SearchAll("bank")) do if g.key=="places" then for _,r in ipairs(g.rows) do assert(not r.left:find("Doras",1,true), "bank isn't a flight master") end end end
     for _, h in ipairs(cns.NearestTrainerHits("class")) do assert(h.npc.k~="place", "not a class trainer") end
     assert(cns.DetailText(fg.rows[1].npc):find("From Questie's database.",1,true) and not cns.DetailText(fg.rows[1].npc):find("training window",1,true), "detail: no training note")
     print("0.9.52 innkeepers and flights ok")

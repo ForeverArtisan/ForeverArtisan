@@ -2,6 +2,7 @@
 
 ## 0.9.53 (2026-11-22)
 - Fixed: 0.9.52 showed its version as 0.9.51 in game, so its What's new didn't show. Same features, right number.
+- Fixed: searching "flight" missed flight masters titled Wind Rider Master (or Gryphon Master and the like), so the one in town didn't show. "inn", "bank", "auction" and "stable" find theirs the same way.
 
 ## 0.9.52 (2026-11-22)
 - Added: one search box at the top of the /fa panel. Type a word and see your crafts (with profit), Auction House prices you've seen, recipes in your profession windows, recipes you can learn from a trainer, and vendors from Trade Contacts, all in one list. Click a craft for its price chart, a recipe to open its profession, an item at the Auction House to search it, a vendor or trainer for a waypoint. With Questie installed it also finds the nearest innkeeper, flight master, bank, auctioneer or stable master. In Trade Contacts, a recipe a trainer teaches reads "learn at Cooking 125". /fa find <words> opens it with your search filled in. The Contacts tab's own search box is gone, since the box at the top covers it.

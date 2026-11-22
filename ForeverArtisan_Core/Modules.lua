@@ -1585,7 +1585,8 @@ local function buildSearch(p)
       else GameTooltip:AddLine((d.left or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
       local extra = d.tipFn and d.tipFn() or d.tip
       if extra then GameTooltip:AddLine(extra, 1, 1, 1, true) end
-      if d.hint then GameTooltip:AddLine(d.hint, 0.5, 0.75, 1) end
+      -- (a contact's details already end with "Click for a waypoint")
+      if d.hint and not (type(extra) == "string" and extra:find(d.hint, 1, true)) then GameTooltip:AddLine(d.hint, 0.5, 0.75, 1) end
     end)
     r:EnableMouseWheel(true)
     r:SetScript("OnMouseWheel", function(_, delta)
