@@ -1657,7 +1657,12 @@ function FA.RefreshSearch()
   if InCombatLockdown and InCombatLockdown() then
     search.empty:SetText("Search waits until you're out of combat.")
   else
-    search.empty:SetText(#list == 0 and ("Nothing found for \"" .. search.q .. "\". Scan the Auction House to add prices, and talk to vendors and trainers to add them.") or "")
+    -- what the box covers, so a quest giver's name with no result doesn't look broken (Kerry, Nov 22)
+    search.empty:SetText(#list == 0 and ("Nothing found for \"" .. search.q .. "\".\n\n"
+      .. "This searches for your professions: crafts, Auction House prices, recipes, vendors, trainers, "
+      .. "and the nearest innkeeper, flight master or bank. Quest givers and other NPCs aren't in it: "
+      .. "your quest addon or the world map finds those.\n\n"
+      .. GREY .. "Missing a price or a vendor? Scan the Auction House, and talk to vendors and trainers you pass.|r") or "")
   end
   search.foot:ClearAllPoints(); search.foot:SetPoint("BOTTOMLEFT", 20, 14)
   search.foot:SetText(#list > search.fit and "Scroll for more  ·  Esc or a tab clears the search" or "Esc or a tab clears the search")
@@ -1857,6 +1862,7 @@ NEWS = {
   { "0.9.51", "New Tooltips tab: turn each kind of tooltip line on or off. Click a Goals line for the nearest vendor, and track training there too. Linked professions from chat no longer count as yours." },
   { "0.9.52", "One search box at the top of /fa for crafts, prices, recipes, trainers and vendors (/fa find). Pop out your crafting plan, fishing or gathering skill and the cast marker. The Modules tab shows your alts' professions. A Waypoint to your next rank in every profession." },
   { "0.9.53", "0.9.52 showed its version as 0.9.51. This build has the right number, so you see what's new." },
+  { "0.9.54", "A search with no results now says what the box covers. The Fishing alert boxes turn back on again." },
 }
 
 local function verNum(v)

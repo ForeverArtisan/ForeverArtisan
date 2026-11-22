@@ -1,5 +1,9 @@
 # ForeverArtisan changelog
 
+## 0.9.54 (2026-11-22)
+- Changed: a search with no results says what the box covers (professions, vendors, trainers, innkeepers, flight masters, banks) and that quest givers aren't in it.
+- Fixed: the Fishing window's "Alerts: pools and rare catches" and "Alert sound" boxes couldn't be turned back on once off. Thanks to the player who reported it.
+
 ## 0.9.53 (2026-11-22)
 - Fixed: 0.9.52 showed its version as 0.9.51 in game, so its What's new didn't show. Same features, right number.
 - Fixed: searching "flight" missed flight masters titled Wind Rider Master (or Gryphon Master and the like), so the one in town didn't show. "inn", "bank", "auction" and "stable" find theirs the same way.

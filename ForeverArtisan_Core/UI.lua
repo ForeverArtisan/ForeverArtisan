@@ -621,6 +621,7 @@ function UI.Kit(ns, view)
       Changed()
     end)
     c.Sync = function(self) self:SetChecked(get()) end
+    c.label = label
     return c
   end
 

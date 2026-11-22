@@ -4970,4 +4970,31 @@ do -- 0.9.52: a small FA badge on the on-screen windows (Kerry, Nov 22)
   fns.SkillPopSet(false); fns.CastPopSet(false); hns.SkillPop.Set(false)
   print("0.9.52 FA badge ok")
 end
+do -- 0.9.53: a search with no results says what the box covers (Kerry, Nov 22: "darthalia" found nothing)
+  run("FOREVERARTISAN","find zzqqdarthalia")
+  local e
+  for _,fs in ipairs(fonts) do local t=rawget(fs,"_text") if type(t)=="string" and t:find("Nothing found for",1,true) then e=t end end
+  assert(e and e:find("Quest givers",1,true), "says quest givers aren't in it: "..tostring(e))
+  run("FOREVERARTISAN","find")
+  _G.ForeverArtisanPanel:Hide()
+  print("0.9.53 empty search message ok")
+end
+do -- 0.9.54: the Fishing alert boxes turn back on (Discord report: once off they stayed off)
+  local fns=loadedFrames["ForeverArtisan_Fishing"].ns
+  local S=fns.DB().settings
+  -- find each box by the label text drawn on it
+  local function box(label)
+    for _,f in ipairs(frames) do if rawget(f,"label")==label and f.scripts.OnClick then return f end end
+  end
+  for _,label in ipairs({"Alerts: pools and rare catches","Alert sound"}) do
+    local c=box(label)
+    assert(c, "found the box: "..label)
+    do
+      rawset(c,"GetChecked",function() return false end); c.scripts.OnClick(c)
+      rawset(c,"GetChecked",function() return true end); c.scripts.OnClick(c)
+    end
+  end
+  assert(S.alerts ~= false and S.alertSound ~= false, "both back on after off then on")
+  print("0.9.54 fishing alert boxes ok")
+end
 print("SUITE OK")

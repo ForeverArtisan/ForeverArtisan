@@ -214,10 +214,12 @@ local function BuildFishingPage(p)
     Check(p, "Chat line for each catch", 16, -176, function() return S().verbose end, function(v) S().verbose = v end),
     Check(p, "Show lure bar on screen", 16, -200, function() return S().hud end, function(v) S().hud = v end),
     -- a ping and a line on screen for a fishing pool in view or a rare catch (Extras.lua)
+    -- (on = nil, off = false: `v and nil or false` was always false, so once off they never came back on.
+    -- Discord report, Nov 22)
     Check(p, "Alerts: pools and rare catches", 240, -176, function() return S().alerts ~= false end,
-      function(v) S().alerts = v and nil or false end),
+      function(v) if v then S().alerts = nil else S().alerts = false end end),
     Check(p, "Alert sound", 240, -200, function() return S().alertSound ~= false end,
-      function(v) S().alertSound = v and nil or false end),
+      function(v) if v then S().alertSound = nil else S().alertSound = false end end),
   }
 
   -- Splash sound: Off / Soft / Medium / Loud, click to step through (0.9.49)
