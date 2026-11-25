@@ -53,6 +53,19 @@ local function CharRec()
   return c
 end
 ns.CharRec = CharRec
+-- trained just now (Core RecipeFinds.lua): learned, before you next open the profession window
+if ForeverArtisan.OnLearn then
+  ForeverArtisan.OnLearn(function(name, spellId)
+    local c = db.chars and db.chars[ForeverArtisan.CharKey(db.chars)]
+    for _, r in pairs(c and c.recipes or {}) do
+      if type(r) == "table" and not r.learned and ((name and r.name == name) or (spellId and r.id == spellId)) then
+        r.learned = true
+        if ns.OnChange then pcall(ns.OnChange) end
+        return true
+      end
+    end
+  end)
+end
 
 ---------------------------------------------------------------- skill
 local function IsCookName(n) return n and (n == "Cooking" or n == (PROFESSIONS_COOKING or "Cooking")) end
@@ -631,6 +644,25 @@ local function ItemTip(tt)
   -- "Recipe: Rockscale Cod"
   local rname = name and name:match("^Recipe: (.+)$")
   local uses = usedBy[id]
+  -- a recipe item: you, then your other characters with this profession, who knows it and who can
+  -- learn it now (0.9.55, CurseForge request: "show what alts know or could learn a recipe")
+  if rname and ForeverArtisan.RecipeWho then
+    local rows, need = ForeverArtisan.RecipeWho("Cooking", rname, db.chars, tt)
+    if rows then
+      tt.faCookDone = true
+      tt:AddLine(" ")
+      local r = recipes[rname]
+      if r and ns.Knows() then
+        ForeverArtisan.TipLine(tt, ("|cffd4a94e%s|r  %s%s|r%s"):format("Cooking", r.learned and GREEN or YELLOW, r.learned and "You know this recipe" or "Not learned yet",
+          r.grayAt and (GRAY .. "  ·  gray at " .. r.grayAt .. "|r") or ""))
+      else
+        ForeverArtisan.TipLine(tt, "|cffd4a94e" .. "Cooking" .. "|r" .. (need and (GRAY .. "  ·  needs " .. need .. "|r") or ""))
+      end
+      for _, l in ipairs(rows) do tt:AddLine(l) end
+      tt:Show()
+      return
+    end
+  end
   if not (rname and recipes[rname]) and not (uses and #uses > 0) then return end
   if not ns.Knows() then return end
   local skill = Skill()

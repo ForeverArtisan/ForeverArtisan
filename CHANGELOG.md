@@ -1,5 +1,24 @@
 # ForeverArtisan changelog
 
+## 0.9.55 (2026-11-25)
+- Added: right-click a heading in the goals window to close out that group. A profession's plan or shopping list takes the whole profession out (Pop in), and a gathering heading clears its goals. Left-click still folds it.
+- Fixed: Trade Contacts could print an error in dungeons ("attempt to index local 't' (a secret string value)") when the game hid an NPC's details. It skips what it can't read now.
+- Fixed: recipes bought with Merchant's Favor (like the smoothies) showed as free in the recipe book and Trade Contacts. They show their Favor price now.
+- Fixed: Skinning said "No Skinning Knife" when you had a Yeti Skinner (or another item that serves as a Skinning Knife), in your bags or worn. Mining's pick check works the same way now. Thanks to the player who reported it.
+- Added: recipe tooltips (patterns, plans, formulas, schematics, recipes, manuals) list your other characters with that profession: who knows it, who can learn it now, and who needs more skill. Thanks to the player who asked.
+- Changed: one Pop out button on every crafting Progress tab puts both the plan and the whole shopping list in the goals window (Pop in takes both out). The plan's separate window and the shopping list's Track all button are gone. Click a heading in the goals window to fold that group. Click a plan row for a waypoint to the trainer when you still have to learn it, or to open its profession when you know it. Training shows once, in the plan, not again on the shopping list.
+- Fixed: the goals window put leather, herbs and ore under Skinning, Herbalism or Mining even on a character without that profession. They stay with the shopping list now.
+- Changed: materials you can make or buy, like bolts, are one line on the shopping list: "Bolt of Woolen Cloth 0 / 49 · AH or make: 147 Wool Cloth". Bolts or cloth in your bags both count toward it. That includes recipes you haven't trained yet (the training is on the list too, and stays there with the plan popped out). Materials the plan makes for skill-ups along the way stay "craft".
+- Fixed: a recipe you train counts as learned right away. Plans and shopping lists no longer say "Train now" until you open the profession window.
+- Changed: a tool you know how to make (Runed Copper Rod) says so on the shopping list, and its materials (Copper Rod, Mote of Magic) are on the list too.
+- Added: hovering Strange Dust with Enchanting says how many Motes of Magic your plan needs. Dust to Motes can't be undone, so convert only those.
+- Fixed: the disenchant tooltip compared soulbound items against an Auction House price they can never get. Soulbound items compare against the vendor.
+- Changed: the "combine 3 into a Greater" essence hint only shows when it's worth at least 5 silver, and says how: right-click 3 to combine, or 1 to split.
+- Changed: /fa goals reset also unfolds the goals list, so a list folded away in a corner comes back in full.
+- Fixed: when a plan's own step makes some of a material later steps need (11 Bolts of Silk Cloth for skill, 100 for the robes and packs after it), the shopping list asked you to buy all 100 bolts. Now it makes the rest the same way and asks for the cloth instead.
+- Changed: training lines on the goals list are in the order you'll learn them, not A to Z.
+- Changed: the minimap button uses the FA emblem, the same as the addon list and the on-screen windows. Right-click it to open the search box ready to type in (it opened Trade Contacts before; /fa contacts still does).
+
 ## 0.9.54 (2026-11-22)
 - Changed: a search with no results says what the box covers (professions, vendors, trainers, innkeepers, flight masters, banks) and that quest givers aren't in it.
 - Fixed: the Fishing window's "Alerts: pools and rare catches" and "Alert sound" boxes couldn't be turned back on once off. Thanks to the player who reported it.

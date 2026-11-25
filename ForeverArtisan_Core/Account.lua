@@ -124,6 +124,88 @@ function FA.AltTrades()
   for _, l in pairs(out) do table.sort(l, function(x, y) if x.rank ~= y.rank then return x.rank > y.rank end return x.who < y.who end) end
   return out
 end
+---------------------------------------------------------------- who of yours knows a recipe
+-- A recipe item's tooltip lists your characters with that profession: who knows it, who can learn it now,
+-- who needs more skill (CurseForge request, Nov 23: "show what alts know or could learn a recipe").
+--   FA.TipRequires(tt)  -> skill, profession   from the item's "Requires Tailoring (145)" line
+--   FA.RecipeWho(prof, rname, chars, tt) -> rows (tooltip lines, not this character), need; or nil when
+--     none of your characters' saved lists has the recipe and the item doesn't require this profession
+--   chars = the profession module's saved db.chars (each character's recipes, saved when it opened its window)
+local REQ_PATTERN
+local function ReqPattern()
+  if REQ_PATTERN then return REQ_PATTERN end
+  local f = type(ITEM_MIN_SKILL) == "string" and ITEM_MIN_SKILL or "Requires %s (%d)"
+  f = f:gsub("%%%d%$", "%%"):gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1")
+  REQ_PATTERN = "^" .. f:gsub("%%s", "(.+)"):gsub("%%d", "(%%d+)") .. "$"
+  return REQ_PATTERN
+end
+FA._ReqPattern = ReqPattern
+function FA.TipRequires(tt)
+  local name = tt and tt.GetName and tt:GetName()
+  local n = tt and tt.NumLines and tt:NumLines() or 0
+  for i = 2, n do
+    local fs = name and _G[name .. "TextLeft" .. i]
+    local t = fs and fs.GetText and fs:GetText()
+    if type(t) == "string" then
+      local p, v = t:match(ReqPattern())
+      if p and tonumber(v) then return tonumber(v), p end
+    end
+  end
+end
+
+local function FindRecipe(list, rname)
+  if type(list) ~= "table" then return nil end
+  if list[rname] then return list[rname] end
+  local low = rname:lower()
+  for k, r in pairs(list) do if type(k) == "string" and k:lower() == low then return r end end
+end
+
+function FA.RecipeWho(prof, rname, chars, tt)
+  if not (prof and rname) then return nil end
+  local need, reqProf = FA.TipRequires(tt)
+  local ours = reqProf and reqProf:lower() == prof:lower()
+  local profKey = prof:lower()
+  local a = Store()
+  local _, mine = Me()
+  local seen, rows = {}, {}
+  local function add(key)
+    if seen[key] or key == mine then return end
+    seen[key] = true
+    -- only characters on your list (the Modules tab's): one you removed there stays gone here too
+    local c = a.chars[key]
+    if not c then return end
+    local rec = type(chars) == "table" and chars[key] or nil
+    local r = rec and FindRecipe(rec.recipes, rname)
+    if r then ours = true end
+    local rank = (c.trades and c.trades[profKey]) or (rec and rec.skill)
+    if not rank and not (r and r.learned) then return end
+    local who = c.name or (type(key) == "string" and key:match("^([^%-]+)")) or "?"
+    local order, text
+    if r and r.learned then
+      order, text = 1, GREEN .. "knows it|r"
+    elseif not (rec and type(rec.recipes) == "table" and next(rec.recipes)) then
+      order, text = 4, GRAY .. "hasn't opened " .. prof .. " yet (" .. rank .. ")|r"
+    elseif need and rank >= need then
+      order, text = 2, "|cffffff00can learn it (" .. rank .. ")|r"
+    elseif need then
+      order, text = 3, GRAY .. "needs " .. need .. " (has " .. rank .. ")|r"
+    else
+      order, text = 2, "|cffffff00doesn't know it (" .. rank .. ")|r"
+    end
+    rows[#rows + 1] = { order = order, who = who, text = text }
+  end
+  for key in pairs(type(chars) == "table" and chars or {}) do add(key) end
+  for key in pairs(a.chars) do add(key) end
+  if not ours or #rows == 0 then return nil, need end
+  table.sort(rows, function(x, y) if x.order ~= y.order then return x.order < y.order end return x.who < y.who end)
+  local out = {}
+  for i, r in ipairs(rows) do
+    if i > 8 then out[#out + 1] = GRAY .. "  +" .. (#rows - 8) .. " more|r"; break end
+    out[#out + 1] = "  " .. r.who .. "  " .. r.text
+  end
+  return out, need
+end
+
 function FA.ForgetCharacter(key)
   local a = Store()
   local _, mine = Me()

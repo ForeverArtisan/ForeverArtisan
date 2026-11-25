@@ -72,7 +72,10 @@ local function npcTitle(unit)
   for i = 2, math.min(tip:NumLines(), 3) do
     local fs = _G["ForeverArtisanContactsScanTipTextLeft" .. i]
     local t = fs and fs:GetText()
-    if t and t:match("^<.+>$") then return t:sub(2, -2) end
+    -- in a dungeon or in combat the line can be a secret value: unreadable, so no title (bug report Nov 25:
+    -- "attempt to index local 't' (a secret string value)" in Wailing Caverns)
+    if Secret(t) or type(t) ~= "string" then return nil end
+    if t:match("^<.+>$") then return t:sub(2, -2) end
     if t and not t:find(LEVEL or "Level") and not t:find("PvP") then
       -- Classic shows titles without brackets on some clients
       if i == 2 and not t:find("%d") then return t end
@@ -84,17 +87,21 @@ local function npcInfo(unit)
   unit = unit or "npc"
   if not UnitExists(unit) then return nil end
   local guid = UnitGUID(unit)
+  -- a secret name can't be saved or compared: skip this one
+  local name = UnitName(unit)
+  if Secret(name) or type(name) ~= "string" then return nil end
   local n = {
-    name = UnitName(unit),
+    name = name,
     npcId = npcIdFromGUID(guid),
     title = npcTitle(unit),
     level = UnitLevel(unit),
   }
-  if n.level and n.level <= 0 then n.level = nil end
+  if Secret(n.level) or type(n.level) ~= "number" or n.level <= 0 then n.level = nil end
   local reaction = UnitReaction(unit, "player")
   if reaction and not Secret(reaction) then n.reaction = reaction end -- 4 neutral, 5+ friendly
   return n
 end
+ns._npcInfo, ns._scanTip = npcInfo, tip -- for the test suite
 
 -- Tooltip lines that start with "Requires" (level, skill, reputation, class...)
 local function requiresFromTooltip()
@@ -377,6 +384,10 @@ local function logTrainer(announce)
   end
 
   for k, v in pairs(saved) do setFilter(k, v) end
+  -- what this trainer shows as known ("used") is learned, even if the profession window hasn't said so yet
+  if ForeverArtisan.RecipeLearned then
+    for _, s in ipairs(skills) do if s.status == "used" then ForeverArtisan.RecipeLearned(s.name) end end
+  end
 
   if #skills == 0 and not announce then return 0 end -- list not loaded yet; try again shortly
   local e = save("trainer", n, w, {

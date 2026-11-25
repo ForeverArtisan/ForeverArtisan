@@ -188,10 +188,15 @@ end
 
 -- What the item sells for as it is: the Auction House after its cut, or the vendor if that pays more.
 -- Returns copper (0 when neither is known) and words for where ("AH, after the 5% cut", "vendor", "no AH price yet").
-function FA.DisenchantSale(item)
+-- bound: soulbound, so it can't go on the AH (Kerry, Nov 22: soulbound cuffs compared against an AH price)
+function FA.DisenchantSale(item, bound)
   local id = itemIdOf(item)
-  local ah = id and ahPrice(id)
   local vendor = GetItemInfo and select(11, GetItemInfo(item)) or 0
+  if bound then
+    if vendor and vendor > 0 then return vendor, "vendor: soulbound, no AH" end
+    return 0, "soulbound: no AH"
+  end
+  local ah = id and ahPrice(id)
   local net = ah and math.floor(ah * AH_CUT + 0.5) or 0
   if net > 0 and net >= vendor then return net, "AH, after the 5% cut" end
   if vendor and vendor > 0 then return vendor, ah and "vendor pays more" or "vendor, no AH price yet" end
@@ -271,6 +276,25 @@ end
 
 local function money(c) return FA.Money and FA.Money(math.floor(c + 0.5)) or (tostring(math.floor(c + 0.5)) .. "c") end
 
+-- soulbound? Bind on pickup always is in your bags; anything else only when the tooltip says so
+local BOUND_TEXTS = {}
+for _, k in ipairs({ "ITEM_SOULBOUND", "ITEM_ACCOUNTBOUND", "ITEM_BNETACCOUNTBOUND", "ITEM_ACCOUNTBOUND_UNTIL_EQUIP" }) do
+  if type(_G[k]) == "string" then BOUND_TEXTS[_G[k]] = true end
+end
+if not next(BOUND_TEXTS) then BOUND_TEXTS["Soulbound"] = true end
+function FA.TooltipBound(tt, item)
+  local bind = GetItemInfo and select(14, GetItemInfo(item))
+  if bind == 1 then return true end
+  local name = tt and tt.GetName and tt:GetName()
+  local n = tt and tt.NumLines and tt:NumLines() or 0
+  for i = 2, math.min(n, 6) do
+    local fs = name and _G[name .. "TextLeft" .. i]
+    local t = fs and fs.GetText and fs:GetText()
+    if t and BOUND_TEXTS[t] then return true end
+  end
+  return false
+end
+
 local KIND_WORDS = { dust = "dust", essence = "essence", shard = "shard", crystal = "crystal", other = "other" }
 
 function FA.DisenchantTipLines(tt, item)
@@ -290,14 +314,21 @@ function FA.DisenchantTipLines(tt, item)
       local lesser = GREATER[r.id] ~= nil -- a lesser that's worth more combined
       local own = ahPrice(r.id)
       local gain = own and (v - own * AH_CUT) or nil
-      local words = lesser and "combine 3 into a " .. nameOf(form) .. " to sell" or "split into 3 " .. nameOf(form) .. " to sell"
-      tt:AddLine("    " .. GREEN .. words .. (gain and gain > 0 and (": +" .. money(gain) .. (lesser and " each" or " a greater")) or "") .. "|r", 1, 1, 1, true)
+      -- only when it's worth the trouble: at least 10% more and 5 silver per stack of 3 (Kerry, Nov 23: "+1c each",
+      -- "what does it mean to combine?"). No AH price for this form: say which sells, without a number.
+      local per3 = gain and (lesser and gain * 3 or gain) or nil
+      local worth = (not own) or (per3 and per3 >= 500 and v >= own * AH_CUT * 1.1)
+      if worth then
+        local words = lesser and ("right-click 3 to combine into 1 " .. nameOf(form) .. ", sells for more")
+          or ("right-click to split into 3 " .. nameOf(form) .. ", sells for more")
+        tt:AddLine("    " .. GREEN .. words .. (per3 and per3 > 0 and (" (+" .. money(per3) .. (lesser and " per 3" or "") .. ")") or "") .. "|r", 1, 1, 1, true)
+      end
     end
   end
   -- the item itself: what it sells for (always shown, to check the math), then which way wins
   local id = itemIdOf(item)
   if id then
-    local sale, words = FA.DisenchantSale(item)
+    local sale, words = FA.DisenchantSale(item, FA.TooltipBound(tt, item))
     tt:AddDoubleLine("  Sold as it is", sale > 0 and (money(sale) .. GRAY .. " (" .. words .. ")|r") or (GRAY .. words .. "|r"),
       0.8, 0.8, 0.8, 0.8, 0.8, 0.8)
     if priced and sale > 0 then

@@ -46,13 +46,12 @@ ns.ItemName = ItemName
 local function Today() return date("%Y-%m-%d") end
 
 local CountAPI = (C_Item and C_Item.GetItemCount) or GetItemCount
+-- Anything else whose tooltip says it "Serves as a Skinning Knife" counts too, in your bags or worn (the Yeti
+-- Skinner, a thrown weapon; bug report Nov 24). Core RecipeFinds.lua: ForeverArtisan.HasTool.
+local isKnife = {}
+ns._isKnife = isKnife -- for the test suite
 function ns.HasKnife()
-  if not CountAPI then return nil end
-  for _, id in ipairs(KNIVES) do
-    local ok, n = pcall(CountAPI, id)
-    if ok and (n or 0) > 0 then return true end
-  end
-  return false
+  return ForeverArtisan.HasTool(KNIVES, "Serves as a Skinning Knife", isKnife)
 end
 
 ---------------------------------------------------------------- skill

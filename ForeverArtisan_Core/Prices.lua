@@ -807,6 +807,66 @@ function FA.CraftValueLines(r)
   return lines
 end
 
+---------------------------------------------------------------- buy it or make it
+-- A material the plan makes from plain materials (Bolt of Woolen Cloth from Wool Cloth) can just as well be
+-- bought. It's listed once, as itself, with "AH or make: 147 Wool Cloth"; the cloth for it comes off the
+-- cloth's own line. Either one fills it. (Kerry, Nov 22: "Both should be listed. For example 100 wool or
+-- 10 Bolts ... Maybe list as AH/Make?")
+--   o = { used, crafted, more, makes, trainMakes, stepMade, stepVia, ups }; changes o.used
+--   (ups[id]: making it gives skill-ups the plan counts on, so it stays "craft")
+--   returns [id] = { got = how many the plan makes, base = how many a skill step makes anyway, via }
+function FA.BuyOrMake(o)
+  local out = {}
+  local function made(id) return o.makes[id] or o.trainMakes[id] or o.crafted[id] or o.stepMade[id] end
+  local function plain(via)
+    if not via or type(via.reagents) ~= "table" or #via.reagents == 0 then return false end
+    for _, g in ipairs(via.reagents) do if not g.id or made(g.id) then return false end end
+    return true
+  end
+  for id in pairs(o.used) do
+    local via, times, base
+    if o.crafted[id] then
+      via, times, base = o.makes[id] or o.trainMakes[id], o.crafted[id], o.stepMade[id] or 0
+    elseif o.more[id] then
+      via, times = o.stepVia[id], o.more[id]
+      base = (o.stepMade[id] or 0) - times * ((via and via.makes) or 1)
+    end
+    if times and times > 0 and plain(via) and not (o.ups and o.ups[id] and o.crafted[id]) then
+      out[id] = { got = times * (via.makes or 1), base = math.max(0, base), via = via }
+    end
+  end
+  for _, a in pairs(out) do
+    local times = a.got / (a.via.makes or 1)
+    for _, g in ipairs(a.via.reagents) do
+      local left = (o.used[g.id] or 0) - times * (g.n or 1)
+      o.used[g.id] = left > 0 and left or nil
+    end
+  end
+  return out
+end
+
+-- e.alt = { makes, from = { { id, name, n } } }: how many you hold counting what you could make from the
+-- materials (spare(id) = how many of that material aren't needed for anything else)
+function FA.AltHave(alt, own, spare)
+  if type(alt) ~= "table" or type(alt.from) ~= "table" or #alt.from == 0 then return own end
+  local crafts
+  for _, g in ipairs(alt.from) do
+    local c = math.floor(math.max(0, spare(g.id) or 0) / math.max(1, g.n or 1))
+    crafts = crafts and math.min(crafts, c) or c
+  end
+  return own + (crafts or 0) * (alt.makes or 1)
+end
+
+-- "AH or make: 147 Wool Cloth" for what's still short
+function FA.AltNote(alt, short)
+  if type(alt) ~= "table" or type(alt.from) ~= "table" then return nil end
+  local crafts = math.ceil(math.max(0, short or 0) / math.max(1, alt.makes or 1))
+  if crafts <= 0 then return nil end
+  local parts = {}
+  for _, g in ipairs(alt.from) do parts[#parts + 1] = (crafts * (g.n or 1)) .. " " .. (g.name or ("item " .. g.id)) end
+  return "AH or make: " .. table.concat(parts, " + ")
+end
+
 ---------------------------------------------------------------- shopping list totals
 -- give each thing on a shopping list its price (things you craft yourself along the way don't need one)
 function FA.PriceShopping(shopping)

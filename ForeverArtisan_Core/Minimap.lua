@@ -7,9 +7,11 @@ local ADDON = ...
 local GREY, GREEN = "|cff9d9d9d", "|cff40ff40"
 local PREFIX = ForeverArtisan.Prefix()
 local LDB_NAME = "ForeverArtisan"
--- our own texture (ForeverArtisan_Core\Media): a clean gold "FA" (Logo\minimap-options\fa-gold), flat like the game's own minimap icons
+-- our own texture (ForeverArtisan_Core\Media): the FA emblem, the same as the addon list and the badge on
+-- the on-screen windows (Kerry, Nov 22: "Can we make this icon the map icon as well? I like it").
+-- Was the flat gold "FA" (Media\minimap, still in the folder).
 local MEDIA = "Interface\\AddOns\\ForeverArtisan_Core\\Media\\"
-local ICON = MEDIA .. "minimap"
+local ICON = MEDIA .. "addon"
 
 local mm, LDBIcon
 
@@ -18,10 +20,10 @@ local function S()
   return ForeverArtisanSettings
 end
 
--- left-click: the /fa panel; right-click: Trade Contacts (its own button was retired in 0.9.21)
+-- left-click: the /fa panel; right-click: the panel with its search box ready to type in (0.9.55,
+-- Kerry, Nov 22: "Right click should open the main search?"; it opened Trade Contacts before)
 local function OnClick(_, button)
-  local V = ForeverArtisan and ForeverArtisan.Vendors
-  if button == "RightButton" and V and V.open then V.open() return end
+  if button == "RightButton" and ForeverArtisan and ForeverArtisan.OpenSearchBox then ForeverArtisan.OpenSearchBox() return end
   if ForeverArtisan and ForeverArtisan.open then ForeverArtisan.open() end
 end
 
@@ -38,7 +40,7 @@ local function TooltipLines(tt)
   if not any then tt:AddLine(GREY .. "No modules running yet.|r") end
   tt:AddLine(" ")
   tt:AddLine(GREEN .. "Click:|r open ForeverArtisan", 1, 1, 1)
-  if ForeverArtisan and ForeverArtisan.Vendors then tt:AddLine(GREEN .. "Right-click:|r open Trade Contacts", 1, 1, 1) end
+  tt:AddLine(GREEN .. "Right-click:|r search everything", 1, 1, 1)
   tt:AddLine(GREEN .. "Drag:|r move around the minimap", 1, 1, 1)
   tt:AddLine(GREY .. "/fa minimap hides it|r")
 end
@@ -173,8 +175,8 @@ local function Command(arg)
   arg = (arg or ""):lower()
   local s = S()
   if arg == "contacts" then
-    print(PREFIX .. "Trade Contacts no longer has its own minimap button. Right-click the FA button, "
-      .. "or use the Trade Contacts buttons at the bottom of the /fa panel.")
+    print(PREFIX .. "Trade Contacts no longer has its own minimap button. Open it with /fa contacts, "
+      .. "or the Contacts tab of the /fa panel. Right-click the FA button to search it with everything else.")
     return
   end
   local angle = tonumber(arg)

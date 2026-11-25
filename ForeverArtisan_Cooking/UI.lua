@@ -225,7 +225,8 @@ local function BuildProgressPage(p)
 
   Header(p, -54, "Plan to skill")
   -- pop the plan out into a see-through window on screen, like the goals list (Core PlanWindow.lua)
-  if FA.PlanPop then p.pop = FA.PlanPop.Button(p, "Cooking") end
+  -- one button for the plan and the shopping list (0.9.55)
+  if FA.PlanPop then p.pop = FA.PlanPop.Button(p, "Cooking", function() return view.shopping end) end
   p.target = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
   p.target:SetSize(46, 20); p.target:SetPoint("TOPLEFT", 120, -50)
   p.target:SetAutoFocus(false); p.target:SetNumeric(true); p.target:SetMaxLetters(3)
@@ -239,18 +240,20 @@ local function BuildProgressPage(p)
   -- the shopping list moves down when the window is taller and the plan shows more rows
   p.shopBox = CreateFrame("Frame", nil, p); p.shopBox:SetSize(W, 20); p.shopBox:SetPoint("TOPLEFT", 0, -238)
   Header(p.shopBox, 0, "Shopping list")
-  Text(p.shopBox, "GameFontDisableSmall", "TOPLEFT", 120, -2):SetText("have / need  ·  right-click: track on screen")
+  Text(p.shopBox, "GameFontDisableSmall", "TOPLEFT", 120, -2):SetText("have / need  ·  right-click: pop out one item")
   p.shopAll = MakeRows(p.shopBox, SHOP_MAX, -20, false)
-  -- Track all: every item on the list goes on the on-screen goals list (Core Tracker.lua)
-  p.trackAll = Button(p.shopBox, "Track all", 90, function()
+  -- Pop out: the whole list goes on screen in the goals window (Core Tracker.lua); Pop in takes it off.
+  -- Same word as the plan's button (Kerry, Nov 22: "a pop in and popout button for both plan and shopping")
+  p.trackAll = Button(p.shopBox, "Pop out", 70, function()
     if not FA.Track then return end
-    if FA.Track.AllOn("Cooking") then FA.Track.UntrackAll("Cooking") else FA.Track.TrackAll("Cooking", view.shopping) end
+    if FA.Track.AllOn("Cooking") then FA.Track.UntrackAll("Cooking")
+    else FA.Track.TrackAll("Cooking", view.shopping); if FA.Track.ShowList then FA.Track.ShowList() end end
     if ns.OnChange then ns.OnChange() end
   end)
   p.trackAll:SetHeight(18); p.trackAll:SetPoint("TOPRIGHT", p.shopBox, "TOPRIGHT", -24, 2); p.trackAll:Hide()
   K.Tip(p.trackAll, function()
-    GameTooltip:AddLine("Track on screen")
-    GameTooltip:AddLine("Puts the whole list on the on-screen goals list, like quest objectives. Right-click one item to track just that one. /fa goals shows or hides the list.", 1, 1, 1, true)
+    GameTooltip:AddLine("Pop the shopping list out")
+    GameTooltip:AddLine("Puts the whole list on screen in the goals window, with have / need counts that move as you buy, loot or bank. Right-click one item to pop out just that one. /fa goals shows or hides the window.", 1, 1, 1, true)
   end)
   -- click a shopping list item at the Auction House: its name goes in the search box (you press Search)
   for _, r in ipairs(p.shopAll) do
@@ -328,6 +331,7 @@ local function RefreshProgressPage(p)
     local row = plan[k]
     if st.train and row then
       row.right = YELLOW .. ("train at %d"):format(st.train.at) .. "|r  " .. (row.right or "")
+      row.train = st.train -- the goals window: a click points to this trainer (0.9.55)
       row.tip = YELLOW .. ("Not learned yet: train it at %d%s."):format(st.train.at,
         st.train.who and (" from " .. st.train.who) or "") .. "|r\n" .. (row.tip or "")
     end
@@ -399,8 +403,8 @@ local function RefreshProgressPage(p)
   view.shopping = shopping
   if FA.Track then
     FA.Track.Sync("Cooking", shopping)
-    p.trackAll:SetText(FA.Track.AllOn("Cooking") and "Untrack all" or "Track all")
-    p.trackAll:SetShown(#shop > 0)
+    p.trackAll:SetText(FA.Track.AllOn("Cooking") and "Pop in" or "Pop out")
+    p.trackAll:Hide() -- (0.9.55: the Pop out by "Plan to skill" pops the shopping list out too)
   end
   p.cost:SetText(FA.ShopCostText and FA.ShopCostText(shopping) or "")
 end

@@ -222,7 +222,9 @@ function FA.RecipeWhere(recipeName, prefixes)
     for _, p in ipairs(prefixes or PREFIXES) do
       for _, h in ipairs(V.hitsForLink(nil, p .. recipeName) or {}) do
         if h.npc and not (h.item and h.item.train) then
-          local price = h.item and h.item.p and GetCoinTextureString and GetCoinTextureString(h.item.p) or ""
+          local price = h.item and h.item.p and h.item.p > 0 and GetCoinTextureString and GetCoinTextureString(h.item.p) or ""
+          -- bought with Merchant's Favor (the smoothie recipes): say so, not "free"
+          if h.item and h.item.cur then price = (price ~= "" and (price .. " + ") or "") .. h.item.cur end
           lines[#lines + 1] = ("Sold by: %s, %s%s%s"):format(h.npc.n, h.npc.s or h.npc.z or "?",
             price ~= "" and ("  " .. price) or "",
             (h.item and h.item.lim) and "  (limited stock)" or "")
@@ -737,4 +739,89 @@ function ForeverArtisan.TrainShopRows(shopping, skill)
       tip = e.source .. (e.train.npc and e.train.npc.n and CLICK:format(e.train.npc.n) or "") .. trackTip(t) }
   end
   return rows
+end
+
+---------------------------------------------------------------- learned at a trainer
+-- A recipe you train counts as learned right away, not once you next open the profession window (Kerry,
+-- Nov 22: trained Bolt of Woolen Cloth, the list still said "Train now"). Each crafting module adds
+-- fn(name, spellId) -> true when that was one of its recipes and it marked it learned.
+local learnHooks = {}
+function ForeverArtisan.OnLearn(fn) learnHooks[#learnHooks + 1] = fn end
+function ForeverArtisan.RecipeLearned(name, spellId)
+  local any = false
+  for _, fn in ipairs(learnHooks) do
+    local ok, hit = pcall(fn, name, spellId)
+    if ok and hit then any = true end
+  end
+  if any then
+    if ForeverArtisan.Track and ForeverArtisan.Track.Replan then pcall(ForeverArtisan.Track.Replan) end
+    if ForeverArtisan.PlanPop and ForeverArtisan.PlanPop.Replan then pcall(ForeverArtisan.PlanPop.Replan) end
+  end
+  return any
+end
+-- "You have learned how to create a new item: Bolt of Woolen Cloth."
+local function LearnPattern()
+  local f = type(ERR_LEARN_RECIPE_S) == "string" and ERR_LEARN_RECIPE_S or "You have learned how to create a new item: %s."
+  return "^" .. f:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%s", "(.+)") .. "$"
+end
+ForeverArtisan._LearnPattern = LearnPattern
+do
+  local ev = CreateFrame("Frame")
+  pcall(ev.RegisterEvent, ev, "CHAT_MSG_SYSTEM")
+  pcall(ev.RegisterEvent, ev, "NEW_RECIPE_LEARNED")
+  ev:SetScript("OnEvent", function(_, e, a)
+    if e == "NEW_RECIPE_LEARNED" then
+      if type(a) == "number" then ForeverArtisan.RecipeLearned(nil, a) end
+    elseif type(a) == "string" then
+      local name = a:match(LearnPattern())
+      if name then ForeverArtisan.RecipeLearned(name, nil) end
+    end
+  end)
+end
+
+---------------------------------------------------------------- gathering tools
+-- Do you have a tool for Skinning or Mining? The id list (from the game files) first, then anything in your
+-- bags or worn whose tooltip says it "Serves as a ..." (the Yeti Skinner, bug report Nov 24: hotfixed items
+-- aren't in the game files, so an id list alone kept missing new ones).
+--   FA.HasTool(ids, phrase, cache) -> true / false, or nil when the game can't count items
+--   cache: [itemID] = true/false, kept per module once an item's tooltip has loaded
+function ForeverArtisan.HasTool(ids, phrase, cache)
+  local count = (C_Item and C_Item.GetItemCount) or GetItemCount
+  if not count then return nil end
+  for _, id in ipairs(ids or {}) do
+    cache[id] = true
+    local ok, n = pcall(count, id)
+    if ok and (n or 0) > 0 then return true end
+  end
+  local function says(id, read)
+    if cache[id] ~= nil then return cache[id] end
+    if not C_TooltipInfo then return false end
+    local ok, data = pcall(read)
+    local lines = ok and type(data) == "table" and data.lines
+    if type(lines) ~= "table" or #lines < 2 then return false end -- not loaded yet: ask again next time
+    local yes = false
+    for _, l in ipairs(lines) do
+      if type(l.leftText) == "string" and l.leftText:find(phrase, 1, true) then yes = true end
+    end
+    cache[id] = yes
+    return yes
+  end
+  -- worn: a tool in a hand, a thrown one in the ranged slot
+  if GetInventoryItemID then
+    for _, slot in ipairs({ 16, 17, 18 }) do
+      local ok, id = pcall(GetInventoryItemID, "player", slot)
+      if ok and id and says(id, function() return C_TooltipInfo.GetInventoryItem("player", slot) end) then return true end
+    end
+  end
+  local C = C_Container
+  if C and C.GetContainerNumSlots and C.GetContainerItemID then
+    for bag = 0, 4 do
+      local okN, n = pcall(C.GetContainerNumSlots, bag)
+      for slot = 1, (okN and n or 0) do
+        local okI, id = pcall(C.GetContainerItemID, bag, slot)
+        if okI and id and says(id, function() return C_TooltipInfo.GetBagItem(bag, slot) end) then return true end
+      end
+    end
+  end
+  return false
 end

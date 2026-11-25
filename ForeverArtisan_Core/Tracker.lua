@@ -45,6 +45,7 @@ end
 local InstantAPI = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
 local GATHER_SUB = { [7] = "Mining", [9] = "Herbalism", [6] = "Skinning" }
 local function GatheredBy(id)
+  if T._gatheredBy then return T._gatheredBy(id) end -- the test suite
   if not InstantAPI then return end
   local ok, _, _, _, _, _, classID, subID = pcall(InstantAPI, id)
   if ok and classID == 7 then return GATHER_SUB[subID] end
@@ -64,7 +65,7 @@ local function Mini(n)
 end
 local function Saved(e)
   if e.train then return { name = e.name, want = 1, train = { at = e.train.at, who = e.train.who, npc = Mini(e.train.npc) } } end
-  return { name = e.name, want = e.need }
+  return { name = e.name, want = e.need, alt = e.alt }
 end
 
 local Refresh -- below
@@ -116,12 +117,21 @@ function T.TrackAll(prof, list)
   s.items[prof] = s.items[prof] or {}
   local n = 0
   for _, e in ipairs(list or {}) do
-    if Trackable(e) and (e.have or 0) < (e.need or 1) then s.items[prof][Key(e)] = Saved(e); n = n + 1 end
+    -- (what the plan makes itself, like bolts from cloth, stays off: its cloth is on the list instead.
+    -- Kerry, Nov 22: Bolt of Silk Cloth 0/100 next to Silk Cloth 0/400)
+    if Trackable(e) and not e.craft and (e.have or 0) < (e.need or 1) then s.items[prof][Key(e)] = Saved(e); n = n + 1 end
   end
   s.all[prof] = true
   s.hidden = nil
   Refresh()
   return n
+end
+
+-- the shopping list popped out: make sure the goals window is on screen and unfolded (0.9.55)
+function T.ShowList()
+  local s = S()
+  s.hidden, s.folded = nil, nil
+  Refresh()
 end
 
 function T.UntrackAll(prof)
@@ -142,9 +152,11 @@ function T.Sync(prof, list)
     if Trackable(e) then
       local k = Key(e)
       seen[k] = true
-      if p[k] then
-        if e.train then p[k] = Saved(e) else p[k].want, p[k].name = e.need, e.name or p[k].name end
-      elseif s.all[prof] and (e.have or 0) < (e.need or 1) then p[k] = Saved(e) end
+      if p[k] and e.craft and s.all[prof] then
+        p[k] = nil -- the plan makes it now: Track all doesn't keep it
+      elseif p[k] then
+        if e.train then p[k] = Saved(e) else p[k].want, p[k].name, p[k].alt = e.need, e.name or p[k].name, e.alt end
+      elseif s.all[prof] and not e.craft and (e.have or 0) < (e.need or 1) then p[k] = Saved(e) end
     end
   end
   for id in pairs(p) do if not seen[id] then p[id] = nil end end
@@ -169,11 +181,42 @@ end
 function T.RemoveLine(ln)
   if not ln then return end
   S().removedOnce = true -- they've found it: the hint under the list can go
-  if ln.shopProf then T.Untrack(ln.shopProf, ln.key or ln.id)
+  if ln.planProf and FA.PlanPop then FA.PlanPop.Toggle(ln.planProf, false)
+  elseif ln.shopProf then T.Untrack(ln.shopProf, ln.key or ln.id)
   elseif ln.goalProf and goalRemove[ln.goalProf] and ln.goalIndex then
     pcall(goalRemove[ln.goalProf], ln.goalIndex)
     Refresh()
   end
+end
+
+-- right-click a heading: that whole group is done (Kerry, Nov 25: "close out goals from the popout").
+-- "<prof> plan" or "<prof> shopping": the profession comes out (Pop in, or its tracked list);
+-- a gathering heading: every line under it.
+function T.RemoveGroup(g)
+  if not g then return end
+  S().removedOnce = true
+  local prof = g.plan or (type(g.title) == "string" and g.title:match("^(.+) shopping$"))
+  if prof then
+    if FA.PlanPop and FA.PlanPop.IsOn and FA.PlanPop.IsOn(prof) then FA.PlanPop.Toggle(prof, false) end
+    T.UntrackAll(prof)
+    return
+  end
+  local goals = {}
+  for _, ln in ipairs(g.lines or {}) do
+    if ln.shopProf then
+      local p = S().items[ln.shopProf]
+      if p then p[ln.key or ln.id] = nil; if not next(p) then S().items[ln.shopProf] = nil end end
+      S().all[ln.shopProf] = nil
+    elseif ln.goalProf and ln.goalIndex then
+      goals[#goals + 1] = ln
+    end
+  end
+  -- gathering goals by index: the last first, so the others keep their place
+  table.sort(goals, function(a, b) return a.goalIndex > b.goalIndex end)
+  for _, ln in ipairs(goals) do
+    if goalRemove[ln.goalProf] then pcall(goalRemove[ln.goalProf], ln.goalIndex) end
+  end
+  Refresh()
 end
 
 ---------------------------------------------------------------- what to show
@@ -224,21 +267,50 @@ function T.Lines()
   for _, prof in ipairs(profs) do
     local ids = {}
     for id in pairs(s.items[prof]) do ids[#ids + 1] = id end
-    -- training first, then the items by name
+    -- training first, in the order you'll learn it (Kerry's screenshot, Nov 22: by name, "at 120" came
+    -- first), then the items by name
     table.sort(ids, function(a, b)
       local ta, tb = type(a) == "string", type(b) == "string"
       if ta ~= tb then return ta end
-      return (s.items[prof][a].name or "") < (s.items[prof][b].name or "")
+      local ia, ib = s.items[prof][a], s.items[prof][b]
+      if ta then
+        local aa, ab = ia.train and ia.train.at or 0, ib.train and ib.train.at or 0
+        if aa ~= ab then return aa < ab end
+      end
+      return (ia.name or "") < (ib.name or "")
     end)
     for _, id in ipairs(ids) do
       local it = s.items[prof][id]
       if type(id) == "string" then
-        -- a Train line: it drops off once you've learned it (the plan stops listing it)
-        Add(prof .. " shopping", "s:" .. prof .. ":" .. id,
-          { key = id, name = it.name or id, have = 0, want = 1, train = it.train or {}, shopProf = prof })
+        -- a Train line: it drops off once you've learned it (the plan stops listing it). With the plan
+        -- popped out it says "train at 80" there already, so the shopping list leaves it out (Kerry,
+        -- Nov 22: "Redundant?")
+        -- Only training a plan row shows: a recipe the plan uses just to make a material (Bolt of Woolen
+        -- Cloth for the capes) has no row of its own, so it stays here (Kerry, Nov 22: "bolt of woolen
+        -- cloth is not on the list?")
+        if not (FA.PlanPop and FA.PlanPop.IsOn and FA.PlanPop.IsOn(prof) and T.PlanTrains(prof, it.name or id)) then
+          Add(prof .. " shopping", "s:" .. prof .. ":" .. id,
+            { key = id, name = it.name or id, have = 0, want = 1, train = it.train or {}, shopProf = prof })
+        end
       else
       local by = GatheredBy(id)
+      -- under the gathering profession only when this character has it; otherwise it's shopping
+      -- (Kerry, Nov 22: "Why does it show skinning. She doesn't have skinning?")
+      if by and goalKnows[by] then
+        local okK, knows = pcall(goalKnows[by])
+        if okK and not knows then by = nil end
+      end
       local want, have, shared, hold = it.want or 1, Own(id), nil, nil
+      -- AH or make (bolts): the cloth for them counts too, past what the cloth's own line needs
+      local altNote
+      if it.alt and FA.AltHave then
+        local mine = s.items[prof]
+        have = FA.AltHave(it.alt, math.max(0, have), function(g)
+          local other = type(mine[g]) == "table" and (mine[g].want or 0) or 0
+          return Own(g) - other
+        end)
+        altNote = FA.AltNote(it.alt, want - have)
+      end
       if left[id] then
         local own = have
         have = math.min(left[id], want)
@@ -247,7 +319,7 @@ function T.Lines()
         if shared.buy > 0 then hold = true end
       end
       local line = Add(by or (prof .. " shopping"), "s:" .. prof .. ":" .. id,
-        { id = id, name = it.name or ("item " .. id), have = have, want = want, note = by and prof or nil,
+        { id = id, name = it.name or ("item " .. id), have = have, want = want, note = altNote or (by and prof) or nil,
           shopProf = prof, shared = shared, hold = hold })
       -- finished and gone: no longer tracked
       if line.gone then s.items[prof][id] = nil end
@@ -279,10 +351,28 @@ function T.Lines()
     end
   end
   goalSeen = newSeen
+  -- popped-out plans (Core PlanWindow.lua): "<prof> plan" right above "<prof> shopping" (0.9.55, Kerry:
+  -- one Pop out puts the plan and the shopping list in this window)
+  if FA.PlanPop and FA.PlanPop.Groups then
+    local okP, plans = pcall(FA.PlanPop.Groups, true)
+    for _, pg in ipairs(okP and plans or {}) do
+      local g = Group(pg.prof .. " plan", pg.sub)
+      g.plan = pg.prof
+      if pg.note then g.lines[#g.lines + 1] = { planNote = pg.note, name = "", have = 0, want = 1, planProf = pg.prof } end
+      for _, d in ipairs(pg.rows) do
+        g.lines[#g.lines + 1] = { plan = d, planProf = pg.prof, name = d.left or "", have = 0, want = 1 }
+      end
+    end
+  end
   -- gathering groups first, in the usual order, then the shopping groups
+  -- (a profession's plan right above its shopping list: Kerry's screenshot had the plan last)
+  local function base(g) return g.plan or (g.title:gsub(" shopping$", "")) end
   table.sort(groups, function(a, b)
     local oa, ob = ORDER[a.title] or 9, ORDER[b.title] or 9
     if oa ~= ob then return oa < ob end
+    local ba, bb = base(a), base(b)
+    if ba ~= bb then return ba < bb end
+    if (a.plan ~= nil) ~= (b.plan ~= nil) then return a.plan ~= nil end
     if (a.sub ~= nil) ~= (b.sub ~= nil) then return b.sub ~= nil end
     return a.title < b.title
   end)
@@ -359,23 +449,67 @@ local function Line(i)
   if not l then
     l = {}
     l.text = FA.UI.Text(f, "GameFontHighlightSmall", "TOPLEFT", 0, 0)
-    l.text:SetWidth(W - 16); l.text:SetWordWrap(false)
+    l.text:SetWidth(W - 16); l.text:SetWordWrap(false); l.text:SetText("")
+    -- a plan row's right side ("train at 55  skill 75-81")
+    l.right = FA.UI.Text(f, "GameFontHighlightSmall", "TOPLEFT", 0, 0); l.right:SetJustifyH("RIGHT"); l.right:SetText("")
     l.bar = FA.UI.Bar(f, W - 26, 2)
     -- the line is a button: hover for the item, click for the nearest vendor (at the Auction House:
-    -- search it), right-click to stop tracking it (left-click: Discord ask, Nov 22)
+    -- search it), right-click to stop tracking it (left-click: Discord ask, Nov 22). A heading folds its
+    -- group; a plan row opens its profession.
     l.btn = CreateFrame("Button", nil, f)
     l.btn:SetPoint("TOPLEFT", l.text, "TOPLEFT", 0, 1); l.btn:SetSize(W - 20, ROW_H)
     l.btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     l.btn:SetScript("OnClick", function(self, button)
       local ln = self.ln
       if not ln then return end
+      if ln.head and button == "RightButton" then T.RemoveGroup(ln.group) return end
+      if ln.head then
+        local st = S(); st.foldG = st.foldG or {}
+        st.foldG[ln.head] = not st.foldG[ln.head] or nil
+        Refresh()
+        return
+      end
       if button == "RightButton" then T.RemoveLine(ln) return end
+      if ln.plan then
+        -- a recipe still to train: a waypoint to its trainer (Kerry, Nov 22: "Clicking on woolen cape should
+        -- point you to trainer?"); one you know: its profession window
+        local t = ln.plan.train
+        if t then
+          T.GoTo({ train = t, name = (ln.plan.left or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("%s+x%d.*$", ""):gsub("%s+about.*$", "") })
+          return
+        end
+        if FA.PlanPop and FA.PlanPop.Open then FA.PlanPop.Open(ln.planProf) end
+        return
+      end
+      if ln.planProf then return end
       T.GoTo(ln)
     end)
     l.btn:SetScript("OnEnter", function(self)
       local ln = self.ln
       if not ln then return end
       GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+      if ln.head then
+        GameTooltip:AddLine(ln.head)
+        GameTooltip:AddLine("Click to fold or unfold it", 0.5, 0.75, 1)
+        GameTooltip:AddLine((ln.group and (ln.group.plan or (ln.group.title or ""):find(" shopping$")))
+          and "Right-click to close it out (the plan and its shopping list)" or "Right-click to remove everything under it", 0.5, 0.75, 1)
+        GameTooltip:Show()
+        return
+      end
+      if ln.plan then
+        local d = ln.plan
+        if d.id and GameTooltip.SetItemByID then GameTooltip:SetItemByID(d.id) else GameTooltip:AddLine(d.tipTitle or "") end
+        if d.tip then GameTooltip:AddLine(d.tip, 1, 1, 1, true) end
+        local t = d.train
+        if t and t.npc and t.npc.n then
+          GameTooltip:AddLine("Click for a waypoint to " .. t.npc.n .. ", " .. (t.npc.s or t.npc.z or "?"), 0.5, 0.75, 1, true)
+        elseif not t then
+          GameTooltip:AddLine("Click to open " .. ln.planProf, 0.5, 0.75, 1, true)
+        end
+        GameTooltip:AddLine("Right-click to put the plan and shopping list back", 0.5, 0.75, 1, true)
+        GameTooltip:Show()
+        return
+      end
       if ln.id and GameTooltip.SetItemByID then GameTooltip:SetItemByID(ln.id) else GameTooltip:AddLine(ln.name or "") end
       if ln.shared then
         local sh = ln.shared
@@ -400,6 +534,21 @@ local function Line(i)
   return l
 end
 
+-- the window is wider while a plan shows (its rows say which skill range each craft covers)
+local PLAN_W = 340
+
+-- whether the popped-out plan has a row that says "train at" for this Train line ("Train Woolen Cape")
+function T.PlanTrains(prof, trainName)
+  local want = tostring(trainName or ""):gsub("^Train ", "")
+  local d = FA.PlanPop and FA.PlanPop._data and FA.PlanPop._data[prof]
+  for _, row in ipairs(d and d.rows or {}) do
+    if row.train then
+      local left = tostring(row.left or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+      if left:sub(1, #want) == want then return true end
+    end
+  end
+  return false
+end
 function Refresh()
   local s = S()
   local groups = T.Lines()
@@ -409,48 +558,74 @@ function Refresh()
   end
   if not f then Build() end
   f:Show()
+  local w = W
+  for _, g in ipairs(groups) do if g.plan then w = PLAN_W end end
+  f:SetWidth(w)
   -- locked: clicks pass through to the world (the fold and close buttons still work)
   f:EnableMouse(not s.locked)
   f.fold.t:SetText(s.folded and "+" or "-")
+  local foldG = s.foldG or {}
   local y, i = -22, 0
   if not s.folded then
     for _, g in ipairs(groups) do
       i = i + 1
       local h = Line(i)
-      h.text:ClearAllPoints(); h.text:SetPoint("TOPLEFT", 8, y)
+      local folded = foldG[g.title]
+      h.text:ClearAllPoints(); h.text:SetPoint("TOPLEFT", 8, y); h.text:SetWidth(w - 16)
       h.text:SetFontObject("GameFontNormalSmall")
-      h.text:SetText(GOLD .. g.title .. "|r" .. (g.sub and (GRAY .. "  (" .. g.sub .. ")|r") or "")); h.text:Show(); h.bar:Hide(); h.btn:Hide(); h.btn.ln = nil
+      h.text:SetText((folded and (GRAY .. "+ |r") or "") .. GOLD .. g.title .. "|r" .. (g.sub and (GRAY .. "  (" .. g.sub .. ")|r") or "")
+        .. (folded and (GRAY .. "  " .. #g.lines .. "|r") or ""))
+      h.text:Show(); h.right:SetText(""); h.right:Hide(); h.bar:Hide()
+      -- a heading folds its group (Kerry, Nov 22: plan and shopping in one window, kept short)
+      h.btn.ln = { head = g.title, group = g }; h.btn:SetSize(w - 20, ROW_H); h.btn:EnableMouse(not s.locked); h.btn:Show()
       y = y - ROW_H
-      for _, ln in ipairs(g.lines) do
+      for _, ln in ipairs(folded and {} or g.lines) do
         i = i + 1
         local l = Line(i)
         l.text:ClearAllPoints(); l.text:SetPoint("TOPLEFT", 16, y)
         l.text:SetFontObject("GameFontHighlightSmall")
-        local count = ("%d / %d"):format(math.min(ln.have, ln.want), ln.want)
-        if ln.train then count = ln.train.at and ("at " .. ln.train.at) or "" end
-        -- on more than one list: how many to buy for all of them together
-        if ln.shared and not ln.done and ln.shared.buy > 0 then
-          count = count .. GRAY .. "  (buy " .. ln.shared.buy .. " in all)|r"
+        l.right:SetText(""); l.right:Hide()
+        if ln.planNote then
+          l.text:SetWidth(w - 24); l.text:SetText(ln.planNote); l.text:Show()
+          l.btn:Hide(); l.btn.ln = nil; l.bar:Hide()
+          y = y - ROW_H
+        elseif ln.plan then
+          local d = ln.plan
+          l.right:SetText(d.right or ""); l.right:SetWidth(0)
+          local rw = tonumber(l.right.GetStringWidth and l.right:GetStringWidth()) or 0
+          l.right:ClearAllPoints(); l.right:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, y); l.right:Show()
+          l.text:SetWidth(math.max(80, w - 24 - rw - 8)); l.text:SetText(d.left or ""); l.text:Show()
+          l.btn.ln = ln; l.btn:SetSize(w - 20, ROW_H); l.btn:EnableMouse(not s.locked); l.btn:Show()
+          l.bar:Hide()
+          y = y - ROW_H
+        else
+          l.text:SetWidth(w - 16)
+          local count = ("%d / %d"):format(math.min(ln.have, ln.want), ln.want)
+          if ln.train then count = ln.train.at and ("at " .. ln.train.at) or "" end
+          -- on more than one list: how many to buy for all of them together
+          if ln.shared and not ln.done and ln.shared.buy > 0 then
+            count = count .. GRAY .. "  (buy " .. ln.shared.buy .. " in all)|r"
+          end
+          l.text:SetText(ln.done and (GREEN .. ln.name .. "  " .. count .. "  done|r")
+            or (ln.name .. "  " .. count .. (ln.note and (GRAY .. "  (" .. ln.note .. ")|r") or "")))
+          l.text:Show()
+          l.btn.ln = ln; l.btn:SetSize(w - 20, ROW_H); l.btn:EnableMouse(not s.locked); l.btn:Show()
+          l.bar:ClearAllPoints(); l.bar:SetPoint("TOPLEFT", 16, y - ROW_H + 3)
+          l.bar:Set(ln.have / math.max(ln.want, 1), ln.done and "done" or nil); l.bar:SetShown(not ln.done and not ln.train)
+          y = y - ROW_H - 2
         end
-        l.text:SetText(ln.done and (GREEN .. ln.name .. "  " .. count .. "  done|r")
-          or (ln.name .. "  " .. count .. (ln.note and (GRAY .. "  (" .. ln.note .. ")|r") or "")))
-        l.text:Show()
-        l.btn.ln = ln; l.btn:EnableMouse(not s.locked); l.btn:Show()
-        l.bar:ClearAllPoints(); l.bar:SetPoint("TOPLEFT", 16, y - ROW_H + 3)
-        l.bar:Set(ln.have / math.max(ln.want, 1), ln.done and "done" or nil); l.bar:SetShown(not ln.done and not ln.train)
-        y = y - ROW_H - 2
       end
       y = y - 2
     end
   end
-  for k = i + 1, #pool do pool[k].text:Hide(); pool[k].bar:Hide(); pool[k].btn:Hide(); pool[k].btn.ln = nil end
+  for k = i + 1, #pool do pool[k].text:Hide(); pool[k].right:Hide(); pool[k].bar:Hide(); pool[k].btn:Hide(); pool[k].btn.ln = nil end
   -- a small hint under the list (hidden while locked: lines don't take clicks then)
   if not f.hint then
     f.hint = FA.UI.Text(f, "GameFontDisableSmall", "TOPLEFT", 8, 0)
-    f.hint:SetText("Click: nearest vendor  ·  Right-click: remove")
+    f.hint:SetText("Click: go there  ·  Right-click: remove  ·  Heading: click to fold, right-click to close")
   end
   if not s.folded and not s.locked then
-    f.hint:ClearAllPoints(); f.hint:SetPoint("TOPLEFT", 8, y - 2); f.hint:Show()
+    f.hint:ClearAllPoints(); f.hint:SetPoint("TOPLEFT", 8, y - 2); f.hint:SetWidth(w - 16); f.hint:Show()
     y = y - ROW_H
   else
     f.hint:Hide()
@@ -466,10 +641,12 @@ function T.Slash(rest)
   if r == "lock" then s.locked = true; say("Goals list locked in place. /fa goals unlock to move it.")
   elseif r == "unlock" then s.locked = nil; say("Goals list unlocked: drag it to move it.")
   elseif r == "reset" then
-    s.pos = nil
+    -- back to its first spot, unfolded (Kerry, Nov 22: folded in the top-left corner under the
+    -- character portrait, it looked gone)
+    s.pos, s.folded = nil, nil
     if f then f:ClearAllPoints(); f:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -90, -330) end
     s.hidden = nil
-    say("Goals list moved back to its first spot.")
+    say("Goals list moved back to its first spot and unfolded.")
   elseif r == "clear" then
     s.items, s.all = {}, {}
     say("Stopped tracking shopping list items. Gathering goals stay (remove them on their Progress tab).")

@@ -48,13 +48,12 @@ local function Today() return date("%Y-%m-%d") end
 ns.Today = Today
 
 local CountAPI = (C_Item and C_Item.GetItemCount) or GetItemCount
+-- Anything else whose tooltip says it "Serves as a Mining Pick" counts too, in your bags or worn (hotfixed
+-- items aren't in the game files; the Skinning knife check had the same gap, bug report Nov 24).
+local isPick = {}
+ns._isPick = isPick -- for the test suite
 function ns.HasPick()
-  if not CountAPI then return nil end
-  for _, id in ipairs(PICKS) do
-    local ok, n = pcall(CountAPI, id)
-    if ok and (n or 0) > 0 then return true end
-  end
-  return false
+  return ForeverArtisan.HasTool(PICKS, "Serves as a Mining Pick", isPick)
 end
 
 ---------------------------------------------------------------- skill

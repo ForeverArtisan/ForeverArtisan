@@ -217,13 +217,15 @@ local st,sh,stk,tg=lw.Plan(140)
 print("LW PLAN to",tg,"steps",#st,"stuck",stk)
 for _,x in ipairs(st) do print("   step",x.r.name,x.crafts,x.from,x.to) end
 local cured,hide
-for _,e in ipairs(sh) do print("   shop",e.name,e.need,e.have,e.craft,e.source) if e.id==4231 then cured=e end if e.id==783 then hide=e end end
-assert(cured and cured.craft, "cured hide should be a sub-craft")
+for _,e in ipairs(sh) do if e.id==4231 then cured=e end if e.id==783 then hide=e end end
+-- 0.9.55: buy it or make it, one line: "Cured Light Hide 1 / 207 (AH or make: 206 Light Hide + 206 Salt)"
+assert(cured and cured.alt and not cured.craft, "cured hide: AH or make")
 local hillCrafts=0 for _,x in ipairs(st) do if x.r.name=="Hillman's Shoulders" then hillCrafts=hillCrafts+x.crafts end end
 local directCured=0 for _,x in ipairs(st) do if x.r.name=="Cured Light Hide" then directCured=directCured+x.crafts end end
-assert(cured.need==hillCrafts*2, "cured need")
-assert(cured.craft+directCured==cured.need-1, "craft only the shortfall (direct crafts count toward it)")
-assert(hide and hide.need==cured.craft+directCured, "light hide = sub-crafts + direct cured crafts")
+assert(cured.need==hillCrafts*2-directCured, "cured need: all the shoulders use, less what the Cured step makes")
+assert(cured.have==1, "the one in bags")
+assert(ForeverArtisan.AltNote(cured.alt, cured.need-cured.have)=="AH or make: 206 Light Hide + 206 Salt", tostring(ForeverArtisan.AltNote(cured.alt, cured.need-cured.have)))
+assert(hide and hide.need==directCured, "light hide line: only the Cured step's own")
 assert(hide.source:find("Crossroads") and hide.source:find("Skinning log"), "light hide should point to Skinning log")
 run("FALW","plan 140"); run("FALW","next"); run("FALW","")
 print("LW ADVICE", lw.SkillInfo().advice)
@@ -762,6 +764,45 @@ do
   local bolt for _,e in ipairs(sh) do if e.id==2996 then bolt=e end end
   print("TAILOR PLAN", #st, bolt and bolt.need, bolt and bolt.craft)
   assert(bolt and bolt.craft, "bolts are crafted, not bought")
+  -- 0.9.55: a bolt step you still have to train makes 11, later steps need more: the rest is made from
+  -- cloth too, not bought (Kerry, Nov 22: Bolt of Silk Cloth 0/100 and Silk Cloth 0/44)
+  do
+    local tl3=loadedFrames["ForeverArtisan_Tailoring"].ns
+    local oTR=ForeverArtisan.TrainableRecipe
+    ForeverArtisan.TrainableRecipe=function(prof,name) if name=="Bolt of Linen Cloth" then return {at=1,cost=100,who="Test Trainer"} end end
+    local TR2={[2963]={name="Bolt of Linen Cloth",learned=false,maxTrivialLevel=75,relativeDifficulty=0,out=2996,reag={{2589,2}}},
+     [3755]={name="Linen Bag",learned=true,maxTrivialLevel=95,relativeDifficulty=0,out=4238,reag={{2996,3},{2320,3}}}}
+    window(TR2,197,"Tailoring")
+    local st3,sh3=tl3.Plan(90)
+    local bolt3, cloth3
+    for _,e in ipairs(sh3) do if e.id==2996 then bolt3=e end if e.id==2589 then cloth3=e end end
+    local steps={} for _,x in ipairs(st3) do steps[#steps+1]=x.r.name.." x"..x.crafts end
+    print("BOLT PLAN", table.concat(steps,", "), bolt3 and bolt3.need, bolt3 and bolt3.craft, cloth3 and cloth3.need)
+    assert(bolt3 and bolt3.craft and (bolt3.source:find("Made by the plan itself",1,true) or bolt3.source:find("yourself",1,true)), "bolts: made by the plan, not bought: "..tostring(bolt3 and bolt3.source))
+    assert(cloth3 and cloth3.need>=bolt3.need*2-((bolt3.have or 0)*2), "cloth for every bolt: "..tostring(cloth3 and cloth3.need).." for "..tostring(bolt3.need))
+    -- 0.9.55: the bolt recipe isn't learned and isn't a step (gray), the Linen Bag needs bolts: the plan
+    -- trains it and makes them from cloth, not "buy bolts" (Kerry, Nov 22: Bolt of Woolen Cloth on the list)
+    local TR4={[2963]={name="Bolt of Linen Cloth",learned=false,maxTrivialLevel=20,relativeDifficulty=0,out=2996,reag={{2589,2}}},
+     [3755]={name="Linen Bag",learned=true,maxTrivialLevel=95,relativeDifficulty=0,out=4238,reag={{2996,3},{2320,3}}}}
+    window(TR4,197,"Tailoring")
+    local st4,sh4=tl3.Plan(70)
+    local bolt4, cloth4, train4
+    for _,e in ipairs(sh4) do if e.id==2996 then bolt4=e end if e.id==2589 then cloth4=e end if e.name=="Train Bolt of Linen Cloth" then train4=e end end
+    for _,x in ipairs(st4) do assert(x.r.name~="Bolt of Linen Cloth", "gray bolt isn't a step") end
+    -- and listed once: "Bolt of Linen Cloth 0 / N (AH or make: 2N Linen Cloth)", no separate cloth line
+    assert(bolt4 and bolt4.alt and not bolt4.craft, "untrained bolt recipe: AH or make: "..tostring(bolt4 and bolt4.source))
+    assert(not cloth4, "the cloth for the bolts is in the bolt line, not its own")
+    assert(ForeverArtisan.AltNote(bolt4.alt, bolt4.need-bolt4.have)==("AH or make: "..((bolt4.need-bolt4.have)*2).." "..bolt4.alt.from[1].name), "note")
+    -- cloth in bags counts toward the bolts
+    counts[2589]=6
+    local _,sh5=tl3.Plan(70)
+    local bolt5 for _,e in ipairs(sh5) do if e.id==2996 then bolt5=e end end
+    assert(bolt5.have==3, "6 cloth = 3 bolts: "..tostring(bolt5.have))
+    counts[2589]=nil
+    assert(train4 and train4.train and train4.source:find("instead of buying",1,true), "training the bolt recipe is on the list")
+    ForeverArtisan.TrainableRecipe=oTR
+    window(TR,197,"Tailoring")
+  end
   -- the Progress plan counts your bank too: bolts in the bank aren't crafted again
   do
     local tl2=loadedFrames["ForeverArtisan_Tailoring"].ns
@@ -831,7 +872,10 @@ do
   assert(r.tools and r.tools[1].name=="Runed Copper Rod" and not r.tools[1].station, "rod read as a tool")
   local rodShop=select(2,en.Plan(70)) local rod for _,e in ipairs(rodShop) do if e.tool then rod=e end end
   print("ROD", rod and rod.source)
-  assert(rod and rod.source:find("Made with Enchanting"), "rod source")
+  -- 0.9.55: you know how to make it: its materials are on the list and the line says so (Kerry, Nov 22)
+  assert(rod and rod.make=="Runed Copper Rod" and rod.source:find("make it yourself from",1,true), "rod: make it: "..tostring(rod and rod.source))
+  local crod for _,e in ipairs(rodShop) do if e.id==6217 then crod=e end end
+  assert(crod and crod.need>=1, "the Copper Rod for it is on the list")
   local _,esh=en.Plan(70)
   local dust for _,e in ipairs(esh) do if e.id==10940 then dust=e end end
   print("ENCH dust", dust and dust.need, dust and dust.source)
@@ -1052,20 +1096,20 @@ do
   assert(not rows[1].tail:IsShown(), "tail hidden without a price")
   print("PRICE TAIL ok")
 end
--- minimap: one button (the FA); right-click opens Trade Contacts, the old map-pin button is gone
+-- minimap: one button (the FA); right-click opens the search (0.9.55), the old map-pin button is gone
 do
   local mmb=_G.ForeverArtisanMinimapButton
   assert(mmb and not _G.ForeverArtisanContactsMinimapButton, "one minimap button")
-  local opened
-  local oldOpen=ForeverArtisan.Vendors.open
-  ForeverArtisan.Vendors.open=function() opened=true end
+  -- 0.9.55: right-click opens the /fa panel with the search box ready (it opened Trade Contacts before)
+  local focused
   mmb.scripts.OnClick(mmb,"RightButton")
-  ForeverArtisan.Vendors.open=oldOpen
-  assert(opened, "right-click opens Trade Contacts")
+  local pnl=_G.ForeverArtisanPanel
+  assert(pnl and pnl._shown, "right-click opens the panel")
+  pnl:Hide()
   local P0=print; local out={}
   print=function(...) out[#out+1]=table.concat({...}," ") end
   ForeverArtisan.minimap("contacts"); print=P0
-  assert(out[1] and out[1]:find("Right%-click"), "/fa minimap contacts says where it went")
+  assert(out[1] and out[1]:find("/fa contacts",1,true), "/fa minimap contacts says where it went")
 end
 -- Tauren Cultivation: ready line on herb tooltips, one nudge, per-herb level learned from your own casts
 do
@@ -3648,6 +3692,27 @@ do
   assert(tip():find("Worth more sold as it is"), "selling wins")
   PR[9001]=math.floor(value/3)
   assert(tip():find("Worth more disenchanted"), "disenchanting wins")
+  -- 0.9.55: soulbound can't go on the AH: the vendor price, not the AH one (Kerry, Nov 22: soulbound cuffs)
+  PR[9001]=value*3
+  _G.FATestTipTextLeft2={GetText=function() return "Soulbound" end}
+  local function boundTip()
+    local lines={} local tt={GetName=function() return "FATestTip" end, NumLines=function() return 3 end,
+      AddLine=function(_,a) lines[#lines+1]=a end, AddDoubleLine=function(_,a,b) lines[#lines+1]=a.." = "..b end}
+    FA.DisenchantTipLines(tt, 9001) return table.concat(lines,"\n") end
+  t=boundTip()
+  _G.FATestTipTextLeft2=nil
+  assert(t:find("soulbound, no AH",1,true) and not t:find("AH, after",1,true), "soulbound: vendor only: "..t)
+  assert(select(1,FA.DisenchantSale(9001,true))==40, "soulbound sale = vendor price")
+  -- 0.9.55: the combine hint only when it's worth something, in plain words (Kerry, Nov 23: "+1c each")
+  PR[9001]=nil
+  -- this vest gives Greater Magic Essence: 3 Lesser sell for a hair more, not worth saying
+  PR[10939]=900 PR[10938]=301
+  t=tip()
+  assert(not t:find("split",1,true), "3c more: no hint: "..t)
+  PR[10938]=1500
+  t=tip()
+  assert(t:find("right-click to split into 3",1,true), "worth it: say how: "..t)
+  PR[10938]=100 PR[10939]=nil
   GetItemInfo, FA.AHPrice = oldGI, oldAH
   print("disenchant sale line ok")
 end
@@ -3788,7 +3853,7 @@ do
   T.Refresh()
   local hit
   for _,f in ipairs(frames) do local ln=rawget(f,"ln") if type(ln)=="table" and ln.id==line.id and f.scripts.OnClick then hit=f end end
-  local hintShown for _,x in ipairs(fonts) do if rawget(x,"_text")=="Click: nearest vendor  ·  Right-click: remove" and rawget(x,"_shown") then hintShown=true end end
+  local hintShown for _,x in ipairs(fonts) do if (rawget(x,"_text") or ""):find("Click: go there",1,true) and rawget(x,"_shown") then hintShown=true end end
   assert(hintShown, "hint under the list")
   assert(hit, "line button")
   hit.scripts.OnClick(hit, "RightButton")
@@ -3805,7 +3870,7 @@ do
     local ok,err=pcall(f.scripts.OnClick,f,"RightButton") assert(ok,"right-click: "..tostring(err)) clicked=clicked+1 end end
   assert(clicked>0, "shopping rows take a right-click")
   local tb=0
-  for _,f in ipairs(frames) do local tx=rawget(f,"_text") if (tx=="Track all" or tx=="Untrack all") and f.scripts.OnClick then
+  for _,pg in ipairs(frames) do local f=rawget(pg,"trackAll") if type(f)=="table" and f.scripts.OnClick then
     local ok,err=pcall(f.scripts.OnClick,f) assert(ok,"track all: "..tostring(err)) tb=tb+1 end end
   assert(tb>=1, "Track all button")
   -- a new gathering goal brings a hidden list back
@@ -3953,6 +4018,29 @@ do -- 0.9.45: Keen Skinning Knife counts as a Skinning Knife (game tool category
   COUNTS[7005]=1 assert(sk.HasKnife()==true, "Skinning Knife counts") COUNTS[7005]=nil
   COUNTS[15138]=1 assert(sk.HasKnife()==false, "Onyxia Scale Cloak is not a knife") COUNTS[15138]=nil
   COUNTS[260811]=1 assert(sk.HasKnife()==true, "Gnomish Army Knife counts as a knife") COUNTS[260811]=nil
+  -- 0.9.55: an item whose tooltip says "Serves as a Skinning Knife." counts, in your bags or worn
+  -- (bug report, Nov 24: the Yeti Skinner, a thrown weapon, isn't in the game files' tool list)
+  do
+    local oC, oT, oI = C_Container, C_TooltipInfo, GetInventoryItemID
+    local tipFor={ [999001]={ {leftText="Yeti Skinner"}, {leftText="Thrown"}, {leftText="\"Serves as a Skinning Knife.\""} },
+                   [999002]={ {leftText="Rusty Spoon"}, {leftText="Junk"} } }
+    local bags={ [0]={999002}, [1]={} }
+    rawset(_G,"C_Container",{ GetContainerNumSlots=function(b) return bags[b] and #bags[b] or 0 end,
+      GetContainerItemID=function(b,s) return bags[b] and bags[b][s] end })
+    rawset(_G,"C_TooltipInfo",{ GetBagItem=function(b,s) local id=bags[b][s] return {lines=tipFor[id]} end,
+      GetInventoryItem=function(_,slot) return slot==18 and {lines=tipFor[999001]} or nil end })
+    local worn=nil
+    GetInventoryItemID=function(_,slot) if slot==18 then return worn end end
+    assert(sk.HasKnife()==false, "junk in bags: no knife")
+    bags[1]={999001}
+    assert(sk.HasKnife()==true, "Yeti Skinner in bags counts")
+    bags[1]={} sk._isKnife[999001]=nil
+    worn=999001
+    assert(sk.HasKnife()==true, "Yeti Skinner worn in the ranged slot counts")
+    worn=nil
+    rawset(_G,"C_Container",oC) rawset(_G,"C_TooltipInfo",oT) GetInventoryItemID=oI
+    sk._isKnife[999001]=nil sk._isKnife[999002]=nil
+  end
   for id,v in pairs(saved) do COUNTS[id]=v end
   print("skinning knife ok")
 end
@@ -3965,6 +4053,21 @@ do -- 0.9.45: Mining Picks from the game's tool data
   assert(has()==false, "no pick -> missing")
   for _,id in ipairs({2901,6206,259229,260811}) do COUNTS[id]=1 assert(has()==true, "pick "..id.." counts") COUNTS[id]=nil end
   for _,id in ipairs({778,1819,1893}) do COUNTS[id]=1 assert(has()==false, "weapon "..id.." is not a pick") COUNTS[id]=nil end
+  -- 0.9.55: a pick that only says so on its tooltip counts too, in your bags or worn
+  do
+    local oC, oT, oI = C_Container, C_TooltipInfo, GetInventoryItemID
+    local tips={ [999101]={ {leftText="Hotfix Pick"}, {leftText="\"Serves as a Mining Pick.\""} } }
+    local bags={ [0]={} }
+    rawset(_G,"C_Container",{ GetContainerNumSlots=function(b) return bags[b] and #bags[b] or 0 end,
+      GetContainerItemID=function(b,s) return bags[b] and bags[b][s] end })
+    rawset(_G,"C_TooltipInfo",{ GetBagItem=function(b,s) return {lines=tips[bags[b][s]]} end, GetInventoryItem=function() return nil end })
+    GetInventoryItemID=function() return nil end
+    assert(has()==false, "empty bags: no pick")
+    bags[0]={999101}
+    assert(has()==true, "a pick by its tooltip counts")
+    rawset(_G,"C_Container",oC) rawset(_G,"C_TooltipInfo",oT) GetInventoryItemID=oI
+    mn._isPick[999101]=nil
+  end
   for id,v in pairs(saved) do COUNTS[id]=v end
   print("mining pick ok")
 end
@@ -4632,48 +4735,89 @@ do -- 0.9.52: one search box above the /fa panel's tabs (crafts, Auction House p
   C_Item=oCI
   print("0.9.52 search ok")
 end
-do -- 0.9.52: Pop out the plan into a see-through window (Kerry, Nov 22, First Aid Progress tab)
+do -- 0.9.52/0.9.55: one Pop out puts the plan and the shopping list in the goals window (Kerry, Nov 22)
   local fa=loadedFrames["ForeverArtisan_FirstAid"].ns
   local FA=ForeverArtisan
+  local T=FA.Track
   local oPlan=fa.Plan
   local to=40
   local bandage={name="Linen Bandage",itemId=1251,learned=true,reagents={{id=2589,n=1}}}
-  fa.Plan=function() return {{r=bandage,from=1,to=to,crafts=45}}, {}, nil end
+  fa.Plan=function() return {{r=bandage,from=1,to=to,crafts=45}}, {{id=2589,name="Linen Cloth",need=45,have=0,source="Cloth"}}, nil end
   if not _G.ForeverArtisanFirstAidFrame then pcall(fa.ToggleWindow) end
   local w=_G.ForeverArtisanFirstAidFrame
   if w and not w:IsShown() then pcall(fa.ToggleWindow) end
   fa.ShowTab("progress")
   local b=FA.PlanPop._buttons["First Aid"]
   assert(b and b._text=="Pop out", "Pop out button by Plan to skill")
+  local st=ForeverArtisanSettings.track[FA.CharKey(ForeverArtisanSettings.track)]
+  st.hidden, st.folded = true, true
   b.scripts.OnClick(b)
   assert(FA.PlanPop.IsOn("First Aid") and b._text=="Pop in", "popped out")
-  local pf=_G.ForeverArtisanPlanFrame
-  assert(pf and pf._shown, "the plan window shows")
-  local function rowFor(name)
-    for _,fr in ipairs(frames) do local d=rawget(fr,"d") if type(d)=="table" and fr._shown and (d.left or ""):find(name,1,true) then return fr end end
-  end
-  local r=rowFor("Linen Bandage")
-  assert(r and r.right._text:find("skill 1%-40"), "same row as the tab: "..tostring(r and r.right._text))
-  assert(r.d.tip and r.d.id==1251, "same hover text and item")
-  -- the tab's own row is the same data
+  assert(T.AllOn("First Aid") and st.hidden==nil and st.folded==nil, "the shopping list too, window shown and unfolded")
+  local function groups() local g={} for _,x in ipairs(T.Lines()) do g[x.title]=x end return g end
+  local g=groups()
+  assert(g["First Aid plan"] and g["First Aid shopping"], "plan and shopping groups in the goals window")
+  local pl
+  for _,ln in ipairs(g["First Aid plan"].lines) do if ln.plan then pl=ln end end
+  assert(pl and pl.plan.right:find("skill 1%-40") and pl.plan.tip and pl.plan.id==1251, "same row as the tab")
   local same
-  for _,fr in ipairs(frames) do local d=rawget(fr,"data") if d==r.d then same=true end end
-  assert(same, "the tab and the pop-out show the same row")
-  -- window closed: a skill-up plans again and the pop-out follows
+  for _,fr in ipairs(frames) do local d=rawget(fr,"data") if d==pl.plan then same=true end end
+  assert(same, "the tab and the goals window show the same row")
+  -- on screen: the plan row and the window wider for it
+  T.Refresh()
+  local gf=_G.ForeverArtisanGoalsFrame
+  local onScreen
+  for _,fr in ipairs(frames) do local ln=rawget(fr,"ln") if type(ln)=="table" and ln.plan==pl.plan and fr._shown then onScreen=fr end end
+  assert(onScreen, "plan row on screen")
+  -- training shows once: in the plan ("train at 80"), not again on the shopping list (Kerry: "Redundant?")
+  st.items["First Aid"]=st.items["First Aid"] or {}
+  -- 0.9.55: but a recipe trained only to make a material (no plan row of its own) stays (Kerry: "bolt of
+  -- woolen cloth is not on the list?")
+  pl.plan.train={at=80}
+  st.items["First Aid"]["train:Train Linen Bandage"]={name="Train Linen Bandage",want=1,train={at=80}}
+  st.items["First Aid"]["train:Train Bolt of Woolen Cloth"]={name="Train Bolt of Woolen Cloth",want=1,train={at=75}}
+  local shown={}
+  for _,x in ipairs(T.Lines()) do if x.title=="First Aid shopping" then for _,l in ipairs(x.lines) do if l.train then shown[l.name]=true end end end end
+  assert(not shown["Train Linen Bandage"], "a plan row's training isn't repeated in shopping")
+  assert(shown["Train Bolt of Woolen Cloth"], "training with no plan row stays in shopping")
+  pl.plan.train=nil
+  st.items["First Aid"]["train:Train Linen Bandage"]=nil
+  st.items["First Aid"]["train:Train Bolt of Woolen Cloth"]=nil
+  -- the plan sits right above its shopping list
+  local order={} for _,x in ipairs(T.Lines()) do order[#order+1]=x.title end
+  local ip, is
+  for i,t in ipairs(order) do if t=="First Aid plan" then ip=i end if t=="First Aid shopping" then is=i end end
+  assert(ip and is and ip+1==is, "plan right above shopping: "..table.concat(order,", "))
+  -- a recipe still to train: clicking its plan row points to the trainer (Kerry, Nov 22)
+  local npc={n="Arnok",s="Valley of Spirits",m=1454,x=38,y=86}
+  pl.plan.train={at=50,who="Arnok",npc=npc}
+  local wp
+  local oW=FA.Vendors.waypoint; FA.Vendors.waypoint=function(n) wp=n end
+  onScreen.scripts.OnClick(onScreen,"LeftButton")
+  FA.Vendors.waypoint=oW
+  assert(wp==npc, "waypoint to the trainer")
+  pl.plan.train=nil
+  -- window closed: a skill-up plans again and the goals window follows
   pcall(fa.ToggleWindow); assert(not w:IsShown(), "First Aid window closed")
   to=50
   fire("SKILL_LINES_CHANGED")
   FA.PlanPop.Replan()
-  r=rowFor("Linen Bandage")
-  assert(r and r.right._text:find("skill 1%-50"), "follows the plan with the window closed: "..tostring(r and r.right._text))
-  -- right-click the heading: back in the window
+  g=groups()
+  pl=nil for _,ln in ipairs(g["First Aid plan"].lines) do if ln.plan then pl=ln end end
+  assert(pl and pl.plan.right:find("skill 1%-50"), "follows the plan with the window closed")
+  -- a heading folds its group
   local head
-  for _,fr in ipairs(frames) do if rawget(fr,"head")=="First Aid" and fr._shown then head=fr end end
-  assert(head, "a First Aid heading")
-  head.scripts.OnClick(head,"RightButton")
-  assert(not FA.PlanPop.IsOn("First Aid") and not pf._shown and b._text=="Pop out", "popped back in")
+  for _,fr in ipairs(frames) do local ln=rawget(fr,"ln") if type(ln)=="table" and ln.head=="First Aid plan" and fr._shown then head=fr end end
+  assert(head, "a plan heading")
+  head.scripts.OnClick(head,"LeftButton")
+  assert(st.foldG and st.foldG["First Aid plan"], "folded")
+  head.scripts.OnClick(head,"LeftButton")
+  assert(not (st.foldG and st.foldG["First Aid plan"]), "unfolded")
+  -- right-click a plan row: both back in
+  T.RemoveLine(pl)
+  assert(not FA.PlanPop.IsOn("First Aid") and not T.AllOn("First Aid") and b._text=="Pop out", "popped back in")
   fa.Plan=oPlan
-  print("0.9.52 plan pop-out ok")
+  print("0.9.55 plan and shopping pop-out ok")
 end
 do -- 0.9.52: one record per character, even when the realm name is empty all session (Kerry's Cooking plan, Nov 22)
   local FA=ForeverArtisan
@@ -4996,5 +5140,242 @@ do -- 0.9.54: the Fishing alert boxes turn back on (Discord report: once off the
   end
   assert(S.alerts ~= false and S.alertSound ~= false, "both back on after off then on")
   print("0.9.54 fishing alert boxes ok")
+end
+do -- 0.9.55: /fa goals reset unfolds the list too (Kerry, Nov 22: folded under the portrait, it looked gone)
+  local key=ForeverArtisan.CharKey(ForeverArtisanSettings.track)
+  local t=ForeverArtisanSettings.track[key]
+  t.folded=true; t.pos={"TOPLEFT","TOPLEFT",7,-7}
+  run("FOREVERARTISAN","goals reset")
+  assert(t.folded==nil and t.pos==nil, "reset: first spot, unfolded")
+  print("0.9.55 goals reset unfolds ok")
+end
+do -- 0.9.55: training lines on the goals list in the order you'll learn them (Kerry, Nov 22)
+  local T=ForeverArtisan.Track
+  local key=ForeverArtisan.CharKey(ForeverArtisanSettings.track)
+  local st=ForeverArtisanSettings.track[key]
+  st.items["Testcraft"]={ ["train:Azure Silk Hood"]={name="Azure Silk Hood",want=1,train={at=120}}, ["train:Woolen Cape"]={name="Woolen Cape",want=1,train={at=55}}, ["train:Bolt of Silk Cloth"]={name="Bolt of Silk Cloth",want=1,train={at=100}} }
+  local order={}
+  for _,g in ipairs(T.Lines()) do if g.title=="Testcraft shopping" then for _,l in ipairs(g.lines) do order[#order+1]=l.name end end end
+  assert(table.concat(order,",")=="Woolen Cape,Bolt of Silk Cloth,Azure Silk Hood", "by skill: "..table.concat(order,","))
+  st.items["Testcraft"]=nil
+  print("0.9.55 training order ok")
+end
+do -- 0.9.55: gathered items go under the gathering profession only when you have it; crafted ones stay off
+  local FA=ForeverArtisan
+  local T=FA.Track
+  local key=FA.CharKey(ForeverArtisanSettings.track)
+  local st=ForeverArtisanSettings.track[key]
+  local sns=loadedFrames["ForeverArtisan_Skinning"].ns
+  local knowsNow=true
+  T._gatheredBy=function(id) if id==4234 then return "Skinning" end end
+  T.Goals("Skinning", function() return {} end, function() return knowsNow end, sns.RemoveGoal)
+  st.items["Testcraft"]={ [4234]={name="Heavy Leather",want=40} }
+  local function where()
+    for _,g in ipairs(T.Lines()) do for _,l in ipairs(g.lines) do if l.id==4234 then return g.title end end end
+  end
+  local w1=where()
+  knowsNow=false
+  local w2=where()
+  T._gatheredBy=nil
+  T.Goals("Skinning", sns.GoalRows, sns.Knows, sns.RemoveGoal)
+  assert(w1=="Skinning", "with Skinning: under Skinning, was "..tostring(w1))
+  assert(w2=="Testcraft shopping", "no Skinning: under shopping, was "..tostring(w2))
+  -- Track all leaves out what the plan makes itself
+  st.items["Testcraft"]=nil; st.all["Testcraft"]=nil
+  T.TrackAll("Testcraft", { {id=4305,name="Bolt of Silk Cloth",need=100,have=0,craft=89}, {id=4306,name="Silk Cloth",need=400,have=0} })
+  assert(st.items["Testcraft"][4306] and not st.items["Testcraft"][4305], "cloth on the list, bolts made by the plan off")
+  T.Sync("Testcraft", { {id=4305,name="Bolt of Silk Cloth",need=100,have=0,craft=89}, {id=4306,name="Silk Cloth",need=400,have=0} })
+  assert(not st.items["Testcraft"][4305], "sync doesn't bring them back")
+  st.items["Testcraft"]=nil; st.all["Testcraft"]=nil
+  print("0.9.55 gathering group and crafted items ok")
+end
+do -- 0.9.55: AH or make, one line on screen: "Bolt of Silk Cloth 2 / 100 (AH or make: 392 Silk Cloth)"
+  local FA=ForeverArtisan
+  local T=FA.Track
+  local st=ForeverArtisanSettings.track[FA.CharKey(ForeverArtisanSettings.track)]
+  local alt={makes=1,from={{id=4306,name="Silk Cloth",n=4}}}
+  T.TrackAll("Testcraft", { {id=4305,name="Bolt of Silk Cloth",need=100,have=0,alt=alt}, {id=4306,name="Silk Cloth",need=44,have=0} })
+  assert(st.items["Testcraft"][4305] and st.items["Testcraft"][4305].alt, "the bolt line is tracked, with its make option")
+  counts[4306]=52 -- 44 for the Silk Cloth line, 8 spare = 2 bolts
+  local ln
+  for _,g in ipairs(T.Lines()) do for _,l in ipairs(g.lines) do if l.id==4305 then ln=l end end end
+  counts[4306]=nil
+  assert(ln and ln.have==2, "spare cloth counts toward the bolts: "..tostring(ln and ln.have))
+  assert(ln.note=="AH or make: 392 Silk Cloth", tostring(ln.note))
+  st.items["Testcraft"]=nil; st.all["Testcraft"]=nil
+  print("0.9.55 AH or make ok")
+end
+do -- 0.9.55: a recipe trained just now counts as learned before the profession window opens (Kerry, Nov 22)
+  local FA=ForeverArtisan
+  local tl=loadedFrames["ForeverArtisan_Tailoring"].ns
+  local recs=tl.CharRec().recipes
+  recs["Bolt of Woolen Cloth"]={name="Bolt of Woolen Cloth",id=2964,learned=false,itemId=2997,reagents={{id=2592,n=3}}}
+  local msg=("You have learned how to create a new item: %s."):format("Bolt of Woolen Cloth")
+  assert(msg:match(FA._LearnPattern())=="Bolt of Woolen Cloth", "chat line read: "..FA._LearnPattern())
+  fire("CHAT_MSG_SYSTEM", msg)
+  assert(recs["Bolt of Woolen Cloth"].learned==true, "learned from the chat line")
+  recs["Bolt of Woolen Cloth"].learned=false
+  fire("NEW_RECIPE_LEARNED", 2964)
+  assert(recs["Bolt of Woolen Cloth"].learned==true, "learned from the event")
+  assert(not FA.RecipeLearned("No Such Recipe"), "someone else's recipe: nothing changes")
+  recs["Bolt of Woolen Cloth"]=nil
+  print("0.9.55 learned at the trainer ok")
+end
+do -- 0.9.55: hovering Strange Dust says how many Motes the plan needs, since Dust to Motes can't be undone
+  local en=loadedFrames["ForeverArtisan_Enchanting"].ns
+  local recs=en.CharRec().recipes
+  local keep={} for k,v in pairs(recs) do keep[k]=v end
+  for k in pairs(recs) do recs[k]=nil end
+  recs["Dust to Motes"]={name="Dust to Motes",learned=true,itemId=247786,makes=3,reagents={{id=10940,name="Strange Dust",n=1}}}
+  recs["Enchant Bracer - Inferior Stamina"]={name="Enchant Bracer - Inferior Stamina",learned=true,reagents={{id=247786,name="Mote of Magic",n=1}}}
+  recs["Enchant Chest - Inferior Stamina"]={name="Enchant Chest - Inferior Stamina",learned=true,reagents={{id=10940,name="Strange Dust",n=1}}}
+  en._IndexUses()
+  local oP, oI = GetProfessions, GetProfessionInfo
+  GetProfessions=function() return 11 end
+  GetProfessionInfo=function(i) return "Enchanting",1,15,75,0,0,333,0 end
+  local function tipFor(id)
+    local lines={}
+    local tt={GetItem=function() return "Strange Dust","|cffffffff|Hitem:"..id.."::|h[x]|h|r" end, AddLine=function(_,a) lines[#lines+1]=tostring(a) end,
+      AddDoubleLine=function(_,a,b) lines[#lines+1]=tostring(a).." "..tostring(b) end, Show=function() end, HookScript=function() end}
+    en._ItemTip(tt) return table.concat(lines,"\n")
+  end
+  en.lastShop={ {id=247786,name="Mote of Magic",need=20,have=2} }
+  local t=tipFor(10940)
+  assert(t:find("can't be undone",1,true) and t:find("needs 18 more Mote of Magic (6 of these)",1,true), "how many: "..t)
+  en.lastShop={}
+  t=tipFor(10940)
+  assert(t:find("needs no Mote of Magic right now",1,true), "none needed: "..t)
+  en.lastShop=nil
+  GetProfessions, GetProfessionInfo = oP, oI
+  for k in pairs(recs) do recs[k]=nil end
+  for k,v in pairs(keep) do recs[k]=v end
+  en._IndexUses()
+  print("0.9.55 dust to motes hint ok")
+end
+do -- 0.9.55: a recipe item lists your other characters: who knows it, who can learn it, who needs more skill
+  -- (CurseForge request, Nov 23)
+  local FA=ForeverArtisan
+  local tl=loadedFrames["ForeverArtisan_Tailoring"].ns
+  local db=tl.DB()
+  local acct=ForeverArtisanSettings.account.chars
+  local saveChars, saveAcct = {}, {}
+  for k,v in pairs(db.chars) do saveChars[k]=v end
+  for k,v in pairs(acct) do saveAcct[k]=v end
+  local mine=FA.CharKey(db.chars)
+  db.chars["Alta-R-1"]={ recipes={ ["Azure Silk Hood"]={name="Azure Silk Hood",learned=true} }, skill=160 }
+  db.chars["Altb-R-2"]={ recipes={ ["Linen Bag"]={name="Linen Bag",learned=true} }, skill=150 }
+  db.chars["Altc-R-3"]={ recipes={ ["Linen Bag"]={name="Linen Bag",learned=true} }, skill=120 }
+  db.chars["Altd-R-4"]={ recipes={} }
+  acct["Alta-R-1"]={name="Alta",trades={tailoring=160}}
+  acct["Altb-R-2"]={name="Altb",trades={tailoring=150}}
+  acct["Altc-R-3"]={name="Altc",trades={tailoring=120}}
+  acct["Altd-R-4"]={name="Altd",trades={tailoring=90}}
+  acct["Alte-R-5"]={name="Alte",trades={mining=100}}
+  db.chars["Gone-R-9"]={ recipes={ ["Azure Silk Hood"]={name="Azure Silk Hood",learned=true} }, skill=200 }
+  _G.FATestRTextLeft2={GetText=function() return "Requires Tailoring (145)" end}
+  local function tip(itemName)
+    local lines={}
+    local tt={GetName=function() return "FATestR" end, NumLines=function() return 3 end,
+      GetItem=function() return itemName,"|cffffffff|Hitem:7089::|h[x]|h|r" end,
+      AddLine=function(_,a) lines[#lines+1]=tostring(a) end, AddDoubleLine=function(_,a,b) lines[#lines+1]=tostring(a).." "..tostring(b) end,
+      Show=function() end, HookScript=function() end}
+    tl._ItemTip(tt) return table.concat(lines,"\n")
+  end
+  local t=tip("Pattern: Azure Silk Hood")
+  print("RECIPE WHO", t)
+  assert(t:find("Alta  |cff40ff40knows it",1,true), "knows it: "..t)
+  assert(t:find("Altb  |cffffff00can learn it (150)",1,true), "can learn: "..t)
+  assert(t:find("Altc  ",1,true) and t:find("needs 145 (has 120)",1,true), "needs more: "..t)
+  assert(t:find("Altd  ",1,true) and t:find("hasn't opened Tailoring yet",1,true), "no data yet: "..t)
+  assert(not t:find("Alte",1,true), "no Tailoring: not listed")
+  assert(not t:find("Gone",1,true), "removed from your list (or never on it): not listed")
+  local a1=t:find("Alta",1,true) local b1=t:find("Altb",1,true) local c1=t:find("Altc",1,true)
+  assert(a1<b1 and b1<c1, "knows, then can learn, then needs")
+  -- not a Tailoring pattern (a Leatherworking one): Tailoring says nothing
+  _G.FATestRTextLeft2={GetText=function() return "Requires Leatherworking (100)" end}
+  assert(tip("Pattern: Some Leather Thing")=="", "another profession's pattern: nothing from Tailoring")
+  _G.FATestRTextLeft2=nil
+  for k in pairs(db.chars) do db.chars[k]=nil end for k,v in pairs(saveChars) do db.chars[k]=v end
+  for k in pairs(acct) do acct[k]=nil end for k,v in pairs(saveAcct) do acct[k]=v end
+  print("0.9.55 recipe who ok")
+end
+do -- 0.9.55: a recipe sold for Merchant's Favor says so (Kerry, Nov 25: the smoothie recipes)
+  local FA=ForeverArtisan
+  local cns=loadedFrames["ForeverArtisan_Contacts"].ns
+  ForeverArtisanContactsDB.entries["vendor:990777"]={kind="vendor",npcId=990777,name="Testchef",title="Chef",zone="The Barrens",mapID=1413,x=50,y=30,
+    items={ {name="Recipe: Mrrggl Smrrthle",itemId=249887,priceCopper=0,cost={{item="Merchant's Favor",amount=30}},requires={"Requires Cooking (125)"}} }}
+  cns.OnContactsChanged()
+  local lines=FA.RecipeWhere("Mrrggl Smrrthle",{"Recipe: "})
+  local t=table.concat(lines,"\n")
+  assert(t:find("Sold by: Testchef",1,true) and t:find("30 Merchant's Favor",1,true), "favor price shown: "..t)
+  assert(cns.Money({p=0,cur="30 Merchant's Favor"})=="30 Merchant's Favor", "not 'free'")
+  ForeverArtisanContactsDB.entries["vendor:990777"]=nil
+  cns.OnContactsChanged()
+  print("0.9.55 favor price ok")
+end
+do -- 0.9.55: a secret tooltip line or name in a dungeon is skipped, not an error (bug report Nov 25, Wailing Caverns)
+  local cns=loadedFrames["ForeverArtisan_Contacts"].ns
+  local SECRET=setmetatable({},{__tostring=function() return "<secret>" end,
+    __index=function() error("attempt to index local 't' (a secret string value)") end})
+  local old=issecretvalue
+  issecretvalue=function(v) return v==SECRET end
+  local oE, oN, oG, oL, oR = UnitExists, UnitName, UnitGUID, UnitLevel, UnitReaction
+  UnitExists=function() return true end
+  UnitGUID=function() return nil end
+  UnitLevel=function() return 25 end
+  UnitReaction=function() return 5 end
+  local tip=cns._scanTip
+  rawset(tip,"NumLines",function() return 2 end)
+  _G.ForeverArtisanContactsScanTipTextLeft2={GetText=function() return SECRET end}
+  UnitName=function() return "Disciple of Naralex" end
+  local ok,n=pcall(cns._npcInfo,"target")
+  assert(ok, "secret tooltip line: no error: "..tostring(n))
+  assert(n and n.name=="Disciple of Naralex" and n.title==nil, "still read, just no title")
+  UnitName=function() return SECRET end
+  ok,n=pcall(cns._npcInfo,"target")
+  assert(ok and n==nil, "secret name: skipped")
+  _G.ForeverArtisanContactsScanTipTextLeft2=nil
+  rawset(tip,"NumLines",nil)
+  UnitExists, UnitName, UnitGUID, UnitLevel, UnitReaction = oE, oN, oG, oL, oR
+  issecretvalue=old
+  print("0.9.55 contacts secret ok")
+end
+do -- 0.9.55: right-click a heading in the goals window closes out that group (Kerry, Nov 25)
+  local FA=ForeverArtisan
+  local T=FA.Track
+  local st=ForeverArtisanSettings.track[FA.CharKey(ForeverArtisanSettings.track)]
+  local function groups() local g={} for _,x in ipairs(T.Lines()) do g[x.title]=x end return g end
+  -- a profession's shopping list: the heading takes the whole profession out
+  T.TrackAll("Testcraft", { {id=2589,name="Linen Cloth",need=40,have=0}, {id=2320,name="Coarse Thread",need=10,have=0} })
+  local g=groups()
+  assert(g["Testcraft shopping"], "shopping group shown")
+  T.Refresh()
+  local head
+  for _,fr in ipairs(frames) do local ln=rawget(fr,"ln") if type(ln)=="table" and ln.head=="Testcraft shopping" and fr._shown then head=fr end end
+  assert(head and head.ln.group, "heading carries its group")
+  head.scripts.OnClick(head,"RightButton")
+  assert(not st.items["Testcraft"] and not groups()["Testcraft shopping"], "right-click the heading: gone")
+  -- left-click still folds
+  T.TrackAll("Testcraft", { {id=2589,name="Linen Cloth",need=40,have=0} })
+  T.Refresh()
+  for _,fr in ipairs(frames) do local ln=rawget(fr,"ln") if type(ln)=="table" and ln.head=="Testcraft shopping" and fr._shown then head=fr end end
+  head.scripts.OnClick(head,"LeftButton")
+  assert(st.foldG and st.foldG["Testcraft shopping"] and st.items["Testcraft"], "left-click folds, keeps it")
+  st.foldG["Testcraft shopping"]=nil
+  T.UntrackAll("Testcraft")
+  -- a plan heading: Pop in
+  local popped=false
+  local oIs, oT = FA.PlanPop.IsOn, FA.PlanPop.Toggle
+  FA.PlanPop.IsOn=function(p) return p=="Testcraft" end
+  FA.PlanPop.Toggle=function(p,on) if p=="Testcraft" and on==false then popped=true end end
+  T.RemoveGroup({ title="Testcraft plan", plan="Testcraft", lines={} })
+  FA.PlanPop.IsOn, FA.PlanPop.Toggle = oIs, oT
+  assert(popped, "plan heading: popped in")
+  -- a gathering heading: every goal under it, last index first
+  local removed={}
+  T.Goals("Testgather", function() return {} end, function() return true end, function(i) removed[#removed+1]=i end)
+  T.RemoveGroup({ title="Testgather", lines={ {goalProf="Testgather",goalIndex=1}, {goalProf="Testgather",goalIndex=3}, {goalProf="Testgather",goalIndex=2} } })
+  assert(table.concat(removed,",")=="3,2,1", "goals removed last first: "..table.concat(removed,","))
+  print("0.9.55 close a group ok")
 end
 print("SUITE OK")

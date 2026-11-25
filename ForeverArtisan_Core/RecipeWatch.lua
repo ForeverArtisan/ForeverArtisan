@@ -106,7 +106,8 @@ function FA.RecipeNpcSource(e)
   if V and V.hitsForLink then
     local ok, hits = pcall(V.hitsForLink, "item:" .. e.id, e.name)
     for _, h in ipairs(ok and hits or {}) do
-      if h.item and not h.item.train then cand(h.item.p, "vendor", h.npc) end
+      -- one bought with Merchant's Favor has no gold price to compare: listed, never "cheaper than the AH"
+      if h.item and not h.item.train then cand((not h.item.cur) and h.item.p or nil, "vendor", h.npc) end
     end
     ok, hits = pcall(V.hitsForLink, nil, base)
     for _, h in ipairs(ok and hits or {}) do
@@ -124,7 +125,7 @@ end
 function FA.RecipeNpcText(e)
   local src = FA.RecipeNpcSource(e)
   if not src then return nil end
-  return src.kind .. " " .. (src.price and FA.Money(src.price) or "?"), src.price and src.price < e.price, src
+  return src.kind .. " " .. (src.price and FA.Money(src.price) or "?"), src.price and e.price and src.price < e.price, src
 end
 
 local fresh, announced, flushAt = {}, {}, nil

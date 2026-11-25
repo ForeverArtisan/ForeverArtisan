@@ -84,8 +84,13 @@ local function Rebuild()
       if e.kind == "vendor" then
         for _, it in ipairs(e.items or {}) do
           if it.name then
+            -- paid in something else too (30 Merchant's Favor for the smoothie recipes): kept as words
+            local cur
+            for _, c in ipairs(type(it.cost) == "table" and it.cost or {}) do
+              if c.item and c.amount then cur = (cur and (cur .. " + ") or "") .. c.amount .. " " .. c.item end
+            end
             npc.items[#npc.items + 1] = { n = it.name, id = it.itemId, p = it.priceCopper, lv = it.levelReq,
-              sk = skillReq(it.requires), lim = it.limited, stack = it.stack }
+              sk = skillReq(it.requires), lim = it.limited, stack = it.stack, cur = cur }
           end
         end
       elseif chatOnly and not (e.skills and #e.skills > 0) then
@@ -198,6 +203,14 @@ function ns.Contacts() Ensure(); return npcs end
 ---------------------------------------------------------------- helpers
 
 local function money(it)
+  -- a currency price (Merchant's Favor): that, with any gold on top
+  if it.cur then
+    if it.p and it.p > 0 then
+      local g = GetCoinTextureString and GetCoinTextureString(it.p) or (it.p .. "c")
+      return g .. " + " .. it.cur
+    end
+    return it.cur
+  end
   if it.p and it.p > 0 then
     if GetCoinTextureString then return GetCoinTextureString(it.p) end
     local g, s, c = math.floor(it.p / 10000), math.floor(it.p / 100) % 100, it.p % 100

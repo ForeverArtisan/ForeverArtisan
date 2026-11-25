@@ -67,6 +67,19 @@ local function CharRec()
   return c
 end
 ns.CharRec = CharRec
+-- trained just now (Core RecipeFinds.lua): learned, before you next open the profession window
+if ForeverArtisan.OnLearn then
+  ForeverArtisan.OnLearn(function(name, spellId)
+    local c = db.chars and db.chars[ForeverArtisan.CharKey(db.chars)]
+    for _, r in pairs(c and c.recipes or {}) do
+      if type(r) == "table" and not r.learned and ((name and r.name == name) or (spellId and r.id == spellId)) then
+        r.learned = true
+        if ns.OnChange then pcall(ns.OnChange) end
+        return true
+      end
+    end
+  end)
+end
 
 ---------------------------------------------------------------- skill
 local function IsProfName(n) return n == PROF end
@@ -579,20 +592,28 @@ function ns.Plan(target)
   end
 
   local stock, used, crafted, names = {}, {}, {}, {}
+  -- materials a trainer recipe makes (Bolt of Woolen Cloth at 75), made once the plan is at that skill
+  -- and trained along the way (Kerry, Nov 22: the list said buy bolts, not the wool to make them)
+  local trainMakes, craftUps = {}, {}
   local stepMade, stepVia = {}, {} -- what the plan's own steps make (tubes, bolts), used later in the plan
   local function Have(id) if stock[id] == nil then stock[id] = Own(id) end; return stock[id] end
   local s, total, cur = skill, 0, nil
+  local function MakesNow(id)
+    local t = trainMakes[id]
+    if makes[id] then return makes[id] end
+    if t and math.floor(s) >= (t.train.at or 1) then return t end
+  end
   local Craft
   -- make sure n of id are on hand, crafting the shortfall when you know a recipe for it
   -- how many of id you could have from what you hold, crafting through recipes you know
   local function Avail(id, depth)
     local n = math.max(0, Have(id))
-    local via = makes[id]
+    local via = MakesNow(id)
     if via and depth < 3 then n = n + ForeverArtisan.InputsCover(via, function(g) return Avail(g, depth + 1) end) * (via.makes or 1) end
     return n
   end
   local function Gather(id, n, depth)
-    local via = makes[id]
+    local via = MakesNow(id)
     local short = n - Have(id)
     if short > 0 and via and depth < 3 then
       local times = math.ceil(short / (via.makes or 1))
@@ -614,7 +635,10 @@ function ns.Plan(target)
         used[g.id] = (used[g.id] or 0) + (g.n or 1)
       end
     end
-    s = s + ns.Chance(r, math.floor(s)) * (r.ups or 1)
+    local up = ns.Chance(r, math.floor(s)) * (r.ups or 1)
+    -- made along the way for skill too (Light Leather at 30): the plan counts on making it, so no "AH or make"
+    if depth > 0 and up > 0 and r.itemId then craftUps[r.itemId] = true end
+    s = s + up
     total = total + 1
     if r.itemId then stock[r.itemId] = Have(r.itemId) + (r.makes or 1) end
     if depth == 0 and r.itemId then
@@ -644,6 +668,9 @@ function ns.Plan(target)
   -- plus recipes a trainer you've met still teaches (they join the plan at the skill they need)
   local cands, untrained = learned, 0
   if ForeverArtisan.PlanRecipes then cands, untrained = ForeverArtisan.PlanRecipes(PROF, recs, Skipped) end
+  for _, r in ipairs(cands) do
+    if r.train and r.itemId and not makes[r.itemId] and not trainMakes[r.itemId] and #ns.MissingTools(r) == 0 then trainMakes[r.itemId] = r end
+  end
   -- planning ahead nothing is learned yet: materials one of these recipes makes (bolts, leather) count
   -- as crafted along the way, so the list is the raw materials to save
   -- (tools you don't own yet don't matter here: they're on the list to get)
@@ -707,8 +734,29 @@ function ns.Plan(target)
       if not t.station and not tools[t.name] then
         tools[t.name] = true
         local have = math.min(1, Count(t.name))
-        shopping[#shopping + 1] = { name = t.name, need = 1, have = have, tool = true,
-          source = "Tool: keep it in your bags while you craft. " .. ns.SourceFor(nil, t.name) }
+        local src = "Tool: keep it in your bags while you craft. " .. ns.SourceFor(nil, t.name)
+        -- one you can make (Runed Copper Rod): its materials go on the list, and the line says so
+        -- (Kerry, Nov 22: "Runed Copper Rod (tool) 0 / 1", nothing said a Copper Rod and a Mote make it)
+        local mk
+        if have < 1 then
+          for _, c in ipairs(cands) do
+            if c.name == t.name and type(c.reagents) == "table" and #c.reagents > 0 then mk = c; break end
+          end
+        end
+        if mk then
+          local parts = {}
+          for _, g in ipairs(mk.reagents) do
+            if g.id then
+              names[g.id] = names[g.id] or g.name
+              used[g.id] = (used[g.id] or 0) + (g.n or 1)
+              parts[#parts + 1] = ((g.n or 1) > 1 and ((g.n or 1) .. " ") or "") .. ItemName(g.id, names[g.id])
+            end
+          end
+          src = ("Tool: make it yourself from %s (on this list)%s, then keep it in your bags while you craft."):format(
+            table.concat(parts, " + "), mk.train and (", once you train it at " .. mk.train.at) or "")
+        end
+        shopping[#shopping + 1] = { name = t.name, need = 1, have = have, tool = true, make = mk and mk.name or nil,
+          source = src }
       end
     end
   end
@@ -726,18 +774,67 @@ function ns.Plan(target)
         source = ("Learn it at %d from %s%s."):format(t.at, t.who or "a trainer",
           t.cost and (" for " .. ForeverArtisan.Money(t.cost)) or "") }
     end
+    for sr in pairs(st.sub or {}) do
+      local t2 = sr.train
+      if t2 and not trained[sr.name] then
+        trained[sr.name] = true
+        shopping[#shopping + 1] = { name = "Train " .. sr.name, need = 1, have = 0, train = t2, price = t2.cost,
+          source = ("Learn it at %d from %s%s, so the plan makes them instead of buying them."):format(t2.at, t2.who or "a trainer",
+            t2.cost and (" for " .. ForeverArtisan.Money(t2.cost)) or "") }
+      end
+    end
   end
+  -- a step of the plan makes some of a material later steps need, but not all (11 Bolts of Silk Cloth
+  -- for the skill, 100 for the robes, hoods and packs after it): make the rest the same way, from what
+  -- that step uses, when those are bought as they are. The step is trained by then. (Kerry, Nov 22:
+  -- the list said buy 100 bolts and 44 silk, as if the 11 made didn't count.)
+  local more = {}
+  for id, n in pairs(used) do
+    local via = stepMade[id] and stepVia[id]
+    local short = n - math.max(0, Own(id)) - (stepMade[id] or 0)
+    if via and short > 0 and not crafted[id] then
+      local plain = true
+      for _, g in ipairs(via.reagents or {}) do if not g.id or makes[g.id] or stepMade[g.id] then plain = false end end
+      if plain then more[id] = math.ceil(short / (via.makes or 1)) end
+    end
+  end
+  for id, times in pairs(more) do
+    local via = stepVia[id]
+    for _, g in ipairs(via.reagents or {}) do
+      names[g.id] = names[g.id] or g.name
+      used[g.id] = (used[g.id] or 0) + times * (g.n or 1)
+    end
+    stepMade[id] = stepMade[id] + times * (via.makes or 1)
+  end
+  -- bolts and the like: buy them or make them, one line (0.9.55). Planning ahead it stays the raw materials to save
+  local alt = (not ahead and ForeverArtisan.BuyOrMake) and ForeverArtisan.BuyOrMake({ used = used, crafted = crafted, more = more,
+    makes = makes, trainMakes = trainMakes, stepMade = stepMade, stepVia = stepVia, ups = craftUps }) or {}
+  for id, a in pairs(alt) do if not used[id] then alt[id] = nil end end
   for id, n in pairs(used) do
     local e = { id = id, name = ItemName(id, names[id]), need = n, have = Own(id) }
-    if crafted[id] then
-      e.craft, e.via = crafted[id], makes[id]
+    local a = alt[id]
+    if a then
+      local from, parts = {}, {}
+      for _, g in ipairs(a.via.reagents) do
+        local nm = ItemName(g.id, names[g.id] or g.name)
+        from[#from + 1] = { id = g.id, name = nm, n = g.n or 1 }
+        parts[#parts + 1] = (g.n or 1) .. " " .. nm
+      end
+      e.alt = { makes = a.via.makes or 1, from = from }
+      e.need = math.max(1, n - a.base)
+      e.have = ForeverArtisan.AltHave(e.alt, math.max(0, Own(id)), function(g) return Own(g) - (used[g] or 0) end)
+      e.source = ("Buy them at the Auction House, or make them: %s (%s each)%s."):format(a.via.name, table.concat(parts, " + "),
+        a.via.train and (", once you train it at " .. a.via.train.at) or "")
+    elseif crafted[id] then
+      e.craft, e.via = crafted[id], makes[id] or trainMakes[id]
       local parts = {}
       for _, g in ipairs(e.via.reagents or {}) do parts[#parts + 1] = ItemName(g.id, g.name) end
       e.source = ("Craft %d yourself: %s (%s)"):format(e.craft, e.via.name, table.concat(parts, " + "))
     elseif stepMade[id] and stepMade[id] >= n - math.max(0, e.have) then
       -- an earlier step of this plan makes them: nothing to buy
       e.craft, e.via = math.ceil(math.min(n, stepMade[id]) / (stepVia[id].makes or 1)), stepVia[id]
-      e.source = ("Made by the plan itself: the %s step makes them."):format(stepVia[id].name)
+      e.source = more[id] and ("Made by the plan itself: the %s step, then %d more of them once it's trained."):format(stepVia[id].name, more[id])
+        or ("Made by the plan itself: the %s step makes them."):format(stepVia[id].name)
     else
       e.source = ns.SourceFor(id, e.name)
     end
@@ -760,6 +857,7 @@ function ns.Plan(target)
     for _, r in ipairs(cands) do if r.train then any = true end end
     if not any and ForeverArtisan.TrainHint then hint = ForeverArtisan.TrainHint(PROF, untrained) end
   end
+  if not ahead then ns.lastShop = shopping end -- the Strange Dust tooltip reads it (Dust to Motes)
   return steps, shopping, stuck, target, maxr, hint, ahead
 end
 
@@ -907,6 +1005,25 @@ local function ItemTip(tt)
   local recipes = CharRec().recipes
   local rname = RecipeNameFromItem(name)
   local uses = usedBy[id]
+  -- a recipe item: you, then your other characters with this profession, who knows it and who can
+  -- learn it now (0.9.55, CurseForge request: "show what alts know or could learn a recipe")
+  if rname and ForeverArtisan.RecipeWho then
+    local rows, need = ForeverArtisan.RecipeWho(PROF, rname, db.chars, tt)
+    if rows then
+      tt.faEnchDone = true
+      tt:AddLine(" ")
+      local r = recipes[rname]
+      if r and ns.Knows() then
+        ForeverArtisan.TipLine(tt, ("|cffd4a94e%s|r  %s%s|r%s"):format(PROF, r.learned and GREEN or YELLOW, r.learned and "You know this recipe" or "Not learned yet",
+          r.grayAt and (GRAY .. "  ·  gray at " .. r.grayAt .. "|r") or ""))
+      else
+        ForeverArtisan.TipLine(tt, "|cffd4a94e" .. PROF .. "|r" .. (need and (GRAY .. "  ·  needs " .. need .. "|r") or ""))
+      end
+      for _, l in ipairs(rows) do tt:AddLine(l) end
+      tt:Show()
+      return
+    end
+  end
   if not (rname and recipes[rname]) and not (uses and #uses > 0) then return end
   if not ns.Knows() then return end
   local skill = Skill()
@@ -930,8 +1047,35 @@ local function ItemTip(tt)
     shown = shown + 1
   end
   if #uses > 3 then tt:AddLine(GRAY .. "  +" .. (#uses - 3) .. " more|r") end
+  -- a one-way conversion you know (Dust to Motes): how many the plan needs, so you don't convert the lot
+  -- (Kerry, Nov 22: Create All turned 47 dust into 141 Motes; the chest enchant needed the dust)
+  for _, r in ipairs(uses) do
+    if r.learned and r.itemId and type(r.reagents) == "table" and #r.reagents == 1 and usedBy[r.itemId] then
+      local need, out
+      for _, e in ipairs(ns.lastShop or {}) do
+        if e.id == r.itemId then need, out = math.max(0, (e.need or 0) - math.max(0, e.have or 0)), e.name end
+      end
+      -- the material's own name (the recipe's name is "Dust to Motes", not the Mote)
+      for _, u in ipairs(usedBy[r.itemId]) do
+        for _, g in ipairs(u.reagents or {}) do
+          if not out and g.id == r.itemId and type(g.name) == "string" and not g.name:find("^item:") then out = g.name end
+        end
+      end
+      out = out or ItemName(r.itemId, "it")
+      local per = (r.reagents[1].n or 1) / math.max(1, r.makes or 1)
+      if need and need > 0 then
+        ForeverArtisan.TipLine(tt, YELLOW .. ("%s can't be undone. Your plan needs %d more %s (%d of these). Keep the rest as they are.")
+          :format(r.name, need, out, math.ceil(need * per)) .. "|r")
+      elseif ns.lastShop then
+        ForeverArtisan.TipLine(tt, YELLOW .. ("%s can't be undone, and your plan needs no %s right now. Keep these as they are.")
+          :format(r.name, out) .. "|r")
+      end
+    end
+  end
   tt:Show()
 end
+
+ns._ItemTip, ns._IndexUses = ItemTip, IndexUses -- for the test suite
 
 -- the /fa Tooltips tab's switch turns this window's checkbox back on too (0.9.51)
 if ForeverArtisan.TipOwner then ForeverArtisan.TipOwner("prof", function(on) if db then db.settings.tooltips = on end end) end

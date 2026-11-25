@@ -681,7 +681,7 @@ end
 local function CSettings() return ForeverArtisanContactsDB and ForeverArtisanContactsDB.settings end
 local SETTINGS = {
   { head = "General" },
-  { key = "minimap", label = "Minimap button", desc = "Left-click opens this panel, right-click Trade Contacts.",
+  { key = "minimap", label = "Minimap button", desc = "Left-click opens this panel, right-click opens it on the search box.",
     get = function() return not (ForeverArtisanSettings and ForeverArtisanSettings.minimapHide) end,
     set = function(on)
       if (not (ForeverArtisanSettings and ForeverArtisanSettings.minimapHide)) ~= on and FA.minimap then FA.minimap("") end
@@ -1676,6 +1676,12 @@ function FA.FindInPanel(text)
   FA.RefreshSearch()
 end
 
+-- the minimap button's right-click: the panel with the search box ready to type in (0.9.55)
+function FA.OpenSearchBox()
+  FA.FindInPanel("")
+  if search.box and search.box.SetFocus then search.box:SetFocus() end
+end
+
 local function buildPanel()
   panel = FA.UI.Frame({ name = "ForeverArtisanPanel", width = 460, height = 628,
     getPos = function() return ForeverArtisanSettings and ForeverArtisanSettings.panelPos end,
@@ -1863,6 +1869,7 @@ NEWS = {
   { "0.9.52", "One search box at the top of /fa for crafts, prices, recipes, trainers and vendors (/fa find). Pop out your crafting plan, fishing or gathering skill and the cast marker. The Modules tab shows your alts' professions. A Waypoint to your next rank in every profession." },
   { "0.9.53", "0.9.52 showed its version as 0.9.51. This build has the right number, so you see what's new." },
   { "0.9.54", "A search with no results now says what the box covers. The Fishing alert boxes turn back on again." },
+  { "0.9.55", "One Pop out puts your plan and shopping list on screen; right-click a heading to close it. Recipe tooltips show which of your alts know it or can learn it. Shopping lists offer \"AH or make\" for bolts and the like. The Yeti Skinner counts as a Skinning Knife." },
 }
 
 local function verNum(v)
@@ -2048,7 +2055,6 @@ local function help()
   print("  /fa find <words>  - search everything: your crafts, Auction House prices, recipes, vendors and trainers")
   print("  /fa market  - your most profitable crafts, every profession in one list")
   print("  /fa goals  - show or hide the on-screen goals list (lock | unlock | reset | clear)")
-  print("  /fa plan  - show or hide the popped-out plan (lock | unlock | reset)")
   print("  /fa new  - what's new in recent releases")
   if FA.RECIPE_WATCH_READY then print("  /fa recipewatch on | quiet | off  - recipes you or your alts don't know, noted when you see them on the Auction House (quiet: no chat)") end
   print("  /fa disenchant on | off | log  - what greens, blues and purples disenchant into and what that's worth, on item tooltips")
@@ -2066,7 +2072,7 @@ local function help()
     .. (hasS and "installed" or "not installed") .. ") for what your alts hold, GatherMate2 ("
     .. (hasG and "installed" or "not installed") .. ") for herb and ore spots, TomTom ("
     .. (type(rawget(_G, "TomTom")) == "table" and "installed" or "not installed") .. ") for waypoint arrows. All optional.")
-  print("  /fa minimap [angle | reset]  - show/hide or move the minimap button (right-click it for Trade Contacts)")
+  print("  /fa minimap [angle | reset]  - show/hide or move the minimap button (right-click it to search)")
   if FA.Vendors then print("  /fa <item, vendor or town>  - search your Trade Contacts") end
   print("  /fa enable <module>  |  /fa disable <module>")
   scan()
