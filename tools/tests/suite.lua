@@ -4955,8 +4955,21 @@ do -- 0.9.52: nearest trainer for a rank counts both spellings; Cooking and Firs
   assert(n and n.n=="Dirge Quikcleave" and n.m and label=="Quest for Artisan", "Artisan: the quest giver")
   FA.QDB.Npc=oQ
   V.nearestTrainer=function(p) return p=="Cooking" and { n="Zamja", s="The Drag", m=1454, x=57, y=53 } or nil end
+  local oTr=V.trainers
+  V.trainers=nil
   n, label = FA.NextRankNPC(cns.NEXT_RANK, 75)
   assert(n and n.n=="Zamja" and label=="Train Journeyman", "Journeyman: the nearest trainer")
+  -- 0.9.56: the nearest one who can teach it (no Junior trainer, no rank title at or below it)
+  V.trainers=function(p) if p=="Mining" then return {
+    { npc={ n="Brom Killian", t="Junior Mining Trainer", s="Undercity", m=1458, x=56, y=36 } },
+    { npc={ n="Brek Stonehoof", t="Mining Trainer", s="Thunder Bluff", m=1456, x=34, y=58 } } } end return {} end
+  n = FA.NextRankNPC({ prof="Mining" }, 75)
+  assert(n and n.n=="Brek Stonehoof", "Mining: not the Junior trainer: "..tostring(n and n.n))
+  V.trainers=function() return {{ npc={ n="Only Junior", t="Junior Mining Trainer", m=1, x=1, y=1 } }} end
+  assert(FA.NextRankNPC({ prof="Mining" }, 75)==nil, "only a Junior trainer: nobody")
+  assert(FA.TrainerCanTeach({ t="Journeyman Leatherworker" }, "Journeyman")==false and FA.TrainerCanTeach({ t="Expert Leatherworker" }, "Journeyman")
+    and FA.TrainerCanTeach({ t="Apprentice Herbalist" }, "Artisan") and FA.TrainerCanTeach({ t="Expert Tailor" }, "Expert")==false, "title rules")
+  V.trainers=oTr
   local fns=loadedFrames["ForeverArtisan_FirstAid"].ns
   V.sellers=function(id) if id==16084 then return {{ npc={ n="Balai Lok'Wein", m=1445, x=36, y=30 } }} end return {} end
   n, label = FA.NextRankNPC(fns.NEXT_RANK, 150)
@@ -5377,5 +5390,305 @@ do -- 0.9.55: right-click a heading in the goals window closes out that group (K
   T.RemoveGroup({ title="Testgather", lines={ {goalProf="Testgather",goalIndex=1}, {goalProf="Testgather",goalIndex=3}, {goalProf="Testgather",goalIndex=2} } })
   assert(table.concat(removed,",")=="3,2,1", "goals removed last first: "..table.concat(removed,","))
   print("0.9.55 close a group ok")
+end
+do -- 0.9.56: the craft queue (Kerry, Nov 25: "make 5 spider silk slippers and 5 woolen reagent bags")
+  local FA=ForeverArtisan
+  local T=FA.Track
+  local Q=FA.Queue
+  assert(Q, "Queue loaded")
+  for p in pairs(Q._S()) do Q._S()[p]=nil end
+  local slippers={name="Spider Silk Slippers",id=3856,itemId=4321,makes=1,
+    reagents={{id=4305,n=2,name="Bolt of Silk Cloth"},{id=2321,n=1,name="Fine Thread"}}}
+  local bag={name="Woolen Reagent Bag",id=99001,itemId=99002,makes=1,
+    reagents={{id=2997,n=3,name="Bolt of Woolen Cloth"},{id=2321,n=2,name="Fine Thread"}}}
+  Q.Add("Testtail", slippers, 5)
+  Q.Add("Testtail", bag, 5)
+  Q.Add("Testtail", slippers, 1) -- on top: 6
+  local g=Q.Groups()[1]
+  assert(g and g.prof=="Testtail" and #g.crafts==2 and g.crafts[1].n==6, "two crafts, the first topped up to 6")
+  local need={} for _,m in ipairs(g.mats) do need[m.id]=m.need end
+  assert(need[4305]==12 and need[2997]==15 and need[2321]==16, "materials merged: fine thread 6+10")
+  -- the goals window: "Testtail queue", the crafts then the materials, with bags counted
+  counts[2321]=10
+  local grp for _,x in ipairs(T.Lines()) do if x.title=="Testtail queue" then grp=x end end
+  counts[2321]=nil
+  assert(grp and grp.queue=="Testtail", "queue group in the goals window")
+  assert(grp.lines[1].queueCraft=="Spider Silk Slippers" and grp.lines[1].want==6 and grp.lines[1].have==0, "craft line first")
+  local thread for _,l in ipairs(grp.lines) do if l.id==2321 then thread=l end end
+  assert(thread and thread.have==10 and thread.want==16, "fine thread 10 / 16")
+  -- crafting counts down: a cast of the recipe's spell, or its name
+  fire("UNIT_SPELLCAST_SUCCEEDED","player","guid",3856)
+  assert(Q.Groups()[1].crafts[1].made==1, "one made")
+  assert(not Q.Made(nil,"Something Else",1), "another spell: nothing")
+  for i=1,5 do Q.Made(nil,"Spider Silk Slippers",nil) end
+  g=Q.Groups()[1]
+  assert(#g.crafts==1 and g.crafts[1].name=="Woolen Reagent Bag", "all 6 made: it leaves the queue")
+  need={} for _,m in ipairs(g.mats) do need[m.id]=m.need end
+  assert(need[2321]==10 and not need[4305], "its materials go with it")
+  -- right-click a craft line: out; the heading: all of it
+  T.RemoveLine({queueProf="Testtail", queueCraft="Woolen Reagent Bag"})
+  assert(#Q.Groups()==0, "craft line right-click: out of the queue")
+  Q.Add("Testtail", bag, 2)
+  T.RemoveGroup({title="Testtail queue", queue="Testtail", lines={}})
+  assert(#Q.Groups()==0, "heading right-click: queue cleared")
+  -- a material line's right-click does nothing (it goes with its crafts)
+  Q.Add("Testtail", bag, 1)
+  T.RemoveLine({queueProf="Testtail", id=2997})
+  assert(#Q.Groups()==1, "material right-click leaves the queue alone")
+  Q.Clear("Testtail")
+  -- right-click a Best crafts row queues it (no popup in the test: one)
+  local tl=loadedFrames["ForeverArtisan_Tailoring"].ns
+  local oS, oP = StaticPopupDialogs, StaticPopup_Show
+  StaticPopupDialogs=nil StaticPopup_Show=nil
+  Q.Ask("Tailoring", slippers)
+  assert(Q.Groups()[1] and Q.Groups()[1].crafts[1].n==1, "Ask without a popup: one")
+  Q.Clear("Tailoring")
+  StaticPopupDialogs={} local shown StaticPopup_Show=function(n,a) shown=a end
+  Q.Ask("Tailoring", slippers)
+  assert(shown=="Spider Silk Slippers" and StaticPopupDialogs.FOREVERARTISAN_QUEUE, "the how-many box")
+  local eb={GetText=function() return "5" end}
+  StaticPopupDialogs.FOREVERARTISAN_QUEUE.OnAccept({editBox=eb})
+  assert(Q.Groups()[1].crafts[1].n==5, "5 queued from the box")
+  Q.Clear("Tailoring")
+  StaticPopupDialogs, StaticPopup_Show = oS, oP
+  -- AH or make on a queue material: you know Bolt of Woolen Cloth (3 Wool Cloth each)
+  local recs={ ["Bolt of Woolen Cloth"]={name="Bolt of Woolen Cloth",learned=true,itemId=2997,makes=1,reagents={{id=2592,n=3,name="Wool Cloth"}}} }
+  Q.Register("Testtail", function() return recs end)
+  Q.Add("Testtail", bag, 5) -- 15 bolts
+  counts[2592]=9 -- 3 bolts' worth
+  local bolt for _,x in ipairs(T.Lines()) do if x.title=="Testtail queue" then for _,l in ipairs(x.lines) do if l.id==2997 then bolt=l end end end end
+  counts[2592]=nil
+  assert(bolt and bolt.have==3 and bolt.want==15, "cloth counts toward the bolts: "..tostring(bolt and bolt.have))
+  assert(bolt.note=="AH or make: 36 Wool Cloth", tostring(bolt.note))
+  -- the window widens for a long line instead of cutting it off (Kerry: "bolt of silk cloth... cutoff")
+  T.ShowList()
+  local gf=_G.ForeverArtisanGoalsFrame
+  rawset(gf.measure,"GetStringWidth",function(self) local t=rawget(self,"_text") or "" return #t*3 end)
+  counts[2592]=9
+  T.Refresh()
+  counts[2592]=nil
+  local want=0 for _,x in ipairs(T.Lines()) do for _,l in ipairs(x.lines) do if not l.plan then want=math.max(want,#T._LineText(l)*3+32) end end end
+  assert(rawget(gf,"_w")==math.min(420,math.ceil(want)) and rawget(gf,"_w")>230, "window as wide as the longest line: "..tostring(rawget(gf,"_w")).." / "..want)
+  rawset(gf.measure,"GetStringWidth",nil)
+  recs["Bolt of Woolen Cloth"].learned=false
+  local m=Q.Groups()[1].mats[1]
+  assert(m.id==2997 and not m.alt, "not learned: no AH or make")
+  Q.Clear("Testtail")
+  -- Best crafts rows say "Right-click to queue it" on hover (Kerry: "I don't see where that is called out")
+  do
+    local lines={}
+    local oG=GameTooltip
+    GameTooltip=setmetatable({SetOwner=function() end, Show=function() end, AddLine=function(_,t) lines[#lines+1]=t end,
+      SetItemByID=function() end},{__index=function() return function() end end})
+    local row
+    for _,fr in ipairs(frames) do if rawget(fr,"queueHint") then row=fr break end end
+    assert(row, "a row marked for the hint")
+    row.data={recipe=slippers} row.itemId=4321
+    row.scripts.OnEnter(row)
+    GameTooltip=oG
+    assert(table.concat(lines,"|"):find("Right-click to queue it",1,true), "hint shown: "..table.concat(lines,"|"))
+    row.data=nil row.itemId=nil
+  end
+  run("FOREVERARTISAN","queue")
+  print("0.9.56 craft queue ok")
+end
+do -- 0.9.56: "Sell to a vendor" in Best crafts (a player's request: vendor refund in the formula)
+  local FA=ForeverArtisan
+  local oGI, oAH, oCM = GetItemInfo, FA.AHPrice, FA.CraftMoney
+  GetItemInfo=function(id) if id==880001 then return "Test Shirt",nil,1,10,5,"Armor","Cloth",1,"INVTYPE_BODY",134400,300 end return oGI(id) end
+  FA.AHPrice=function(id) if id==880001 then return 5000 end end   -- the AH says 50s (a price that never sells)
+  FA.CraftMoney=function(r) return 1000 end                            -- 10s of materials
+  local recs={ ["Test Shirt"]={name="Test Shirt",learned=true,itemId=880001,makes=1,reagents={}} }
+  FA.SetVendorOnly(false)
+  local p=FA.BestCrafts(recs,function() return 1 end,"profit")[1]
+  assert(p and p.profit==5000*0.95-1000, "AH price: "..tostring(p and p.profit))
+  local l=FA.BestCrafts(recs,function() return 1 end,"level")[1]
+  assert(l.perPoint==1000, "cheapest to level: materials only")
+  FA.SetVendorOnly(true)
+  assert(FA.VendorOnly(), "on")
+  p=FA.BestCrafts(recs,function() return 1 end,"profit")[1]
+  assert(p and p.profit==300-1000, "vendor 3s against 10s of materials: a 7s loss, not a 37s profit: "..tostring(p and p.profit))
+  l=FA.BestCrafts(recs,function() return 0.5 end,"level")[1]
+  assert(l.perPoint==(1000-300)/0.5 and l.vendorBack, "cheapest to level: vendor price off the cost: "..tostring(l.perPoint))
+  local b=FA.BestCrafts(recs,function() return 1 end,"both")
+  assert(#b==0, "level + profit: doesn't pay for itself at the vendor")
+  FA.SetVendorOnly(false)
+  assert(not ForeverArtisanSettings.bestVendor, "off clears it")
+  GetItemInfo, FA.AHPrice, FA.CraftMoney = oGI, oAH, oCM
+  print("0.9.56 sell to a vendor ok")
+end
+-- 0.9.56: too low for the next rank? every profession says so, Fishing's way (Kerry at 32, Cooking 225)
+do
+  local FA=ForeverArtisan
+  local oGP, oGPI, oLvl = GetProfessions, GetProfessionInfo, UnitLevel
+  UnitLevel=function() return 32 end
+  assert(FA.LevelFirst(35)==" You're level 32, so that's 3 more levels first.", tostring(FA.LevelFirst(35)))
+  assert(FA.LevelFirst(33)==" You're level 32, so that's 1 more level first.", "one level")
+  assert(FA.LevelFirst(20)==nil and FA.LevelFirst(nil)==nil, "there already: nothing")
+  GetProfessions=function() return 1,2,3,4,5,6,7,8 end
+  GetProfessionInfo=function(i) local t={[1]={"Herbalism",182},[2]={"Mining",186},[3]={"Skinning",393},[4]={"Fishing",356},[5]={"Cooking",185},[6]={"First Aid",129},[7]={"Alchemy",171},[8]={"Leatherworking",165}} local e=t[i] return e[1],1,225,225,0,0,e[2],0 end
+  local cook=loadedFrames["ForeverArtisan_Cooking"].ns.SkillInfo()
+  assert(cook.capped and cook.needLevel==35 and cook.advice:find("Dirge",1,true) and cook.advice:find("3 more levels first",1,true), "Cooking: "..tostring(cook.advice))
+  local aid=loadedFrames["ForeverArtisan_FirstAid"].ns.SkillInfo()
+  assert(aid.levelNote and aid.advice:find("3 more levels first",1,true), "First Aid: "..tostring(aid.advice))
+  local alc=loadedFrames["ForeverArtisan_Alchemy"].ns.SkillInfo()
+  assert(alc.capped and alc.needLevel==35 and alc.advice:find("3 more levels first",1,true), "Alchemy: "..tostring(alc.advice))
+  UnitLevel=function() return 40 end
+  cook=loadedFrames["ForeverArtisan_Cooking"].ns.SkillInfo()
+  assert(not cook.levelNote and not cook.advice:find("more level",1,true), "level 40: no note")
+  GetProfessions, GetProfessionInfo, UnitLevel = oGP, oGPI, oLvl
+  print("0.9.56 level first ok")
+end
+-- 0.9.56: nobody lists Expert: a trainer titled a rank ABOVE it (Tepa <Expert Tailor> only teaches Journeyman)
+do
+  local FA=ForeverArtisan
+  local V=FA.Vendors
+  local oH, oS = V.hitsForLink, V.sortHits
+  local victor={ n="Victor Ward", t="Journeyman Tailor", s="Magic Quarter", z="Undercity", m=1458, x=70, y=29, key="t1", seed=true }
+  local tepa={ n="Tepa", t="Expert Tailor", s="Thunder Bluff", z="Thunder Bluff", m=1456, x=45, y=45, key="t2" }
+  local josef={ n="Josef Gregorian", t="Artisan Tailor", s="Magic Quarter", z="Undercity", m=1458, x=71, y=31, key="t3" }
+  local dist={ ["Victor Ward"]=1, Tepa=2, ["Josef Gregorian"]=50 }
+  local list={{npc=victor},{npc=tepa},{npc=josef}}
+  V.hitsForLink=function(_, key) if key=="Apprentice Tailoring" then return list end return {} end
+  V.sortHits=function(h) table.sort(h, function(a,b) return dist[a.npc.n] < dist[b.npc.n] end) return h end
+  local where, _, npc = FA.RankTrainer("Tailoring", "Expert")
+  assert(npc==josef, "Expert: the Artisan Tailor, not Tepa (Expert Tailor): "..tostring(where))
+  assert(select(3, FA.RankTrainer("Tailoring", "Artisan"))==nil, "nobody titled Master: nothing")
+  assert(select(3, FA.RankTrainer("Tailoring", "Journeyman"))==tepa, "Journeyman: the nearest Expert-titled (Tepa)")
+  local oGP, oGPI = GetProfessions, GetProfessionInfo
+  GetProfessions=function() return 1,2,nil,nil,nil,nil,7,nil end
+  GetProfessionInfo=function(i) if i==7 then return "Tailoring",1,150,150,0,0,197,0 end return oGPI(i) end
+  local tns=loadedFrames["ForeverArtisan_Tailoring"].ns
+  local inf=tns.SkillInfo()
+  assert(inf.capped and inf.trainer==josef and inf.advice:find("Josef Gregorian",1,true), "Tailoring 150/150: "..tostring(inf.advice))
+  -- nobody qualifies at all: the known trainer, with a waypoint
+  list={{npc=victor},{npc=tepa}}
+  inf=tns.SkillInfo()
+  assert(inf.trainer and inf.trainer.n=="Josef Gregorian" and inf.trainer.m==1458 and inf.advice:find("Tepa and Magar only teach Journeyman",1,true), "known Expert trainer: "..tostring(inf.advice))
+  GetProfessions, GetProfessionInfo = oGP, oGPI
+  V.hitsForLink, V.sortHits = oH, oS
+  print("0.9.56 nearest rank trainer ok")
+end
+-- 0.9.56: the empty Best crafts list at a cap names who to see
+do
+  local FA=ForeverArtisan
+  local txt=FA.CapEmptyText({ trainer={ n="Rhiannon Davis", s="Magic Quarter" }, nextRank="Expert" })
+  assert(txt=="You're at this rank's cap. Train Expert: Rhiannon Davis, Magic Quarter. Skill-up crafts show here again after that.", txt)
+  txt=FA.CapEmptyText({ trainer={ n="Dirge Quikcleave", s="Gadgetzan" }, nextLabel="Quest for Artisan", levelNote=" You're level 32, so that's 3 more levels first." })
+  assert(txt:find("Quest for Artisan: Dirge Quikcleave, Gadgetzan. You're level 32",1,true), txt)
+  assert(FA.CapEmptyText({})=="You're at this rank's cap: train the next rank and skill-up crafts show here again.", "no trainer: as before")
+  print("0.9.56 cap empty text ok")
+end
+-- 0.9.56: the built-in trainers keep the title rule (a rank title teaches up to the rank below it)
+do
+  local R={ Apprentice=0, Journeyman=1, Expert=2, Artisan=3, Master=4 }
+  local seeds=ForeverArtisan_ContactsSeed or (loadedFrames["ForeverArtisan_Contacts"] and loadedFrames["ForeverArtisan_Contacts"].ns.SEED_TRAINERS)
+  local checked=0
+  for _, npc in ipairs(type(seeds)=="table" and seeds or {}) do
+    local tr = type(npc.t)=="string" and R[npc.t:match("^(%a+)") or ""]
+    if tr and tr>=1 and npc.prof and not npc.t:find("Herbalist") then
+      for _, sk in ipairs(npc.skills or {}) do
+        local r = sk.n and sk.n:match("^(%a+) "..npc.prof.."$")
+        if r and R[r] then assert(R[r] < tr, npc.n.." <"..npc.t.."> teaches "..sk.n); checked=checked+1 end
+      end
+    end
+  end
+  print("0.9.56 trainer titles ok ("..checked.." checked)")
+end
+-- 0.9.56: Best crafts wording follows "Sell to a vendor"
+do
+  local FA=ForeverArtisan
+  local was=FA.VendorOnly()
+  FA.SetVendorOnly(false)
+  assert(FA.BestExplain("profit","AH text")=="AH text" and FA.BestNoneText():find("today's prices",1,true), "AH: as before")
+  FA.SetVendorOnly(true)
+  assert(FA.BestExplain("profit","AH text"):find("vendor's price",1,true) and not FA.BestExplain("profit","x"):find("Auction House",1,true), "vendor: profit line")
+  assert(not FA.BestExplain("both","x"):find("disenchant",1,true), "vendor: no disenchanting in Level + profit")
+  assert(FA.BestExplain("disenchant","DE text")=="DE text", "Disenchant mode unchanged")
+  assert(FA.BestNoneText():find("vendor's price",1,true), "vendor: empty list")
+  for _, m in ipairs({ "profit", "return", "level", "both" }) do
+    local txt=FA.BestExplain(m, "x")
+    assert(#txt<=72, "vendor "..m.." line fits on one line ("..#txt.."): "..txt)
+  end
+  assert(FA.HouseTag({ better="goblin", diff=2500 })==nil, "vendor: no goblin AH tag")
+  FA.SetVendorOnly(false)
+  assert(FA.HouseTag({ better="goblin", diff=2500 }), "AH: goblin tag back")
+  FA.SetVendorOnly(true)
+  FA.SetVendorOnly(was)
+  print("0.9.56 vendor wording ok")
+end
+-- 0.9.56: two boxes, Sell at the Auction House or Sell to a vendor, one or the other
+do
+  local FA=ForeverArtisan
+  local ah, vd
+  for _,f in pairs(frames) do
+    if f.label=="Sell at the Auction House" and rawget(f,"Sync") then ah=ah or f end
+    if f.label=="Sell to a vendor" and rawget(f,"Sync") then vd=vd or f end
+  end
+  assert(ah and vd and ah.scripts.OnClick and vd.scripts.OnClick, "both boxes exist")
+  local was=FA.VendorOnly()
+  vd.scripts.OnClick(vd)
+  assert(FA.VendorOnly()==true, "vendor box: vendor prices")
+  vd.scripts.OnClick(vd)
+  assert(FA.VendorOnly()==true, "clicking the ticked one keeps it (one or the other)")
+  ah.scripts.OnClick(ah)
+  assert(FA.VendorOnly()==false, "AH box: AH prices")
+  for _, c in ipairs({ ah, vd }) do c.SetChecked=function(self, v) self._ck=v end end
+  ah:Sync() vd:Sync()
+  assert(ah._ck==true and vd._ck==false, "only the AH box ticked")
+  -- the Market tab has the same two boxes, and its note follows them
+  local mp=_G.ForeverArtisanPanel and _G.ForeverArtisanPanel.pages and _G.ForeverArtisanPanel.pages.market
+  assert(mp and mp.ahSell and mp.vendor, "Market: both boxes")
+  local oStage=FA.MarketStage; FA.MarketStage=function() return nil end
+  mp.showing, mp.watching = nil, nil
+  mp.vendor.scripts.OnClick(mp.vendor)
+  assert(FA.VendorOnly()==true and mp.note:GetText():find("vendor's price",1,true), "Market vendor: "..tostring(mp.note:GetText()))
+  mp.ahSell.scripts.OnClick(mp.ahSell)
+  assert(FA.VendorOnly()==false and mp.note:GetText():find("Auction House cut",1,true), "Market AH note")
+  FA.MarketStage=oStage
+  FA.SetVendorOnly(was)
+  print("0.9.56 AH or vendor boxes ok")
+end
+-- 0.9.56: the queue's profit follows "Sell to a vendor"
+do
+  local FA=ForeverArtisan
+  local Q=FA.Queue
+  local was=FA.VendorOnly()
+  local oAH, oV, oP = FA.AHPrice, FA.VendorSell, FA.ItemPrice
+  FA.AHPrice=function(id) return id==7001 and 1000 or nil end
+  FA.VendorSell=function(id) return id==7001 and 100 or nil end
+  FA.ItemPrice=function(id) return id==7002 and 300 or nil end
+  for p in pairs(Q._S()) do Q._S()[p]=nil end
+  Q.Add("Tailoring", { name="Test Belt", itemId=7001, makes=1, reagents={{ id=7002, n=1, name="Bolt" }} }, 2)
+  FA.SetVendorOnly(false)
+  local g=Q.Groups()[1]
+  assert(g.profit==2*(950-300), "AH: "..tostring(g.profit))
+  FA.SetVendorOnly(true)
+  g=Q.Groups()[1]
+  assert(g.profit==2*(100-300), "vendor: "..tostring(g.profit))
+  Q.Clear("Tailoring")
+  FA.AHPrice, FA.VendorSell, FA.ItemPrice = oAH, oV, oP
+  FA.SetVendorOnly(was)
+  print("0.9.56 queue profit follows vendor ok")
+end
+-- 0.9.56: right-click a recipe you don't know: where to get it, in chat, and a waypoint
+do
+  local FA=ForeverArtisan
+  local V=FA.Vendors
+  local oH, oW, oP = V.hitsForLink, V.waypoint, FA.Printer
+  local said, wp = {}, nil
+  FA.Printer=function() return function(m) said[#said+1]=m end end
+  local snang={ n="Snang", s="The Drag", z="Orgrimmar", m=1454, x=63, y=49 }
+  V.hitsForLink=function(_, key) if key=="Test Robe" then return {{ npc=snang, item={ train=true, sk="Tailoring 70" } }} end return {} end
+  V.waypoint=function(n) wp=n end
+  FA.SayRecipeWhere("Test Robe", { "Pattern: " })
+  local all=table.concat(said,"\n")
+  assert(all:find("Where to get Test Robe:",1,true) and all:find("Train: Snang, The Drag",1,true) and wp==snang and all:find("Waypoint set",1,true), all)
+  said, wp = {}, nil
+  FA.SayRecipeWhere("Nowhere Robe", { "Pattern: " })
+  all=table.concat(said,"\n")
+  assert(all:find("Not found yet",1,true) and wp==nil, "unknown source: says so, no waypoint")
+  V.hitsForLink, V.waypoint, FA.Printer = oH, oW, oP
+  print("0.9.56 recipe where in chat ok")
 end
 print("SUITE OK")

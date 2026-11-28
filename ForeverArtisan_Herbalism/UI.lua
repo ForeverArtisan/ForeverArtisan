@@ -1,6 +1,11 @@
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
 -- ForeverArtisan: Herbalism: window (/fa herb) with Herbalism / Progress / Gather log / Herb guide tabs
 local _, ns = ...
+-- too low to train the next rank? (0.9.56, Core Prices.lua)
+local function LevelFirst(max)
+  local FA = ForeverArtisan
+  return FA.LevelFirst and FA.RANK_LEVEL and FA.LevelFirst(FA.RANK_LEVEL[max]) or ""
+end
 if not ns or not ns.DB then return end
 
 local ROW_H, W, H = 24, 470, 578
@@ -112,9 +117,9 @@ local function RefreshMainPage(p)
       if ForeverArtisan.NextRankNPC then npc, label = ForeverArtisan.NextRankNPC({ prof = "Herbalism" }, i.max) end
       p.rankNPC = npc
       if npc then
-        p.color:SetText(RED .. ("Capped at %d.|r "):format(i.max) .. label .. ": " .. npc.n .. ", " .. (npc.s or npc.z or "?") .. ".")
+        p.color:SetText(RED .. ("Capped at %d.|r "):format(i.max) .. label .. ": " .. npc.n .. ", " .. (npc.s or npc.z or "?") .. "." .. LevelFirst(i.max))
       else
-        p.color:SetText(RED .. ("Capped at %d. Train the next rank at an Herbalism trainer to keep gaining skill.|r"):format(i.max))
+        p.color:SetText(RED .. ("Capped at %d. Train the next rank at an Herbalism trainer to keep gaining skill.|r"):format(i.max) .. LevelFirst(i.max))
       end
     else
       local now = ns.PickNext()

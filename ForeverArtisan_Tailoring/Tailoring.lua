@@ -67,6 +67,10 @@ local function CharRec()
   return c
 end
 ns.CharRec = CharRec
+-- the craft queue (Core Queue.lua) reads your recipes for "AH or make" on its materials
+if ForeverArtisan.Queue and ForeverArtisan.Queue.Register then
+  ForeverArtisan.Queue.Register("Tailoring", function() return db and CharRec().recipes end)
+end
 -- trained just now (Core RecipeFinds.lua): learned, before you next open the profession window
 if ForeverArtisan.OnLearn then
   ForeverArtisan.OnLearn(function(name, spellId)
@@ -894,14 +898,14 @@ local RANK_AT = { [75] = { "Journeyman", 50, 10 }, [150] = { "Expert", 125, 20 }
 local ADVICE = {
   Horde = {
     [75]  = "Journeyman: any Tailoring trainer (needs 50, level 10).",
-    [150] = "Expert: a Tailoring trainer in a capital city (needs 125, level 20).",
-    [225] = "Artisan: ask a capital-city guard for an Artisan Tailoring trainer (needs 200, level 35).",
+    [150] = "Expert: Josef Gregorian, Undercity (needs 125, level 20). Tepa and Magar only teach Journeyman.",
+    [225] = "Artisan: Daryl Stack, Tarren Mill, Hillsbrad Foothills (needs 200, level 35).",
     [300] = "Top rank. Nothing left to train.",
   },
   Alliance = {
     [75]  = "Journeyman: any Tailoring trainer (needs 50, level 10).",
-    [150] = "Expert: a Tailoring trainer in a capital city (needs 125, level 20).",
-    [225] = "Artisan: ask a capital-city guard for an Artisan Tailoring trainer (needs 200, level 35).",
+    [150] = "Expert: Georgio Bolero, Stormwind (needs 125, level 20).",
+    [225] = "Artisan: Timothy Worthington, Theramore Isle, Dustwallow Marsh (needs 200, level 35).",
     [300] = "Top rank. Nothing left to train.",
   },
 }
@@ -909,6 +913,19 @@ local function Faction()
   local f = UnitFactionGroup and UnitFactionGroup("player")
   return (f == "Alliance" or f == "Horde") and f or "Horde"
 end
+
+-- Expert and Artisan Tailoring trainers in Forever (0.9.56; Tepa and Magar, "Expert Tailor", only
+-- teach Journeyman). Used when no trainer you've met or the built-in list teaches the rank.
+local KNOWN = {
+  Horde = {
+    [150] = { n = "Josef Gregorian", s = "Undercity", z = "Undercity", m = 1458, x = 71, y = 31 },
+    [225] = { n = "Daryl Stack", s = "Tarren Mill", z = "Hillsbrad Foothills", m = 1424, x = 64, y = 21 },
+  },
+  Alliance = {
+    [150] = { n = "Georgio Bolero", s = "Stormwind", z = "Stormwind City", m = 1453, x = 53, y = 81 },
+    [225] = { n = "Timothy Worthington", s = "Theramore Isle", z = "Dustwallow Marsh", m = 1445, x = 66, y = 52 },
+  },
+}
 
 local function TrainerFor(rankName)
   -- the nearest trainer under either spelling of the rank (Core Prices.lua, 0.9.52)
@@ -926,6 +943,8 @@ function ns.SkillInfo()
   local next = max and RANK_AT[max]
   local met, seed, npc
   if next then met, seed, npc = TrainerFor(next[1]) end
+  -- nobody met or built in teaches it: the known Expert and Artisan trainers, so the Waypoint works
+  if next and not npc then npc = KNOWN[Faction()] and KNOWN[Faction()][max] end
   info.trainer, info.nextRank = npc, next and next[1]
   if met then
     info.advice = ("%s: %s, %s (needs %d, level %d)."):format(next[1], met,
@@ -933,6 +952,9 @@ function ns.SkillInfo()
   else
     info.advice = max and ADVICE[info.faction][max]
   end
+  -- too low to train it yet? say so, and when you can (0.9.56)
+  local lf = next and ForeverArtisan.LevelFirst and ForeverArtisan.LevelFirst(next[3])
+  if lf then info.needLevel, info.levelNote = next[3], lf; if info.advice then info.advice = info.advice .. lf end end
   info.sinceUp = c.sinceUp or 0
   local log = c.skillLog or {}
   local n, sum = 0, 0
@@ -1215,7 +1237,7 @@ SlashCmdList.FATAILOR = function(msg)
     say(("Plan to %d:"):format(target or 0))
     local info = ns.SkillInfo()
     if info.capped and (target or 0) > info.max then
-      say(RED .. ("Capped at %d. Train the next rank first; the plan past %d won't count until you do.|r"):format(info.max, info.max))
+      say(RED .. ("Capped at %d. Train the next rank first; the plan past %d won't count until you do.%s|r"):format(info.max, info.max, info.levelNote or ""))
     end
     for _, st in ipairs(steps) do say(("  %s  x%d  %s(%d-%d)|r"):format(st.r.name, st.crafts, GRAY, st.from, st.to)) end
     if stuck then say(YELLOW .. ("Your recipes run out at %d. Learn new recipes to go further.|r"):format(stuck)) end

@@ -181,7 +181,9 @@ end
 function T.RemoveLine(ln)
   if not ln then return end
   S().removedOnce = true -- they've found it: the hint under the list can go
-  if ln.planProf and FA.PlanPop then FA.PlanPop.Toggle(ln.planProf, false)
+  if ln.queueCraft and FA.Queue then FA.Queue.Remove(ln.queueProf, ln.queueCraft)
+  elseif ln.queueProf then return -- a queue material: it goes when its crafts do
+  elseif ln.planProf and FA.PlanPop then FA.PlanPop.Toggle(ln.planProf, false)
   elseif ln.shopProf then T.Untrack(ln.shopProf, ln.key or ln.id)
   elseif ln.goalProf and goalRemove[ln.goalProf] and ln.goalIndex then
     pcall(goalRemove[ln.goalProf], ln.goalIndex)
@@ -195,6 +197,7 @@ end
 function T.RemoveGroup(g)
   if not g then return end
   S().removedOnce = true
+  if g.queue and FA.Queue then FA.Queue.Clear(g.queue) return end
   local prof = g.plan or (type(g.title) == "string" and g.title:match("^(.+) shopping$"))
   if prof then
     if FA.PlanPop and FA.PlanPop.IsOn and FA.PlanPop.IsOn(prof) then FA.PlanPop.Toggle(prof, false) end
@@ -364,15 +367,42 @@ function T.Lines()
       end
     end
   end
+  -- the craft queue (Core Queue.lua): "<prof> queue", the crafts then their materials (0.9.56)
+  if FA.Queue and FA.Queue.Groups then
+    local okQ, qs = pcall(FA.Queue.Groups)
+    for _, q in ipairs(okQ and qs or {}) do
+      local sub = q.profit and ((q.profit >= 0 and "profit ~" or "loss ~") .. FA.Money(math.abs(q.profit))) or nil
+      local g = Group(q.prof .. " queue", sub)
+      g.queue = q.prof
+      for _, e in ipairs(q.crafts) do
+        g.lines[#g.lines + 1] = { name = e.name, have = e.made or 0, want = e.n, queueProf = q.prof, queueCraft = e.name,
+          id = e.itemId, note = "craft" }
+      end
+      local qneed = {}
+      for _, m in ipairs(q.mats) do qneed[m.id] = m.need end
+      for _, m in ipairs(q.mats) do
+        local have, note = Own(m.id), nil
+        -- AH or make (bolts): the cloth for them counts too, past what the queue needs of the cloth itself
+        if m.alt and FA.AltHave then
+          have = FA.AltHave(m.alt, have, function(id) return Own(id) - (qneed[id] or 0) end)
+          note = FA.AltNote and FA.AltNote(m.alt, m.need - have)
+        end
+        g.lines[#g.lines + 1] = { id = m.id, name = m.name or ("item " .. m.id), have = math.min(have, m.need), want = m.need,
+          queueProf = q.prof, done = have >= m.need, note = note }
+      end
+    end
+  end
   -- gathering groups first, in the usual order, then the shopping groups
   -- (a profession's plan right above its shopping list: Kerry's screenshot had the plan last)
-  local function base(g) return g.plan or (g.title:gsub(" shopping$", "")) end
+  local function base(g) return g.plan or g.queue or (g.title:gsub(" shopping$", "")) end
   table.sort(groups, function(a, b)
     local oa, ob = ORDER[a.title] or 9, ORDER[b.title] or 9
     if oa ~= ob then return oa < ob end
     local ba, bb = base(a), base(b)
     if ba ~= bb then return ba < bb end
     if (a.plan ~= nil) ~= (b.plan ~= nil) then return a.plan ~= nil end
+    -- a profession's queue after its plan and shopping list
+    if (a.queue ~= nil) ~= (b.queue ~= nil) then return b.queue ~= nil end
     if (a.sub ~= nil) ~= (b.sub ~= nil) then return b.sub ~= nil end
     return a.title < b.title
   end)
@@ -482,6 +512,11 @@ local function Line(i)
         return
       end
       if ln.planProf then return end
+      -- a queued craft: its profession, to make it
+      if ln.queueCraft then
+        if FA.PlanPop and FA.PlanPop.Open then FA.PlanPop.Open(ln.queueProf) end
+        return
+      end
       T.GoTo(ln)
     end)
     l.btn:SetScript("OnEnter", function(self)
@@ -491,7 +526,9 @@ local function Line(i)
       if ln.head then
         GameTooltip:AddLine(ln.head)
         GameTooltip:AddLine("Click to fold or unfold it", 0.5, 0.75, 1)
-        GameTooltip:AddLine((ln.group and (ln.group.plan or (ln.group.title or ""):find(" shopping$")))
+        local gq = ln.group and ln.group.queue
+        GameTooltip:AddLine(gq and "Right-click to clear the queue"
+          or (ln.group and (ln.group.plan or (ln.group.title or ""):find(" shopping$")))
           and "Right-click to close it out (the plan and its shopping list)" or "Right-click to remove everything under it", 0.5, 0.75, 1)
         GameTooltip:Show()
         return
@@ -510,6 +547,14 @@ local function Line(i)
         GameTooltip:Show()
         return
       end
+      if ln.queueCraft then
+        if ln.id and GameTooltip.SetItemByID then GameTooltip:SetItemByID(ln.id) else GameTooltip:AddLine(ln.name or "") end
+        GameTooltip:AddLine(("Queued: %d made of %d. It counts down as you craft it."):format(ln.have, ln.want), 1, 1, 1, true)
+        GameTooltip:AddLine("Click to open " .. ln.queueProf, 0.5, 0.75, 1)
+        GameTooltip:AddLine("Right-click to take it out of the queue", 0.5, 0.75, 1)
+        GameTooltip:Show()
+        return
+      end
       if ln.id and GameTooltip.SetItemByID then GameTooltip:SetItemByID(ln.id) else GameTooltip:AddLine(ln.name or "") end
       if ln.shared then
         local sh = ln.shared
@@ -525,7 +570,11 @@ local function Line(i)
       elseif type(ln.id) == "number" then
         GameTooltip:AddLine("At the Auction House: click to search it", 0.5, 0.75, 1)
       end
-      GameTooltip:AddLine(ln.goalProf and "Right-click to remove this goal" or "Right-click to stop tracking it", 0.5, 0.75, 1)
+      if ln.queueProf then
+        GameTooltip:AddLine("For your " .. ln.queueProf .. " queue. It goes when the crafts do.", 0.5, 0.75, 1, true)
+      else
+        GameTooltip:AddLine(ln.goalProf and "Right-click to remove this goal" or "Right-click to stop tracking it", 0.5, 0.75, 1)
+      end
       GameTooltip:Show()
     end)
     l.btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -536,6 +585,19 @@ end
 
 -- the window is wider while a plan shows (its rows say which skill range each craft covers)
 local PLAN_W = 340
+local MAX_W = 420
+-- a goals line as it reads on screen: "Bolt of Silk Cloth  0 / 25  (AH or make: 100 Silk Cloth)"
+local function LineText(ln)
+  local count = ("%d / %d"):format(math.min(ln.have, ln.want), ln.want)
+  if ln.train then count = ln.train.at and ("at " .. ln.train.at) or "" end
+  -- on more than one list: how many to buy for all of them together
+  if ln.shared and not ln.done and ln.shared.buy > 0 then
+    count = count .. GRAY .. "  (buy " .. ln.shared.buy .. " in all)|r"
+  end
+  return ln.done and (GREEN .. ln.name .. "  " .. count .. "  done|r")
+    or (ln.name .. "  " .. count .. (ln.note and (GRAY .. "  (" .. ln.note .. ")|r") or ""))
+end
+T._LineText = LineText
 
 -- whether the popped-out plan has a row that says "train at" for this Train line ("Train Woolen Cape")
 function T.PlanTrains(prof, trainName)
@@ -560,6 +622,25 @@ function Refresh()
   f:Show()
   local w = W
   for _, g in ipairs(groups) do if g.plan then w = PLAN_W end end
+  -- wide enough for the longest line, so a note like "AH or make: 100 Silk Cloth" isn't cut off (Kerry,
+  -- Nov 25, screenshot: "bolt of silk cloth... cutoff"), up to a limit
+  if not f.measure then
+    f.measure = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall"); f.measure:Hide()
+  end
+  if not s.folded then
+    local foldG = s.foldG or {}
+    for _, g in ipairs(groups) do
+      if not foldG[g.title] then
+        for _, ln in ipairs(g.lines) do
+          if not (ln.plan or ln.planNote) then
+            f.measure:SetText(LineText(ln))
+            local sw = tonumber(f.measure.GetStringWidth and f.measure:GetStringWidth()) or 0
+            if sw + 32 > w then w = math.min(MAX_W, math.ceil(sw + 32)) end
+          end
+        end
+      end
+    end
+  end
   f:SetWidth(w)
   -- locked: clicks pass through to the world (the fold and close buttons still work)
   f:EnableMouse(not s.locked)
@@ -600,14 +681,7 @@ function Refresh()
           y = y - ROW_H
         else
           l.text:SetWidth(w - 16)
-          local count = ("%d / %d"):format(math.min(ln.have, ln.want), ln.want)
-          if ln.train then count = ln.train.at and ("at " .. ln.train.at) or "" end
-          -- on more than one list: how many to buy for all of them together
-          if ln.shared and not ln.done and ln.shared.buy > 0 then
-            count = count .. GRAY .. "  (buy " .. ln.shared.buy .. " in all)|r"
-          end
-          l.text:SetText(ln.done and (GREEN .. ln.name .. "  " .. count .. "  done|r")
-            or (ln.name .. "  " .. count .. (ln.note and (GRAY .. "  (" .. ln.note .. ")|r") or "")))
+          l.text:SetText(LineText(ln))
           l.text:Show()
           l.btn.ln = ln; l.btn:SetSize(w - 20, ROW_H); l.btn:EnableMouse(not s.locked); l.btn:Show()
           l.bar:ClearAllPoints(); l.bar:SetPoint("TOPLEFT", 16, y - ROW_H + 3)

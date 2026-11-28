@@ -1,6 +1,11 @@
 -- Copyright (c) 2026 ForeverArtisan. All rights reserved.
 -- ForeverArtisan: Skinning: window (/fa skin) with Skinning / Progress / Skinning log / Level guide tabs
 local _, ns = ...
+-- too low to train the next rank? (0.9.56, Core Prices.lua)
+local function LevelFirst(max)
+  local FA = ForeverArtisan
+  return FA.LevelFirst and FA.RANK_LEVEL and FA.LevelFirst(FA.RANK_LEVEL[max]) or ""
+end
 if not ns or not ns.DB then return end
 
 local ROW_H, W, H = 24, 470, 578
@@ -97,9 +102,9 @@ local function RefreshMainPage(p)
       if ForeverArtisan.NextRankNPC then npc, label = ForeverArtisan.NextRankNPC({ prof = "Skinning" }, i.max) end
       p.rankNPC = npc
       if npc then
-        p.color:SetText(RED .. ("Capped at %d.|r "):format(i.max) .. label .. ": " .. npc.n .. ", " .. (npc.s or npc.z or "?") .. ".")
+        p.color:SetText(RED .. ("Capped at %d.|r "):format(i.max) .. label .. ": " .. npc.n .. ", " .. (npc.s or npc.z or "?") .. "." .. LevelFirst(i.max))
       else
-        p.color:SetText(RED .. ("Capped at %d. Train the next rank at a Skinning trainer to keep gaining skill.|r"):format(i.max))
+        p.color:SetText(RED .. ("Capped at %d. Train the next rank at a Skinning trainer to keep gaining skill.|r"):format(i.max) .. LevelFirst(i.max))
       end
     else
       local bands = ns.LevelBands(ns.EffSkill())

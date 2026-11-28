@@ -781,6 +781,8 @@ FA.Vendors = {
     local h = ns.NearestTrainerHits and ns.NearestTrainerHits(trade)[1]
     return h and h.npc or nil
   end,
+  -- every trainer you've met or passed for a profession, nearest first (Core: skip ones that can't teach a rank)
+  trainers = function(trade) return ns.NearestTrainerHits and ns.NearestTrainerHits(trade) or {} end,
 }
 
 SLASH_FASEARCH1 = "/fasearch"

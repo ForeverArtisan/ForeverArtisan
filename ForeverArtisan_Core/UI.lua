@@ -715,6 +715,12 @@ function UI.Kit(ns, view)
         -- tipFn: hover text built only when someone hovers (long lists stay cheap to fill)
         local tip = self.tip or (self.tipFn and self.tipFn())
         if tip then GameTooltip:AddLine(tip, 1, 1, 1, true) end
+        -- lists that queue on right-click say so on every recipe you know (Kerry, Nov 25: "I don't see where
+        -- that is called out")
+        local d = self.data
+        if self.queueHint and d and d.recipe and d.recipe.learned ~= false then
+          GameTooltip:AddLine("Right-click to queue it: how many, and its materials go on your goals list", 0.5, 0.75, 1, true)
+        end
         GameTooltip:Show()
       end)
       r:SetScript("OnLeave", function() GameTooltip:Hide() end)

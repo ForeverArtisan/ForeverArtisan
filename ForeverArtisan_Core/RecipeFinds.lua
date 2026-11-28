@@ -261,6 +261,22 @@ function FA.RecipeWhere(recipeName, prefixes)
   return lines, tag, npc, skill
 end
 
+-- Right-click a recipe you don't know in a Recipe book: where to get it, in chat, and a waypoint to
+-- the trainer or vendor when there is one (0.9.56; Kerry: "Nothing happens on not learned ... Maybe it
+-- would be nice to show where to get it (if known)").
+function FA.SayRecipeWhere(recipeName, prefixes)
+  if not recipeName then return end
+  local say = FA.Printer and FA.Printer() or print
+  local lines, _, npc = FA.RecipeWhere(recipeName, prefixes)
+  say(("Where to get %s:"):format(recipeName))
+  for _, l in ipairs(lines or {}) do say("  " .. l) end
+  if npc and FA.Vendors and FA.Vendors.waypoint then
+    FA.Vendors.waypoint(npc)
+    say(("  Waypoint set: %s, %s."):format(npc.n, npc.s or npc.z or "?"))
+  end
+  return lines, npc
+end
+
 FA.IsRecipeItem = IsRecipeItem
 
 -- Where a material dropped for you: "Dropped by Vampire Bat, Tirisfal Glades (looted 6 times)", or nil.

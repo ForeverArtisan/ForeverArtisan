@@ -366,7 +366,7 @@ local function RefreshProgressPage(p)
   -- explain why the plan is short: capped rank first, then recipes running out
   local notes, unreachable = {}, false
   if i.capped and target > i.max then
-    notes[#notes + 1] = RED .. ("Capped at %d. Train the next rank first; the plan past %d won't count until you do.|r"):format(i.max, i.max)
+    notes[#notes + 1] = RED .. ("Capped at %d. Train the next rank first; the plan past %d won't count until you do.%s|r"):format(i.max, i.max, i.levelNote or "")
     unreachable = true
   end
   if stuck and stuck < target then
@@ -390,7 +390,7 @@ local function RefreshProgressPage(p)
     table.insert(shop, 1, { icon = 136235, tipTitle = "Train " .. (i.nextRank or "the next rank"),
       left = YELLOW .. "Train " .. (i.nextRank or "next rank") .. ": " .. t.n .. "|r",
       right = YELLOW .. (t.s or t.z or "") .. "|r", waypoint = t,
-      tip = ("Capped at %d. Train %s to keep gaining skill.\n|cff80c0ffClick for a waypoint to %s|r"):format(i.max, i.nextRank or "the next rank", t.n) })
+      tip = ("Capped at %d. Train %s to keep gaining skill.%s\n|cff80c0ffClick for a waypoint to %s|r"):format(i.max, i.nextRank or "the next rank", (i.levelNote or ""), t.n) })
   end
   for _, e in ipairs(shopping) do
     if not e.train then
@@ -539,7 +539,7 @@ local function BookData()
       local tip = ReagentTip(r)
       if lines then
         tip = GOLD .. "Where to get it|r\n" .. table.concat(lines, "\n")
-          .. (npc and ("\n|cff80c0ffClick for a waypoint|r") or "") .. "\n\n" .. tip
+          .. (npc and ("\n|cff80c0ffClick for a waypoint|r") or "") .. "\n|cff80c0ffRight-click: where to get it, in chat|r\n\n" .. tip
       end
       return tip
     end
@@ -562,11 +562,20 @@ local function BuildGuidePage(p)
     "Search recipes or materials")
   p.search:SetPoint("TOPLEFT", 24, -4)
   p.all = MakeRows(p, BOOK_MAX, -30, false)
+  for _, r in ipairs(p.all) do r.queueHint = true end -- right-click queues a recipe you know (0.9.56)
   p.rows = K.Visible(p.all, BOOK_ROWS)
   -- an unlearned recipe with a trainer or vendor you've met: click for a waypoint
   for _, r in ipairs(p.all) do
-    r:SetScript("OnClick", function(self)
+    if r.RegisterForClicks then r:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
+    r:SetScript("OnClick", function(self, button)
       local d = self.data
+      -- right-click: queue it (Core Queue.lua, 0.9.56)
+      if button == "RightButton" then
+        if d and d.recipe and d.recipe.learned and FA.Queue then FA.Queue.Ask("Leatherworking", d.recipe)
+        -- one you don't know: where to get it, in chat (0.9.56)
+        elseif d and d.recipe and FA.SayRecipeWhere then FA.SayRecipeWhere(d.recipe.name, ns.RecipePrefixes) end
+        return
+      end
       if d and d.recipe and d.recipe.learned then OpenOnRecipe(d.recipe)
       elseif d and d.npc and FA.Vendors and FA.Vendors.waypoint then FA.Vendors.waypoint(d.npc) end
     end)
@@ -585,7 +594,7 @@ local function BuildGuidePage(p)
     prev = b
   end
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 16, p, "BOTTOMLEFT"); help:SetWidth(430)
-  help:SetText("Click a recipe you know to open it. Hover one you don't know for where to get it.")
+  help:SetText("Click a recipe you know to open it, right-click to queue it. Hover one you don't know for where to get it, right-click it for chat.")
   Wheel(p, "guideOff", function() return (p.count or 0) - #p.rows end)
 end
 
@@ -616,7 +625,7 @@ end
 ---------------------------------------------------------------- page 5: Best crafts
 -- Your learned recipes ranked three ways. Prices: Auctionator's scan or your own Auction House
 -- visits; the dot says how much to trust each price. Never searches, posts or buys.
-local BEST_ROWS, BEST_MAX = 14, 27
+local BEST_ROWS, BEST_MAX = 13, 27 -- 13: room for the Sell to a vendor box under the list (0.9.56)
 local BEST_MODES = {
   { "profit", "Profit", 62, "Ranked by profit per craft after the Auction House's cut, with the return." },
   { "return", "Return", 62, "Ranked by return: +150% means 1g of materials brings back 2g 50s." },
@@ -659,7 +668,7 @@ local function LevelTip(row)
   local lines = { GOLD_TAG .. "Skill-up chance:|r " .. words }
   local net = row.netPerPoint
   if net then
-    local how = row.netViaDE and "disenchant what you make" or "sell what you make"
+    local how = row.netViaDE and "disenchant what you make" or (FA.VendorOnly() and "vendor what you make") or "sell what you make"
     lines[#lines + 1] = net >= 0 and ("If you " .. how .. ": about " .. FA.Money(math.floor(net + 0.5)) .. " a point")
       or (GREEN .. "If you " .. how .. ": earns about " .. FA.Money(math.floor(-net + 0.5)) .. " a point|r")
   end
@@ -686,7 +695,7 @@ local function BestData()
       if mode == "level" then
         right = (row.perPoint >= 0 and (FA.Money(math.floor(row.perPoint + 0.5)) .. " a point")
           or (GREEN .. "earns " .. FA.Money(math.floor(-row.perPoint + 0.5)) .. " a point|r"))
-          .. (row.viaDE and (GRAY .. "  ·  disenchant it|r") or "")
+          .. (row.viaDE and (GRAY .. "  ·  disenchant it|r") or (row.vendorBack and (GRAY .. "  ·  vendor it|r")) or "")
         levelTip = LevelTip(row)
       elseif mode == "disenchant" then
         local money = (row.deProfit >= 0 and (GREEN .. "+" .. FA.Money(row.deProfit)) or (RED .. FA.Money(row.deProfit))) .. "|r"
@@ -725,11 +734,18 @@ local function BuildBestPage(p)
   p.explain = Text(p, "GameFontHighlightSmall", "TOPLEFT", 20, -32); p.explain:SetWidth(430)
   p.source = Text(p, "GameFontDisableSmall", "TOPLEFT", 20, -48); p.source:SetWidth(430)
   p.all = MakeRows(p, BEST_MAX, -80, false)
+  for _, r in ipairs(p.all) do r.queueHint = true end -- right-click queues it (0.9.56)
   p.rows = K.Visible(p.all, BEST_ROWS)
   for _, row in ipairs(p.all) do
-    row:SetScript("OnClick", function(self)
+    if row.RegisterForClicks then row:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
+    row:SetScript("OnClick", function(self, button)
       local d = self.data
       if not (d and d.recipe) then return end
+      -- right-click: queue it (Core Queue.lua, 0.9.56)
+      if button == "RightButton" then
+        if FA.Queue then FA.Queue.Ask("Leatherworking", d.recipe) end
+        return
+      end
       -- at the Auction House: put the name in the search box (you press Search); else open the recipe
       if FA.AuctionHouseOpen and FA.AuctionHouseOpen() and FA.SearchAH then FA.SearchAH(d.recipe.name)
       else OpenOnRecipe(d.recipe) end
@@ -738,6 +754,25 @@ local function BuildBestPage(p)
   p.empty = Text(p, "GameFontDisable", "TOP", 0, -150, p, "TOP"); p.empty:SetJustifyH("CENTER"); p.empty:SetWidth(400)
   p.hide = K.Check(p, "Hide shaky prices", 16, -(80 + BEST_ROWS * 24 + 18),
     function() return S().bestHideShaky end, function(v) S().bestHideShaky = v or nil; view.bestOff = 0 end)
+  -- sell at the Auction House or to a vendor, one or the other; every profession and the Market tab
+  -- follow it (a player's request, 0.9.56; Kerry: "a checkbox for sell to AH, and sell to vendor ... either or")
+  p.ahSell = K.Check(p, "Sell at the Auction House", 16, -(80 + BEST_ROWS * 24 + 42),
+    function() return not FA.VendorOnly() end, function() FA.SetVendorOnly(false); view.bestOff = 0; ns.OnChange() end)
+  p.vendor = K.Check(p, "Sell to a vendor", 260, -(80 + BEST_ROWS * 24 + 42),
+    function() return FA.VendorOnly() end, function() FA.SetVendorOnly(true); view.bestOff = 0; ns.OnChange() end)
+  if K.Tip then
+    K.Tip(p.ahSell, function()
+      GameTooltip:AddLine("Sell at the Auction House")
+      GameTooltip:AddLine("Profit, Return and Level + profit count what you make at Auction House prices, after its cut. "
+        .. "Every profession and the Market tab follow it.", 1, 1, 1, true)
+    end)
+    K.Tip(p.vendor, function()
+      GameTooltip:AddLine("Sell to a vendor")
+      GameTooltip:AddLine("For crafts you'll vendor rather than list. Profit, Return and Level + profit use the vendor's price "
+        .. "instead of the Auction House's, and Cheapest to level takes the vendor's price off the cost. "
+        .. "Every profession and the Market tab follow it.", 1, 1, 1, true)
+    end)
+  end
   -- the player's own minimum profit per craft (every profession and the Market tab share it)
   p.minLabel = Text(p, "GameFontHighlightSmall", "TOPLEFT", 200, -(80 + BEST_ROWS * 24 + 23))
   p.minLabel:SetText("Hide crafts making under")
@@ -752,7 +787,7 @@ local function BuildBestPage(p)
     end)
   end
   local help = Text(p, "GameFontDisableSmall", "BOTTOMLEFT", 20, 16, p, "BOTTOMLEFT"); help:SetWidth(430)
-  help:SetText(GOLD_TAG .. "Gold:|r a goblin Auction House (Booty Bay, Gadgetzan, Everlook) pays that much more a craft. Hover for both houses. Dots: green steady, yellow check it, gray shaky. Click to open the recipe (at the Auction House: search it).")
+  help:SetText(GOLD_TAG .. "Gold:|r a goblin Auction House (Booty Bay, Gadgetzan, Everlook) pays that much more a craft. Hover for both houses. Dots: green steady, yellow check it, gray shaky. Click: open the recipe (at the AH: search it). Right-click: queue it.")
   Wheel(p, "bestOff", function() return (p.count or 0) - #p.rows end)
 end
 
@@ -767,7 +802,7 @@ local function RefreshBestPage(p)
       b:SetText(b.label)
     end
   end
-  for _, m in ipairs(BEST_MODES) do if m[1] == mode then p.explain:SetText(m[4]) end end
+  for _, m in ipairs(BEST_MODES) do if m[1] == mode then p.explain:SetText(FA.BestExplain and FA.BestExplain(mode, m[4]) or m[4]) end end
   p.source:SetText(table.concat(FA.PriceSourceLines(), "\n"))
   local data = ns.Knows() and BestData() or {}
   p.count = #data
@@ -775,13 +810,15 @@ local function RefreshBestPage(p)
   view.bestOff = math.min(view.bestOff or 0, math.max(0, #data - #p.rows))
   Fill(p.rows, data, view.bestOff)
   if p.hide.Sync then p.hide:Sync() end
+  if p.vendor and p.vendor.Sync then p.vendor:Sync() end
+  if p.ahSell and p.ahSell.Sync then p.ahSell:Sync() end
   if p.min and p.min.Sync and not (p.min.HasFocus and p.min:HasFocus()) then p.min:Sync() end
   p.empty:SetText(#data > 0 and "" or (not ns.Knows() and "This character hasn't learned Leatherworking.")
     or (not ns.HasRecipes() and "Open your Leatherworking window once so I can read your recipes.")
     or (mode ~= "profit" and (function() local b, _, c = ns.Skill(); return b and c and c > 0 and b >= c end)()
-      and "You're at this rank's cap: train the next rank and skill-up crafts show here again.")
+      and (FA.CapEmptyText and FA.CapEmptyText(ns.SkillInfo()) or "You're at this rank's cap: train the next rank and skill-up crafts show here again."))
     or (mode == "level" and "Nothing that still gives skill-ups has prices yet. Visit the Auction House, or scan with Auctionator.")
-    or (mode == "both" and "None of your skill-up recipes pays for itself at today's prices.")
+    or (mode == "both" and (FA.BestNoneText and FA.BestNoneText() or "None of your skill-up recipes pays for itself at today's prices."))
     or (mode == "disenchant" and "Nothing you craft disenchants for prices known yet. Disenchanting needs green or better weapons and armor, and Auction House prices for the dust, essences and shards.")
     or (FA.MinProfit() and ("Nothing makes at least " .. FA.Money(FA.MinProfit()) .. " a craft. Lower or clear the minimum below."))
     or "No prices yet for what you craft. Visit the Auction House, or scan with Auctionator.")

@@ -813,7 +813,7 @@ end
 
 -- Market: every profession's Best crafts in one list, by profit after the Auction House cut.
 -- Flagged BETA before launch only: beta realm prices swing too much to trust fully.
-local MARKET_ROWS, MARKET_MAX = 15, 28 -- normal height / the panel dragged taller (0.9.49)
+local MARKET_ROWS, MARKET_MAX = 14, 27 -- normal height / the panel dragged taller (0.9.49; 14 in 0.9.56 for the AH or vendor row)
 local MARKET_TOP = -106 -- first row, under the "click a craft" line
 -- this week's direction, on rows and in the trend view
 local ARROW = { up = "|TInterface\\Buttons\\Arrow-Up-Up:12|t", down = "|TInterface\\Buttons\\Arrow-Down-Up:12|t" }
@@ -849,7 +849,8 @@ function refreshMarket()
   local stage = FA.MarketStage()
   p.badge:SetText(stage and ("|cffff9020BETA|r") or "")
   p.note:SetText(stage == "beta" and ("|cffff9020These are beta Auction House prices.|r " .. GREY .. "They swing a lot, so treat the ranking as a rough guide until launch.|r")
-    or (GREY .. "Recipes you know, in every profession, ranked by profit per craft after the Auction House cut.|r"))
+    or (GREY .. (FA.VendorOnly and FA.VendorOnly() and "Recipes you know, in every profession, ranked by profit per craft at the vendor's price."
+      or "Recipes you know, in every profession, ranked by profit per craft after the Auction House cut.") .. "|r"))
   p.source:SetText(FA.PriceSourceLines and table.concat(FA.PriceSourceLines(), "\n") or "")
   local okW, wline, wtip = false, nil, nil
   if FA.RecipeWatchLines then okW, wline, wtip = pcall(FA.RecipeWatchLines) end
@@ -898,6 +899,7 @@ function refreshMarket()
     or (FA.MinProfit and FA.MinProfit() and ("Nothing makes at least " .. FA.Money(FA.MinProfit()) .. " a craft. Lower or clear the minimum below."))
     or "No prices yet for what you craft. Visit the Auction House, or scan with Auctionator.")
   p.hide:SetChecked(ForeverArtisanSettings and ForeverArtisanSettings.marketHideShaky and true or false)
+  if p.ahSell then p.ahSell:SetChecked(not FA.VendorOnly()); p.vendor:SetChecked(FA.VendorOnly()) end
   local byReturn = ForeverArtisanSettings and ForeverArtisanSettings.marketSort == "return"
   p.sortBtn:SetText(byReturn and "Sort: best return" or "Sort: most profit")
   if p.min.Sync and not p.min:HasFocus() then p.min:Sync() end
@@ -1469,17 +1471,34 @@ local function buildMarketTab(p)
     GameTooltip:AddLine("Minimum profit per craft")
     GameTooltip:AddLine("Type an amount like 50s, 1g or 1g 20s (a number alone is silver). Crafts that make less are hidden here and in every profession's Best crafts. Empty shows everything.", 1, 1, 1, true)
   end)
+  -- sell at the Auction House or to a vendor, one or the other, shared with every profession's Best crafts
+  -- (0.9.56; Kerry: "a checkbox for sell to AH, and sell to vendor ... either or")
+  local function Box(x, label, vendor, tip)
+    local c = CreateFrame("CheckButton", nil, p, "UICheckButtonTemplate")
+    c:SetSize(24, 24); c:SetPoint("TOPLEFT", x, MARKET_TOP - MARKET_ROWS * 24 - 30)
+    local fs = c:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    fs:SetPoint("LEFT", c, "RIGHT", 2, 0); fs:SetText(label)
+    c:SetHitRectInsets(0, -((fs:GetStringWidth() or 150) + 4), 0, 0)
+    c.label = label
+    c:SetScript("OnClick", function() FA.SetVendorOnly(vendor); p.off = 0; refreshMarket() end)
+    FA.UI.Tip(c, function() GameTooltip:AddLine(label); GameTooltip:AddLine(tip, 1, 1, 1, true) end)
+    return c
+  end
+  p.ahSell = Box(14, "Sell at the Auction House", false,
+    "Profit and return at Auction House prices, after its cut. Every profession's Best crafts follows it.")
+  p.vendor = Box(240, "Sell to a vendor", true,
+    "Profit and return at the vendor's price, for crafts you'll vendor rather than list. Every profession's Best crafts follows it.")
   -- say it big, right above the list: rows open a price chart
   p.clickHint = Txt(p, "GameFontNormal", 16, -82, 428,
     "Click any craft to see its price chart and whether it's trending up or down.")
-  local help = Txt(p, "GameFontDisableSmall", 16, MARKET_TOP - MARKET_ROWS * 24 - 40, 428,
+  local help = Txt(p, "GameFontDisableSmall", 16, MARKET_TOP - MARKET_ROWS * 24 - 62, 428,
     "Arrows: the price is up or down this week. Dots: green steady price, yellow check it, gray shaky. "
     .. GOLD .. "Gold:|r a goblin Auction House pays that much more.")
-  p.listParts = { p.hide, help, p.empty, p.clickHint }
+  p.listParts = { p.hide, p.ahSell, p.vendor, help, p.empty, p.clickHint }
   for _, r in ipairs(p.all) do p.listParts[#p.listParts + 1] = r end
   -- under the list: they move down when the panel is dragged taller (0.9.49)
   local y = MARKET_TOP - MARKET_ROWS * 24
-  p.under = { { p.hide, 14, y - 6 }, { p.sortBtn, 160, y - 6 }, { ml, 306, y - 11 }, { p.min, 372, y - 7 }, { help, 16, y - 40 } }
+  p.under = { { p.hide, 14, y - 6 }, { p.sortBtn, 160, y - 6 }, { ml, 306, y - 11 }, { p.min, 372, y - 7 }, { p.ahSell, 14, y - 30 }, { p.vendor, 240, y - 30 }, { help, 16, y - 62 } }
   buildTrend(p)
   buildWatch(p)
 end
@@ -1870,6 +1889,7 @@ NEWS = {
   { "0.9.53", "0.9.52 showed its version as 0.9.51. This build has the right number, so you see what's new." },
   { "0.9.54", "A search with no results now says what the box covers. The Fishing alert boxes turn back on again." },
   { "0.9.55", "One Pop out puts your plan and shopping list on screen; right-click a heading to close it. Recipe tooltips show which of your alts know it or can learn it. Shopping lists offer \"AH or make\" for bolts and the like. The Yeti Skinner counts as a Skinning Knife." },
+  { "0.9.56", "Craft queue: right-click a recipe, say how many, and its materials go on your goals list. Best crafts and the Market can count what you make at the vendor's price. Capped professions name the trainer for the next rank and the level you need." },
 }
 
 local function verNum(v)
@@ -2055,6 +2075,7 @@ local function help()
   print("  /fa find <words>  - search everything: your crafts, Auction House prices, recipes, vendors and trainers")
   print("  /fa market  - your most profitable crafts, every profession in one list")
   print("  /fa goals  - show or hide the on-screen goals list (lock | unlock | reset | clear)")
+  print("  /fa queue  - what's queued to craft (clear to empty it). Right-click a recipe to queue it.")
   print("  /fa new  - what's new in recent releases")
   if FA.RECIPE_WATCH_READY then print("  /fa recipewatch on | quiet | off  - recipes you or your alts don't know, noted when you see them on the Auction House (quiet: no chat)") end
   print("  /fa disenchant on | off | log  - what greens, blues and purples disenchant into and what that's worth, on item tooltips")
@@ -2112,6 +2133,8 @@ SlashCmdList.FOREVERARTISAN = function(msg)
     if FA.Track then FA.Track.Slash(rest) end
   elseif lower == "plan" or lower == "plans" then
     if FA.PlanPop then FA.PlanPop.Slash(rest) end
+  elseif lower == "queue" then
+    if FA.Queue then FA.Queue.Slash(rest) end
   elseif lower == "market" then
     showPanel("market")
   elseif lower == "beta" or lower == "welcome" or lower == "about" then

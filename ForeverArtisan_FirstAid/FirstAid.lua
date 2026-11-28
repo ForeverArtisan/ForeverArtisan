@@ -54,6 +54,10 @@ local function CharRec()
   return c
 end
 ns.CharRec = CharRec
+-- the craft queue (Core Queue.lua) reads your recipes for "AH or make" on its materials
+if ForeverArtisan.Queue and ForeverArtisan.Queue.Register then
+  ForeverArtisan.Queue.Register("First Aid", function() return db and CharRec().recipes end)
+end
 -- trained just now (Core RecipeFinds.lua): learned, before you next open the profession window
 if ForeverArtisan.OnLearn then
   ForeverArtisan.OnLearn(function(name, spellId)
@@ -588,6 +592,10 @@ function ns.SkillInfo()
   info.capped = max and rank >= max and max < 300
   info.faction = Faction()
   info.advice = max and ADVICE[info.faction][max]
+  -- too low for the Artisan quest yet? say so, and when you can (0.9.56; Expert has no level here)
+  local need = max == 225 and 35 or nil
+  local lf = ForeverArtisan.LevelFirst and ForeverArtisan.LevelFirst(need)
+  if lf then info.needLevel, info.levelNote = need, lf; if info.advice then info.advice = info.advice .. lf end end
   if info.capped and ForeverArtisan.NextRankNPC then info.trainer, info.nextLabel, info.nextRank = ForeverArtisan.NextRankNPC(NEXT_RANK, max) end
   info.sinceUp = c.sinceUp or 0
   local log = c.skillLog or {}
@@ -828,7 +836,7 @@ SlashCmdList.FAAID = function(msg)
     say(("Plan to %d:"):format(target or 0))
     local info = ns.SkillInfo()
     if info.capped and (target or 0) > info.max then
-      say(RED .. ("Capped at %d. Train the next rank first; the plan past %d won't count until you do.|r"):format(info.max, info.max))
+      say(RED .. ("Capped at %d. Train the next rank first; the plan past %d won't count until you do.%s|r"):format(info.max, info.max, info.levelNote or ""))
     end
     for _, st in ipairs(steps) do say(("  %s  x%d  %s(%d-%d)|r"):format(st.r.name, st.crafts, GRAY, st.from, st.to)) end
     if stuck then say(YELLOW .. ("Your recipes run out at %d. Learn new recipes to go further.|r"):format(stuck)) end

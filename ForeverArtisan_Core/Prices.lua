@@ -472,6 +472,7 @@ end
 -- then the nearest wins. (Kerry, Nov 22, standing on The Drag: it sent him to Rhiannon Davis in
 -- Undercity, because the first spelling found only her and the second was never looked at.)
 -- Returns "Name, Place", from the built-in list?, npc
+local RANK_ORDER = { Journeyman = 1, Expert = 2, Artisan = 3, Master = 4 }
 function FA.RankTrainer(prof, rankName)
   local V = FA.Vendors
   if not (V and V.hitsForLink and prof and rankName) then return end
@@ -483,9 +484,55 @@ function FA.RankTrainer(prof, rankName)
       if k and not seen[k] then seen[k] = true; all[#all + 1] = h end
     end
   end
+  -- Nobody lists the rank: any trainer of the profession whose title is a rank ABOVE it. A trainer's
+  -- title is one rank past what it teaches: Tepa <Expert Tailor> teaches up to Journeyman, Josef
+  -- Gregorian <Artisan Tailor> teaches Expert, Daryl Stack <Master Tailor> Artisan (0.9.56; Kerry at
+  -- Tailoring 150/150 was sent to Tepa: "This information is incorrect. Expert is not here").
+  if #all == 0 then
+    local want = RANK_ORDER[rankName]
+    for _, low in ipairs(want and { "Apprentice", "Journeyman", "Expert" } or {}) do
+      for _, key in ipairs({ prof .. " (" .. low .. ")", low .. " " .. prof }) do
+        local ok, hits = pcall(V.hitsForLink, nil, key)
+        for _, h in ipairs(ok and type(hits) == "table" and hits or {}) do
+          local k = h.npc and (h.npc.key or h.npc.id or h.npc.n)
+          local tr = h.npc and type(h.npc.t) == "string" and RANK_ORDER[h.npc.t:match("^(%a+)")]
+          if k and not seen[k] and tr and tr > want then seen[k] = true; all[#all + 1] = h end
+        end
+      end
+    end
+  end
   if V.sortHits then all = V.sortHits(all) or all end
   local h = all[1]
   if h then return h.npc.n .. ", " .. (h.npc.s or h.npc.z or "?"), h.npc.seed, h.npc end
+end
+
+-- The nearest trainer of a profession who can still teach a rank, when nobody lists it (0.9.56; Kerry,
+-- "make sure the expert/journeyman issue isn't repeated for all other tradeskills"). Skipped:
+-- "Junior <Prof> Trainer" (Apprentice only: Junior Mining Trainer in Undercity) and a rank title at or
+-- below the rank (a "Journeyman Leatherworker" teaches Apprentice, an "Expert Tailor" Journeyman).
+-- Gathering titles don't follow that ("Apprentice Herbalist" Faruza teaches Artisan): only rank words
+-- from Journeyman up count.
+function FA.TrainerCanTeach(npc, rankName)
+  local t = npc and type(npc.t) == "string" and npc.t or ""
+  if t:find("^Junior ") then return false end
+  local tr = RANK_ORDER[t:match("^(%a+)") or ""]
+  local want = RANK_ORDER[rankName]
+  if tr and want and tr <= want then return false end
+  return true
+end
+function FA.NearestRankCapable(prof, rankName)
+  local V = FA.Vendors
+  local hits
+  if V and V.trainers then
+    local ok, h = pcall(V.trainers, prof); hits = ok and type(h) == "table" and h or nil
+  end
+  if not hits then
+    local ok, n = pcall(V and V.nearestTrainer or function() end, prof)
+    return ok and n and FA.TrainerCanTeach(n, rankName) and n or nil
+  end
+  for _, h in ipairs(hits) do
+    if h.npc and FA.TrainerCanTeach(h.npc, rankName) then return h.npc end
+  end
 end
 
 -- Who to see for the next rank when it isn't a trainer's (Cooking and First Aid: a book at 150, a
@@ -494,14 +541,34 @@ end
 -- (quest npc: { id, n, z, s, m, x, y }, Questie's spot wins when installed).
 -- Returns npc, label ("Train Journeyman", "Buy Expert Cookbook", "Quest for Artisan"), rank name
 local RANKS = { [75] = "Journeyman", [150] = "Expert", [225] = "Artisan" }
+
+-- Too low to train the next rank? Fishing's wording, for every profession (0.9.56; Kerry at 32 with
+-- Cooking capped at 225: the plan sent him to Dirge's Artisan quest, which needs level 35).
+-- Character level each rank needs (Classic trainers; Cooking and First Aid only ask it for Artisan).
+FA.RANK_LEVEL = { [75] = 10, [150] = 20, [225] = 35 }
+-- " You're level 32, so that's 3 more levels first." or nil when you're there already
+-- The empty Best crafts list at a rank's cap: who to see, like the main and Progress tabs (0.9.56;
+-- Kerry, Tailoring 150/150: the list just said "train the next rank"). info = a profession's SkillInfo().
+function FA.CapEmptyText(info)
+  local base = "You're at this rank's cap: train the next rank and skill-up crafts show here again."
+  local t = type(info) == "table" and info.trainer
+  if not (t and t.n) then return base .. (type(info) == "table" and info.levelNote or "") end
+  local what = info.nextLabel or ("Train " .. (info.nextRank or "the next rank"))
+  return ("You're at this rank's cap. %s: %s, %s.%s Skill-up crafts show here again after that."):format(
+    what, t.n, t.s or t.z or "?", info.levelNote or "")
+end
+
+function FA.LevelFirst(need)
+  local lvl = UnitLevel and UnitLevel("player")
+  if not (need and lvl and lvl < need) then return end
+  return (" You're level %d, so that's %d more level%s first."):format(lvl, need - lvl, need - lvl == 1 and "" or "s")
+end
 function FA.NextRankNPC(spec, max)
   local rank = RANKS[max]
   if not (spec and rank) then return end
   if max == 75 or (max == 150 and not spec.book) or (max == 225 and not spec.quest) then
     local _, _, npc = FA.RankTrainer(spec.prof, rank)
-    if not npc and FA.Vendors and FA.Vendors.nearestTrainer then
-      local ok, n = pcall(FA.Vendors.nearestTrainer, spec.prof); if ok then npc = n end
-    end
+    if not npc and FA.Vendors then npc = FA.NearestRankCapable(spec.prof, rank) end
     return npc, "Train " .. rank, rank
   end
   if max == 150 then
@@ -622,6 +689,33 @@ function FA.SetMinProfit(copper)
   ForeverArtisanSettings.minProfit = (type(copper) == "number" and copper > 0) and copper or nil
 end
 
+-- "Sell to a vendor": Best crafts counts what you make at the vendor's price, not the Auction House's
+-- (a player's request, Nov 26: "include vendor price refund ... so it's a true cost if you're planning
+-- on vendoring"; AH prices can be skewed by items that don't actually sell). Shared by every profession.
+-- Best crafts' line under the mode buttons, and the empty Level + profit list, say vendor when the
+-- "Sell to a vendor" box is ticked (0.9.56; Kerry: Profit still said "after the Auction House's cut",
+-- Level + profit "sold or disenchanted" and "at today's prices"). One line each: the longest
+-- Auction House line (72 characters) is the width that fits; longer wraps into the prices line.
+local VENDOR_EXPLAIN = {
+  profit = "Ranked by profit per craft at the vendor's price, with the return.",
+  ["return"] = "Return at the vendor's price: +150% turns 1g of materials into 2g 50s.",
+  level = "Skill-ups by cost per point less the vendor's price, cheapest first.",
+  both = "Skill-ups that pay for themselves when you vendor what you make.",
+}
+function FA.BestExplain(mode, text)
+  return FA.VendorOnly and FA.VendorOnly() and VENDOR_EXPLAIN[mode] or text
+end
+function FA.BestNoneText()
+  return FA.VendorOnly and FA.VendorOnly() and "None of your skill-up recipes pays for itself at the vendor's price."
+    or "None of your skill-up recipes pays for itself at today's prices."
+end
+
+function FA.VendorOnly() return ForeverArtisanSettings and ForeverArtisanSettings.bestVendor and true or false end
+function FA.SetVendorOnly(on)
+  ForeverArtisanSettings = ForeverArtisanSettings or {}
+  ForeverArtisanSettings.bestVendor = on and true or nil
+end
+
 -- return on the materials: +150% means 1g of materials brings back 2.5g (1.5g profit)
 function FA.ReturnText(ret)
   if not ret then return "" end
@@ -738,6 +832,8 @@ end
 -- short tag for a Best crafts row: "better at goblin AH: +16s", or nil when neither house clearly wins
 function FA.HouseTag(c)
   if not (c and c.better) then return end
+  -- selling to a vendor: which Auction House pays more doesn't apply (0.9.56, Kerry's Cooking screenshot)
+  if FA.VendorOnly and FA.VendorOnly() then return end
   return (c.better == "goblin" and "better at goblin AH: +" or "better at your AH: +") .. FA.Money(c.diff)
 end
 
@@ -933,7 +1029,8 @@ function FA.BestCrafts(recipes, chanceOf, mode)
       local cost = FA.CraftMoney and (FA.CraftMoney(r) or FA.CraftMoney(r, makes, memo))
       local ah = FA.AHPrice(r.itemId)
       local vend = VendorSell(r.itemId)
-      local best = math.max(ah and math.floor(ah * (1 - FA.AH_CUT)) or 0, vend or 0) * n
+      local vonly = FA.VendorOnly()
+      local best = vonly and ((vend or 0) * n) or (math.max(ah and math.floor(ah * (1 - FA.AH_CUT)) or 0, vend or 0) * n)
       local ch = (chanceOf and chanceOf(r)) or 0
       local row = { r = r, cost = cost, sale = ah, vend = vend, chance = ch }
       if cost and best > 0 then row.profit = best - cost end
@@ -950,11 +1047,14 @@ function FA.BestCrafts(recipes, chanceOf, mode)
       end
       -- what you'd get back is the better of selling it and disenchanting it
       local back, viaDE = best, nil
-      if row.de and row.de > best then back, viaDE = row.de, true end
+      if row.de and row.de > best and not vonly then back, viaDE = row.de, true end
       if cost and ch > 0 then
         -- net of selling or disenchanting: Level + profit ranks by it, and Cheapest to level shows it on hover
         row.netPerPoint, row.netViaDE = (cost - back) / ch, viaDE
-        if mode == "level" then
+        if mode == "level" and vonly then
+          -- Sell to a vendor: the vendor's price is sure money, so it comes off the cost
+          row.perPoint, row.vendorBack = (cost - back) / ch, true
+        elseif mode == "level" then
           -- Cheapest to level: what the materials cost per skill-up, nothing taken off for selling
           -- (resale is a guess, worst at launch when everyone sells the same crafts)
           row.perPoint = cost / ch

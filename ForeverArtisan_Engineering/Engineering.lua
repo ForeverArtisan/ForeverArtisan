@@ -67,6 +67,10 @@ local function CharRec()
   return c
 end
 ns.CharRec = CharRec
+-- the craft queue (Core Queue.lua) reads your recipes for "AH or make" on its materials
+if ForeverArtisan.Queue and ForeverArtisan.Queue.Register then
+  ForeverArtisan.Queue.Register("Engineering", function() return db and CharRec().recipes end)
+end
 -- trained just now (Core RecipeFinds.lua): learned, before you next open the profession window
 if ForeverArtisan.OnLearn then
   ForeverArtisan.OnLearn(function(name, spellId)
@@ -894,14 +898,14 @@ local RANK_AT = { [75] = { "Journeyman", 50, 10 }, [150] = { "Expert", 125, 20 }
 local ADVICE = {
   Horde = {
     [75]  = "Journeyman: any Engineering trainer (needs 50, level 10).",
-    [150] = "Expert: an Engineering trainer in a capital city (needs 125, level 20).",
-    [225] = "Artisan: ask a capital-city guard for an Artisan Engineering trainer (needs 200, level 35).",
+    [150] = "Expert: a trainer titled Artisan Engineer (an Expert Engineer only teaches Journeyman). Needs 125, level 20.",
+    [225] = "Artisan: a trainer titled Master Engineer. Needs 200, level 35.",
     [300] = "Top rank. Nothing left to train.",
   },
   Alliance = {
     [75]  = "Journeyman: any Engineering trainer (needs 50, level 10).",
-    [150] = "Expert: an Engineering trainer in a capital city (needs 125, level 20).",
-    [225] = "Artisan: ask a capital-city guard for an Artisan Engineering trainer (needs 200, level 35).",
+    [150] = "Expert: a trainer titled Artisan Engineer (an Expert Engineer only teaches Journeyman). Needs 125, level 20.",
+    [225] = "Artisan: a trainer titled Master Engineer. Needs 200, level 35.",
     [300] = "Top rank. Nothing left to train.",
   },
 }
@@ -933,6 +937,9 @@ function ns.SkillInfo()
   else
     info.advice = max and ADVICE[info.faction][max]
   end
+  -- too low to train it yet? say so, and when you can (0.9.56)
+  local lf = next and ForeverArtisan.LevelFirst and ForeverArtisan.LevelFirst(next[3])
+  if lf then info.needLevel, info.levelNote = next[3], lf; if info.advice then info.advice = info.advice .. lf end end
   info.sinceUp = c.sinceUp or 0
   local log = c.skillLog or {}
   local n, sum = 0, 0
@@ -1213,7 +1220,7 @@ SlashCmdList.FAENG = function(msg)
     say(("Plan to %d:"):format(target or 0))
     local info = ns.SkillInfo()
     if info.capped and (target or 0) > info.max then
-      say(RED .. ("Capped at %d. Train the next rank first; the plan past %d won't count until you do.|r"):format(info.max, info.max))
+      say(RED .. ("Capped at %d. Train the next rank first; the plan past %d won't count until you do.%s|r"):format(info.max, info.max, info.levelNote or ""))
     end
     for _, st in ipairs(steps) do say(("  %s  x%d  %s(%d-%d)|r"):format(st.r.name, st.crafts, GRAY, st.from, st.to)) end
     if stuck then say(YELLOW .. ("Your recipes run out at %d. Learn new recipes to go further.|r"):format(stuck)) end
